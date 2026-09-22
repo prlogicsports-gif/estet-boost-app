@@ -1,0 +1,1 @@
+export const mockSession = { user: { name: "Fernanda Costa", initials: "FC", role: "Esteticista" } };
