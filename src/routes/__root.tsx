@@ -9,38 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
-import appCss from "../styles.css?url";
+import appCss from "../styles.css";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { SplashScreen } from "../components/splash/splash-screen";
-
-const SPLASH_KEY = "eb-splash-seen";
-
-// A splash aparece só na abertura do app (uma vez por sessão do navegador).
-// Entrar, sair da conta ou navegar entre telas nunca a repete.
-function useSplashOnce() {
-  // Servidor e primeiro render do navegador concordam (splash ligada), senão o React
-  // refaz a árvore. Quem já viu a splash nesta sessão a desliga logo após hidratar.
-  const [show, setShow] = useState(true);
-
-  useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem(SPLASH_KEY)) setShow(false);
-    } catch {
-      // sem storage disponível: a splash segue o fluxo normal
-    }
-  }, []);
-
-  const done = () => {
-    try {
-      window.sessionStorage.setItem(SPLASH_KEY, "1");
-    } catch {
-      // sem storage disponível: a splash simplesmente não é memorizada
-    }
-    setShow(false);
-  };
-
-  return { show, done };
-}
 
 function NotFoundComponent() {
   return (
