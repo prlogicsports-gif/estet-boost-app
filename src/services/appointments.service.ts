@@ -1,3 +1,4 @@
+import { logActivity } from "@/services/activity.service";
 import { appointmentsDb, clientsDb } from "@/data/db";
 import type { AppointmentRec, AppointmentStatus } from "@/lib/models";
 import { createClient } from "@/services/clients.service";
@@ -80,6 +81,13 @@ export function requestAppointment(input: {
   };
   appointmentsDb.set((list) => [...list, rec]);
   notify(events.appointmentRequested(rec));
+  logActivity({
+    by: "cliente",
+    kind: "horario",
+    clientId: client.id,
+    client: client.name,
+    text: `Solicitou ${rec.procedure} em ${rec.date.split("-").reverse().join("/")} às ${rec.time}`,
+  });
   return rec;
 }
 
@@ -88,6 +96,13 @@ export function approveRequest(id: string) {
   if (!a) return;
   update(id, { status: "confirmed", request: false, alert: undefined });
   notify(events.requestApproved(a));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: `Aprovou o horário de ${a.procedure} (${a.time})`,
+  });
 }
 
 export function declineRequest(id: string) {
@@ -95,6 +110,13 @@ export function declineRequest(id: string) {
   if (!a) return;
   update(id, { status: "cancelled", request: false });
   notify(events.requestDeclined(a));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: `Recusou o horário solicitado (${a.time})`,
+  });
 }
 
 export function confirmAppointment(id: string, by: "gestor" | "cliente") {
@@ -102,6 +124,16 @@ export function confirmAppointment(id: string, by: "gestor" | "cliente") {
   if (!a) return;
   update(id, { status: "confirmed", alert: undefined });
   notify(by === "cliente" ? events.confirmedByClient(a) : events.confirmedByStudio(a));
+  logActivity({
+    by,
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text:
+      by === "cliente"
+        ? `Confirmou presença em ${a.procedure}`
+        : `Confirmou o horário de ${a.procedure}`,
+  });
 }
 
 export function cancelAppointment(id: string, by: "gestor" | "cliente") {
@@ -113,14 +145,35 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
       // Menos de 24 horas: a esteticista precisa aprovar.
       update(id, { cancelRequest: true });
       notify(events.cancelRequested(a));
+      logActivity({
+        by: "cliente",
+        kind: "horario",
+        clientId: a.clientId,
+        client: a.client,
+        text: `Pediu para cancelar ${a.procedure} (menos de 24 h)`,
+      });
       return;
     }
     update(id, { status: "cancelled" });
     notify(events.cancelledByClient(a));
+    logActivity({
+      by: "cliente",
+      kind: "horario",
+      clientId: a.clientId,
+      client: a.client,
+      text: `Cancelou ${a.procedure}`,
+    });
     return;
   }
   update(id, { status: "cancelled", cancelRequest: false });
   notify(events.cancelledByStudio(a));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: `Cancelou ${a.procedure}`,
+  });
 }
 
 export function approveCancel(id: string) {
@@ -133,6 +186,13 @@ export function requestReschedule(id: string, date: string, time: string) {
   if (!a) return;
   update(id, { reschedule: true, proposedDate: date, proposedTime: time });
   notify(events.rescheduleRequested(a, date, time));
+  logActivity({
+    by: "cliente",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: `Pediu remarcação para ${date.split("-").reverse().join("/")} às ${time}`,
+  });
 }
 
 export function approveReschedule(id: string) {
@@ -147,6 +207,13 @@ export function approveReschedule(id: string) {
     status: "confirmed",
   });
   notify(events.rescheduleApproved(a, a.proposedDate, a.proposedTime));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: "Aprovou a remarcação",
+  });
 }
 
 export function declineReschedule(id: string) {
@@ -154,6 +221,13 @@ export function declineReschedule(id: string) {
   if (!a) return;
   update(id, { reschedule: false, proposedDate: undefined, proposedTime: undefined });
   notify(events.rescheduleDeclined(a));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: "Recusou a remarcação",
+  });
 }
 
 /** A esteticista move o horário: a cliente é avisada. */
@@ -162,6 +236,13 @@ export function rescheduleAppointment(id: string, date: string, time: string) {
   if (!a) return;
   update(id, { date, time, reschedule: false, proposedDate: undefined, proposedTime: undefined });
   notify(events.movedByStudio(a, date, time));
+  logActivity({
+    by: "gestor",
+    kind: "horario",
+    clientId: a.clientId,
+    client: a.client,
+    text: `Moveu o horário para ${date.split("-").reverse().join("/")} às ${time}`,
+  });
 }
 
 /** Cria o retorno sugerido ao fechar um atendimento: fica aguardando a confirmação da cliente. */

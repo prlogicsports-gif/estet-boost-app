@@ -1,4 +1,13 @@
-import { appointmentsDb, careDb, clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
+import {
+  appointmentsDb,
+  careDb,
+  clientsDb,
+  ledgerDb,
+  proceduresDb,
+  sessionsDb,
+  stockDb,
+} from "@/data/db";
+import { logActivity } from "@/services/activity.service";
 import { addDays, todayISO } from "@/lib/dates";
 import type { ProcedureRec, SessionRec } from "@/lib/models";
 import { suggestReturn } from "@/services/appointments.service";
@@ -192,6 +201,7 @@ export function completeSession(
             method: session.payment,
             value: price,
             clientId: session.clientId,
+            refId: session.id,
           }
         : {
             kind: "receber",
@@ -202,6 +212,7 @@ export function completeSession(
             method: session.payment,
             value: price,
             clientId: session.clientId,
+            refId: session.id,
           },
     );
   }
@@ -254,3 +265,65 @@ export const shortOnStock = (session: Pick<SessionRec, "products">) =>
     const item = stockDb.get().find((entry) => entry.id === used.stockId);
     return item ? used.qty > item.quantity : false;
   });
+
+/** Corrige um atendimento já finalizado: procedimentos, valores, forma de pagamento e anotações. O caixa e a agenda acompanham. */
+export function editFinishedSession(
+  id: string,
+  patch: Pick<SessionRec, "procedures" | "notes" | "payment">,
+) {
+  const session = find(id);
+  if (!session || session.status !== "done") return;
+  const procedure = patch.procedures.map((item) => item.name).join(" + ") || session.procedure;
+  const price = patch.procedures.reduce((sum, item) => sum + item.price, 0);
+  sessionsDb.set((list) =>
+    list.map((item) => (item.id === id ? { ...item, ...patch, procedure } : item)),
+  );
+  const apptId = session.apptId ?? `ap-${id}`;
+  appointmentsDb.set((list) =>
+    list.map((item) =>
+      item.id === apptId ? { ...item, procedure, price, payment: patch.payment } : item,
+    ),
+  );
+  ledgerDb.set((list) =>
+    list.map((item) =>
+      item.refId === id
+        ? { ...item, origin: procedure, value: price, method: patch.payment }
+        : item,
+    ),
+  );
+  logActivity({
+    by: "gestor",
+    kind: "atendimento",
+    clientId: session.clientId,
+    client: session.client,
+    text: `Corrigiu o atendimento: ${procedure}`,
+  });
+}
+
+/** Apaga um atendimento lançado por engano: sai do caixa, volta o estoque e a agenda. */
+export function deleteFinishedSession(id: string) {
+  const session = find(id);
+  if (!session || session.status !== "done") return;
+  sessionsDb.set((list) => list.filter((item) => item.id !== id));
+  ledgerDb.set((list) => list.filter((item) => item.refId !== id));
+  stockDb.set((list) =>
+    list.map((item) => {
+      const used = session.products.find((entry) => entry.stockId === item.id);
+      return used
+        ? { ...item, quantity: Math.round((item.quantity + used.qty) * 100) / 100 }
+        : item;
+    }),
+  );
+  if (session.apptId)
+    appointmentsDb.set((list) =>
+      list.map((item) => (item.id === session.apptId ? { ...item, done: false } : item)),
+    );
+  else appointmentsDb.set((list) => list.filter((item) => item.id !== `ap-${id}`));
+  logActivity({
+    by: "gestor",
+    kind: "atendimento",
+    clientId: session.clientId,
+    client: session.client,
+    text: `Apagou o atendimento: ${session.procedure}`,
+  });
+}

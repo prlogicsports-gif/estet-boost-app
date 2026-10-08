@@ -8,6 +8,7 @@ import {
 import { addDays, instantOf, shiftSeedDate, todayISO } from "@/lib/dates";
 import { createStore } from "@/lib/db";
 import type {
+  ActivityRec,
   AnamnesisRec,
   AppointmentRec,
   BillRec,
@@ -498,6 +499,7 @@ export const blocksDb = createStore<BlockRec[]>("eb:v1:bloqueios", () => [
   { id: "bl1", date: daysFromToday(3), start: "10:30", end: "12:00", reason: "Bloqueio pessoal" },
 ]);
 export const hoursDb = createStore<HoursRec>("eb:v1:horarios", seedHours);
+export const activityDb = createStore<ActivityRec[]>("eb:v1:historico", () => []);
 export const settingsDb = createStore<Settings>("eb:v1:configuracoes", () => DEFAULT_SETTINGS);
 export const prefsDb = createStore<Record<string, NotificationPrefs>>("eb:v1:preferencias", () => ({
   gestor: { ...defaultPrefs },
@@ -521,6 +523,7 @@ export function resetDemoData() {
     blocksDb,
     hoursDb,
     settingsDb,
+    activityDb,
     prefsDb,
   ].forEach((store) => store.reset());
 }

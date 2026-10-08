@@ -5,6 +5,8 @@ import { NewAppointmentDrawer } from "@/components/agenda/new-appointment-drawer
 import { AlertCard } from "@/components/eb/alert-card";
 import { AnamnesisEditor } from "@/components/clients/anamnesis-editor";
 import { ClientForm, valuesOf } from "@/components/clients/client-form";
+import { SessionEditor } from "@/components/clients/session-editor";
+import type { SessionRec } from "@/lib/models";
 import { Drawer } from "@/components/eb/overlays";
 import { ClientTimeline, type TimelineEntry } from "@/components/eb/client-timeline";
 import { EmptyState } from "@/components/eb/empty-state";
@@ -37,7 +39,7 @@ export const Route = createFileRoute("/_gestor/clientes/$clientId")({
   component: ClientePage,
 });
 
-type Tab = "resumo" | "historico" | "anamnese" | "evolucao" | "financeiro";
+type Tab = "resumo" | "historico" | "anamnese" | "evolucao" | "fotos" | "financeiro";
 
 function InfoRow({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
@@ -61,6 +63,7 @@ function ClientePage() {
   const [tab, setTab] = useState<Tab>("resumo");
   const [scheduling, setScheduling] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [fixing, setFixing] = useState<SessionRec | null>(null);
   const [anamnesing, setAnamnesing] = useState(false);
   const { questions } = settingsDb.use();
   const anamnese = anamnesisDb.use().find((item) => item.clientId === clientId);
@@ -99,6 +102,7 @@ function ClientePage() {
     .sort((a, b) => (b.finishedAt ?? b.startedAt).localeCompare(a.finishedAt ?? a.startedAt))
     .map((item) => ({
       id: item.id,
+      editable: true,
       date: formatShort((item.finishedAt ?? item.startedAt).slice(0, 10)),
       procedure: item.procedure,
       ...(item.products.length
@@ -187,6 +191,7 @@ function ClientePage() {
           { id: "historico", label: "Histórico" },
           { id: "anamnese", label: "Anamnese" },
           { id: "evolucao", label: "Evolução" },
+          { id: "fotos", label: "Fotos" },
           { id: "financeiro", label: "Financeiro" },
         ]}
       />
@@ -276,7 +281,11 @@ function ClientePage() {
 
       {tab === "historico" ? (
         history.length ? (
-          <ClientTimeline entries={history} />
+          <ClientTimeline
+            entries={history}
+            selectLabel="Corrigir atendimento"
+            onSelect={(entry) => setFixing(sessions.find((item) => item.id === entry.id) ?? null)}
+          />
         ) : (
           <EmptyState
             icon="History"
@@ -340,9 +349,10 @@ function ClientePage() {
             seed={faceSeed[client.id]}
             showGeneralActions={false}
           />
-          <PhotoVault clientId={client.id} />
         </div>
       ) : null}
+
+      {tab === "fotos" ? <PhotoVault clientId={client.id} /> : null}
 
       {tab === "financeiro" ? (
         <div className="flex flex-col gap-2.5">
@@ -392,6 +402,11 @@ function ClientePage() {
       ) : null}
 
       <ToastHost toast={toast ? { message: toast } : null} />
+      <SessionEditor
+        session={fixing}
+        onClose={() => setFixing(null)}
+        onDone={(message) => (setFixing(null), setToast(message))}
+      />
       <AnamnesisEditor
         clientId={client.id}
         open={anamnesing}

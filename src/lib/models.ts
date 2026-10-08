@@ -158,6 +158,17 @@ export type SessionRec = {
   finishedAt?: string | undefined;
 };
 
+/** Registro de tudo o que acontece na clínica (cliente e esteticista), para consulta em Gestão. */
+export type ActivityRec = {
+  id: string;
+  at: string;
+  by: "cliente" | "gestor";
+  kind: "horario" | "pagamento" | "cadastro" | "atendimento";
+  clientId?: string | undefined;
+  client: string;
+  text: string;
+};
+
 export type BlockRec = { id: string; date: string; start: string; end: string; reason: string };
 
 export type DayHours = { open: boolean; start: string; end: string };

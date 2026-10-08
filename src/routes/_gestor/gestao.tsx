@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AlertCard } from "@/components/eb/alert-card";
 import { CashSummary, type CashKind } from "@/components/eb/cash-summary";
 import { Icon } from "@/components/eb/icon";
+import { IconButton } from "@/components/eb/icon-button";
 import { Input } from "@/components/eb/input";
 import { MetricCard } from "@/components/eb/metric-card";
 import { Drawer } from "@/components/eb/overlays";
@@ -16,26 +17,32 @@ import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { billsDb, ledgerDb, stockDb } from "@/data/db";
+import { activityDb, billsDb, ledgerDb, stockDb } from "@/data/db";
 import type { LedgerEntry } from "@/data/gestor-mock";
 import { useClinicClients } from "@/lib/use-clinic";
 import { usePro } from "@/lib/use-pro";
 import { addDays, daysBetween, formatShort, monthName, relativeDay, todayISO } from "@/lib/dates";
 import { brl } from "@/lib/view";
 import { cn } from "@/lib/utils";
-import type { StockRec } from "@/lib/models";
+import type { ActivityRec, BillRec, StockRec } from "@/lib/models";
 import {
   addBill,
   addLedgerEntry,
   confirmPayment,
   payBill,
+  removeBill,
+  removeLedgerEntry,
+  reopenBill,
+  reopenReceivable,
+  updateBill,
+  updateLedgerEntry,
   rejectPayment,
   removeStock,
   saveStock,
 } from "@/services/finance.service";
 
-type Tab = "caixa" | "receber" | "contas" | "estoque";
-const TABS: Tab[] = ["caixa", "receber", "contas", "estoque"];
+type Tab = "caixa" | "receber" | "contas" | "estoque" | "historico";
+const TABS: Tab[] = ["caixa", "receber", "contas", "estoque", "historico"];
 
 export const Route = createFileRoute("/_gestor/gestao")({
   validateSearch: (search): { aba?: Tab | undefined } => ({
@@ -113,7 +120,15 @@ const longDate = (iso: string) => {
   }
 };
 
-function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => void }) {
+function CashDetail({
+  kind,
+  onClose,
+  onEdit,
+}: {
+  kind: CashKind | null;
+  onClose: () => void;
+  onEdit: (entry: LedgerEntry) => void;
+}) {
   const ledger = ledgerDb.use();
   const [all, setAll] = useState(false);
   const [method, setMethod] = useState("todos");
@@ -228,6 +243,11 @@ function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => v
                   {meta.sign}
                   {brl(entry.value)}
                 </span>
+                <IconButton
+                  icon="PencilLine"
+                  label={`Corrigir ${entry.label}`}
+                  onClick={() => onEdit(entry)}
+                />
               </div>
             ))}
           </div>
@@ -255,6 +275,8 @@ function GestaoPage() {
   }, [aba]);
   const [detail, setDetail] = useState<CashKind | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [editEntry, setEditEntry] = useState<LedgerEntry | null>(null);
+  const [editBill, setEditBill] = useState<BillRec | null>(null);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [product, setProduct] = useState<{
@@ -306,6 +328,8 @@ function GestaoPage() {
         : "Adicionar produto";
   const openAdd = () => {
     setProduct({ item: null, mode: "novo" });
+    setEditEntry(null);
+    setEditBill(null);
     setSheet(
       tab === "caixa" || tab === "receber" ? "movimento" : tab === "contas" ? "conta" : "produto",
     );
@@ -334,6 +358,7 @@ function GestaoPage() {
           { id: "receber", label: reportedCount ? `A receber · ${reportedCount}` : "A receber" },
           { id: "contas", label: "Contas" },
           { id: "estoque", label: "Estoque" },
+          { id: "historico", label: "Histórico" },
         ]}
       />
 
@@ -458,6 +483,11 @@ function GestaoPage() {
                       </Button>
                     </>
                   )}
+                  <IconButton
+                    icon="PencilLine"
+                    label={`Corrigir ${entry.label}`}
+                    onClick={() => (setEditEntry(entry), setSheet("movimento"))}
+                  />
                 </div>
               );
             })}
@@ -515,7 +545,19 @@ function GestaoPage() {
                 >
                   {bill.paid ? "Paga" : late ? "Atrasada" : "A pagar"}
                 </StatusBadge>
-                {bill.paid ? null : (
+                {bill.paid ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      reopenBill(bill.id);
+                      setToast(`${bill.name} voltou para a pagar e saiu do caixa`);
+                    }}
+                  >
+                    Desfazer pagamento
+                  </Button>
+                ) : (
                   <Button
                     type="button"
                     size="sm"
@@ -528,11 +570,18 @@ function GestaoPage() {
                     Marcar como paga
                   </Button>
                 )}
+                <IconButton
+                  icon="PencilLine"
+                  label={`Corrigir ${bill.name}`}
+                  onClick={() => (setEditBill(bill), setSheet("conta"))}
+                />
               </div>
             );
           })}
         </div>
       ) : null}
+
+      {tab === "historico" ? <ActivityList /> : null}
 
       {tab === "estoque" ? (
         <div className="flex flex-col gap-2.5">
@@ -583,14 +632,24 @@ function GestaoPage() {
         </div>
       ) : null}
 
-      <CashDetail kind={detail} onClose={() => setDetail(null)} />
+      <CashDetail
+        kind={detail}
+        onClose={() => setDetail(null)}
+        onEdit={(entry) => {
+          setDetail(null);
+          setEditEntry(entry);
+          setSheet("movimento");
+        }}
+      />
       <MovementDrawer
         open={sheet === "movimento"}
+        entry={editEntry}
         onClose={() => setSheet(null)}
         onSaved={(text) => (setSheet(null), setToast(text))}
       />
       <BillDrawer
         open={sheet === "conta"}
+        bill={editBill}
         onClose={() => setSheet(null)}
         onSaved={(text) => (setSheet(null), setToast(text))}
       />
@@ -621,10 +680,12 @@ const parseMoney = (text: string) => Number(text.replace(/\./g, "").replace(",",
 
 function MovementDrawer({
   open,
+  entry,
   onClose,
   onSaved,
 }: {
   open: boolean;
+  entry: LedgerEntry | null;
   onClose: () => void;
   onSaved: (text: string) => void;
 }) {
@@ -638,15 +699,17 @@ function MovementDrawer({
   const [owner, setOwner] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setOwner("");
-      setKind("entradas");
-      setLabel("");
-      setValue("");
-      setDate(todayISO());
-      setTried(false);
-    }
-  }, [open]);
+    if (!open) return;
+    setOwner(entry?.clientId ?? "");
+    setKind(entry?.kind ?? "entradas");
+    setLabel(entry?.label ?? "");
+    setValue(entry ? String(entry.value).replace(".", ",") : "");
+    setMethod(entry?.method ?? METHODS[0] ?? "Pix");
+    setDate(
+      entry ? (entry.kind === "receber" ? (entry.due ?? entry.date) : entry.date) : todayISO(),
+    );
+    setTried(false);
+  }, [open, entry]);
 
   const amount = parseMoney(value);
   const labelError = label.trim() ? undefined : "Descreva a movimentação.";
@@ -655,6 +718,19 @@ function MovementDrawer({
   function submit() {
     setTried(true);
     if (labelError || valueError) return;
+    if (entry) {
+      updateLedgerEntry(entry.id, {
+        kind,
+        label: label.trim(),
+        value: amount,
+        method,
+        date,
+        ...(kind === "receber" ? { due: date } : {}),
+        ...(owner ? { clientId: owner } : {}),
+      });
+      onSaved("Lançamento corrigido");
+      return;
+    }
     addLedgerEntry({
       kind,
       date,
@@ -679,9 +755,45 @@ function MovementDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title="Nova movimentação"
-      subtitle="Entra no caixa e nos totais do mês"
-      footer={drawerFooter(onClose, submit, "Lançar")}
+      title={entry ? "Corrigir lançamento" : "Nova movimentação"}
+      subtitle={
+        entry ? "A correção muda o caixa e os totais do mês" : "Entra no caixa e nos totais do mês"
+      }
+      footer={
+        entry ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                if (window.confirm("Apagar este lançamento do caixa?")) {
+                  removeLedgerEntry(entry.id);
+                  onSaved("Lançamento apagado");
+                }
+              }}
+            >
+              <Icon name="Trash2" size={16} /> Apagar
+            </Button>
+            {entry.kind === "entradas" && entry.due ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  reopenReceivable(entry.id);
+                  onSaved("Recebimento desfeito: voltou para a receber");
+                }}
+              >
+                Desfazer recebimento
+              </Button>
+            ) : null}
+            <Button type="button" variant="tech" className="flex-1" onClick={submit}>
+              <Icon name="Check" size={18} /> Salvar correção
+            </Button>
+          </>
+        ) : (
+          drawerFooter(onClose, submit, "Lançar")
+        )
+      }
     >
       <div className="flex flex-col gap-3.5">
         <SegmentedTabs
@@ -752,10 +864,12 @@ function MovementDrawer({
 
 function BillDrawer({
   open,
+  bill,
   onClose,
   onSaved,
 }: {
   open: boolean;
+  bill: BillRec | null;
   onClose: () => void;
   onSaved: (text: string) => void;
 }) {
@@ -766,14 +880,13 @@ function BillDrawer({
   const [tried, setTried] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setName("");
-      setValue("");
-      setDue(addDays(todayISO(), 7));
-      setRecurrence("Mensal");
-      setTried(false);
-    }
-  }, [open]);
+    if (!open) return;
+    setName(bill?.name ?? "");
+    setValue(bill ? String(bill.value).replace(".", ",") : "");
+    setDue(bill?.due ?? addDays(todayISO(), 7));
+    setRecurrence(bill?.recurrence ?? "Mensal");
+    setTried(false);
+  }, [open, bill]);
 
   const amount = parseMoney(value);
   const nameError = name.trim() ? undefined : "Dê um nome para a conta.";
@@ -782,6 +895,11 @@ function BillDrawer({
   function submit() {
     setTried(true);
     if (nameError || valueError || !due) return;
+    if (bill) {
+      updateBill(bill.id, { name: name.trim(), value: amount, due, recurrence });
+      onSaved(`${name.trim()} corrigida`);
+      return;
+    }
     addBill({ name: name.trim(), value: amount, due, recurrence });
     onSaved(`${name.trim()} adicionada: você é avisada 3 dias antes`);
   }
@@ -790,9 +908,31 @@ function BillDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title="Adicionar conta"
+      title={bill ? "Corrigir conta" : "Adicionar conta"}
       subtitle="O lembrete chega todo dia, de 3 dias antes até o vencimento"
-      footer={drawerFooter(onClose, submit, "Adicionar conta")}
+      footer={
+        bill ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                if (window.confirm(`Apagar ${bill.name}?`)) {
+                  removeBill(bill.id);
+                  onSaved(`${bill.name} apagada`);
+                }
+              }}
+            >
+              <Icon name="Trash2" size={16} /> Apagar
+            </Button>
+            <Button type="button" variant="tech" className="flex-1" onClick={submit}>
+              <Icon name="Check" size={18} /> Salvar correção
+            </Button>
+          </>
+        ) : (
+          drawerFooter(onClose, submit, "Adicionar conta")
+        )
+      }
     >
       <div className="flex flex-col gap-3.5">
         <Input
@@ -1008,5 +1148,109 @@ function ProductDrawer({
         </div>
       </div>
     </Drawer>
+  );
+}
+
+const ACTIVITY_FILTERS: { id: "todos" | ActivityRec["kind"]; label: string }[] = [
+  { id: "todos", label: "Tudo" },
+  { id: "horario", label: "Horários" },
+  { id: "pagamento", label: "Pagamentos" },
+  { id: "cadastro", label: "Cadastros" },
+  { id: "atendimento", label: "Atendimentos" },
+];
+const ACTIVITY_ICON: Record<ActivityRec["kind"], string> = {
+  horario: "CalendarClock",
+  pagamento: "Wallet",
+  cadastro: "UserPlus",
+  atendimento: "Sparkles",
+};
+
+/** Tudo o que as clientes (e você) fizeram, do mais recente ao mais antigo. */
+function ActivityList() {
+  const list = activityDb.use();
+  const [filter, setFilter] = useState<"todos" | ActivityRec["kind"]>("todos");
+  const [who, setWho] = useState<"todos" | ActivityRec["by"]>("todos");
+  const shown = list.filter(
+    (item) => (filter === "todos" || item.kind === filter) && (who === "todos" || item.by === who),
+  );
+  const groups: { day: string; items: ActivityRec[] }[] = [];
+  for (const item of shown) {
+    const day = item.at.slice(0, 10);
+    const group = groups.find((entry) => entry.day === day);
+    if (group) group.items.push(item);
+    else groups.push({ day, items: [item] });
+  }
+  const chip = (on: boolean) =>
+    cn(
+      "min-h-11 flex-none whitespace-nowrap rounded-full border px-[13px] text-[12.5px]",
+      on
+        ? "border-transparent bg-[var(--eb-nude-500)] text-[var(--text-on-nude)]"
+        : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] text-[var(--text-secondary)]",
+    );
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-1.5 overflow-x-auto">
+        {ACTIVITY_FILTERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={chip(filter === item.id)}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <span className="mx-1 w-px flex-none bg-[var(--border-hairline)]" />
+        {(["todos", "cliente", "gestor"] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={chip(who === item)}
+            onClick={() => setWho(item)}
+          >
+            {item === "todos"
+              ? "Todos"
+              : item === "cliente"
+                ? "Feito pelas clientes"
+                : "Feito por mim"}
+          </button>
+        ))}
+      </div>
+      {groups.map((group) => (
+        <div key={group.day} className="flex flex-col gap-2">
+          <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+            {relativeDay(group.day)}
+          </span>
+          {group.items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
+            >
+              <span className="grid size-8 flex-none place-items-center rounded-full bg-[var(--eb-ivory-a06)] text-[var(--eb-nude-300)]">
+                <Icon name={ACTIVITY_ICON[item.kind]} size={15} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px]">
+                  <span className="font-medium">{item.client}</span> · {item.text}
+                </div>
+                <div className="font-mono text-[11.5px] text-muted-foreground">
+                  {new Date(item.at).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
+                  · {item.by === "cliente" ? "pela cliente" : "por você"}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+      {!shown.length ? (
+        <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-card)] px-4 py-5 text-[13px] text-muted-foreground">
+          Os pedidos de horário, confirmações, pagamentos informados, cadastros e atendimentos
+          aparecem aqui conforme acontecem.
+        </p>
+      ) : null}
+    </div>
   );
 }

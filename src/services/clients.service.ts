@@ -1,3 +1,4 @@
+import { logActivity } from "@/services/activity.service";
 import { clientsDb, DEMO_CLINIC, type ClientRec } from "@/data/db";
 import { initialsOf } from "@/data/mock-auth";
 import { events } from "@/services/notification-events";
@@ -76,6 +77,16 @@ export function createClient(input: NewClient): ClientRec {
   };
   clientsDb.set((list) => [...list, rec]);
   notify(events.clientRegistered(rec, input.via ?? "cadastro"));
+  logActivity({
+    by: input.via === "link" ? "cliente" : "gestor",
+    kind: "cadastro",
+    clientId: rec.id,
+    client: rec.name,
+    text:
+      input.via === "link"
+        ? "Se cadastrou pelo link da clínica"
+        : "Foi cadastrada pela esteticista",
+  });
   return rec;
 }
 

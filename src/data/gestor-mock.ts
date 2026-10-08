@@ -270,6 +270,8 @@ export type LedgerEntry = {
   due?: string;
   /** Cliente a quem a cobrança pertence. */
   clientId?: string;
+  /** Quem gerou o lançamento (atendimento ou conta), para corrigir junto se algo for editado. */
+  refId?: string;
   /** A cliente avisou que pagou; a esteticista ainda precisa confirmar o recebimento. */
   reported?: { at: string; method: string };
 };

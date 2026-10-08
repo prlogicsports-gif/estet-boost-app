@@ -10,6 +10,8 @@ export type TimelineEntry = {
   photos?: number;
   payment?: string;
   professional?: string;
+  /** Pode ser corrigido pela esteticista. */
+  editable?: boolean;
 };
 
 function Meta({ icon, label }: { icon: string; label: string }) {
@@ -24,9 +26,11 @@ function Meta({ icon, label }: { icon: string; label: string }) {
 export function ClientTimeline({
   entries,
   onSelect,
+  selectLabel = "Ver detalhes",
 }: {
   entries: TimelineEntry[];
   onSelect?: (entry: TimelineEntry) => void;
+  selectLabel?: string;
 }) {
   return (
     <ol className="m-0 flex list-none flex-col p-0">
@@ -68,13 +72,13 @@ export function ClientTimeline({
               ) : null}
               {entry.payment ? <Meta icon="Wallet" label={entry.payment} /> : null}
               {entry.professional ? <Meta icon="User" label={entry.professional} /> : null}
-              {onSelect ? (
+              {onSelect && entry.editable ? (
                 <button
                   type="button"
                   onClick={() => onSelect(entry)}
                   className="min-h-11 text-[12.5px] text-[var(--teal)]"
                 >
-                  Ver detalhes
+                  {selectLabel}
                 </button>
               ) : null}
             </div>
