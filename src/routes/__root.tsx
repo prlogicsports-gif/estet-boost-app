@@ -115,7 +115,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const splash = useSplashOnce();
+
 
   return (
     <QueryClientProvider client={queryClient}>
