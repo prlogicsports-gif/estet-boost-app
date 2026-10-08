@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Lock, Mail } from "lucide-react";
 
+import { AuthTitle, authLink } from "@/components/auth/terms-check";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/auth/field";
+import type { Session } from "@/lib/auth.types";
 import { authService } from "@/services/auth.service";
 
 export function LoginForm({
@@ -9,48 +12,69 @@ export function LoginForm({
   onForgot,
   onCreate,
 }: {
-  onSuccess: () => void;
+  onSuccess: (session: Session) => void;
   onForgot: () => void;
   onCreate: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
 
   return (
     <form
-      className="space-y-4"
+      className="mt-6"
       onSubmit={async (event) => {
         event.preventDefault();
+        const data = new FormData(event.currentTarget);
         setLoading(true);
-        await authService.signIn();
+        setError(undefined);
+        const result = await authService.signIn(
+          String(data.get("email")),
+          String(data.get("senha")),
+        );
         setLoading(false);
-        onSuccess();
+        if (result.ok) onSuccess(result.session);
+        else setError(result.message);
       }}
     >
-      <div>
-        <h1 className="text-xl font-light text-foreground">Seu cuidado, organizado.</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Acompanhe atendimentos, clientes e cada evolução.
-        </p>
+      <AuthTitle title="Seu cuidado, organizado.">
+        Acompanhe atendimentos, clientes e cada evolução.
+      </AuthTitle>
+
+      <div className="mt-5 flex flex-col gap-3.5">
+        <Field
+          label="E-mail"
+          type="email"
+          name="email"
+          autoComplete="username"
+          placeholder="fernanda@estudio.com.br"
+          icon={<Mail aria-hidden />}
+          error={error}
+          required
+        />
+        <Field
+          label="Senha"
+          type="password"
+          name="senha"
+          autoComplete="current-password"
+          placeholder="Sua senha"
+          icon={<Lock aria-hidden />}
+          required
+        />
       </div>
 
-      <Field label="E-mail" type="email" name="email" autoComplete="email" placeholder="voce@estudio.com" required />
-      <Field label="Senha" type="password" name="senha" autoComplete="current-password" placeholder="••••••••" required />
+      <div className="mt-2.5 flex justify-end">
+        <button type="button" onClick={onForgot} className={`min-h-11 text-[13.5px] ${authLink}`}>
+          Esqueci minha senha
+        </button>
+      </div>
 
-      <button
-        type="button"
-        onClick={onForgot}
-        className="min-h-11 text-sm text-[var(--teal)] underline-offset-4 hover:underline"
-      >
-        Esqueci minha senha
-      </button>
-
-      <Button type="submit" size="lg" className="w-full" disabled={loading}>
+      <Button type="submit" size="lg" className="mt-2.5 w-full" disabled={loading}>
         {loading ? "Entrando..." : "Entrar"}
       </Button>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Ainda não tem conta?{" "}
-        <button type="button" onClick={onCreate} className="text-primary underline-offset-4 hover:underline">
+      <p className="mt-[18px] text-center text-[13.5px] leading-normal text-[var(--text-secondary)]">
+        Primeira vez por aqui?{" "}
+        <button type="button" onClick={onCreate} className={authLink}>
           Criar minha conta
         </button>
       </p>

@@ -2,9 +2,11 @@ import { Link } from "@tanstack/react-router";
 
 import { BrandMark } from "@/components/brand/brand-mark";
 import { desktopItems } from "@/components/shell/nav-items";
-import { mockSession } from "@/data/mock-auth";
+import { initialsOf, roleLabel } from "@/data/mock-auth";
+import { useSession } from "@/lib/session";
 
 export function DesktopSidebar() {
+  const session = useSession();
   return (
     <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-64 shrink-0 flex-col justify-between rounded-[var(--radius-xl)] p-4 glass-panel lg:flex">
       <div>
@@ -28,11 +30,13 @@ export function DesktopSidebar() {
 
       <div className="flex items-center gap-3 rounded-[var(--radius-md)] bg-[var(--muted)] p-3">
         <span className="flex size-9 items-center justify-center rounded-full bg-primary font-mono text-xs text-primary-foreground">
-          {mockSession.user.initials}
+          {session ? initialsOf(session.name) : ""}
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-sm text-foreground">{mockSession.user.name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{mockSession.user.role}</span>
+          <span className="block truncate text-sm text-foreground">{session?.name}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {session ? roleLabel[session.role] : ""}
+          </span>
         </span>
       </div>
     </aside>

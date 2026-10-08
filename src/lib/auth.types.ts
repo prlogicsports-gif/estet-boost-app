@@ -1,3 +1,14 @@
+export type Role = "gestor" | "cliente";
 export type StudioSize = "autonoma" | "clinica";
 export type Invite = { slug: string | null; code: string | null; professional: string };
-export type SignupData = { name: string; email: string; phone: string; studio: string; city: string; size: StudioSize };
+export type SignupData = {
+  name: string;
+  email: string;
+  phone: string;
+  studio: string;
+  city: string;
+  document: string;
+  size: StudioSize;
+};
+export type Session = { role: Role; name: string; email: string };
+export type AuthResult = { ok: true; session: Session } | { ok: false; message: string };

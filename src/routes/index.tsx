@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 
 import { AuthCarousel } from "@/components/auth/auth-carousel";
@@ -9,6 +9,8 @@ import { SignupFlow } from "@/components/auth/signup-flow";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { SplashScreen } from "@/components/splash/splash-screen";
 import { readInvite } from "@/lib/invite";
+import { homeFor, useSession } from "@/lib/session";
+import type { Session } from "@/lib/auth.types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -17,12 +19,14 @@ export const Route = createFileRoute("/")({
       { title: "Acessar a EstetBoost." },
       {
         name: "description",
-        content: "Entre na EstetBoost. e organize agenda, clientes e evolução do seu estúdio de estética.",
+        content:
+          "Entre na EstetBoost. e organize agenda, clientes e evolução do seu estúdio de estética.",
       },
       { property: "og:title", content: "Acessar a EstetBoost." },
       {
         property: "og:description",
-        content: "Entre na EstetBoost. e organize agenda, clientes e evolução do seu estúdio de estética.",
+        content:
+          "Entre na EstetBoost. e organize agenda, clientes e evolução do seu estúdio de estética.",
       },
     ],
   }),
@@ -31,53 +35,68 @@ export const Route = createFileRoute("/")({
 
 type Mode = "entrar" | "criar" | "recuperar";
 
+const tabs = [
+  { value: "entrar", label: "Entrar" },
+  { value: "criar", label: "Criar conta" },
+] as const;
+
 function AuthPage() {
   const navigate = useNavigate();
   const searchStr = useRouterState({ select: (state) => state.location.searchStr });
   const invite = readInvite(searchStr ?? "");
+  const session = useSession();
   const [splash, setSplash] = useState(true);
   const [mode, setMode] = useState<Mode>("entrar");
 
-  const goToApp = () => navigate({ to: "/hoje" });
+  const goHome = (next: Session) => navigate({ to: homeFor(next.role) });
+
+  // Quem já tem sessão vai direto para a área do próprio perfil.
+  useEffect(() => {
+    if (session && !splash) navigate({ to: homeFor(session.role) });
+  }, [session, splash, navigate]);
 
   return (
     <div className="min-h-screen bg-background">
       {splash ? <SplashScreen onDone={() => setSplash(false)} /> : null}
 
-      <div className="grid min-h-screen lg:grid-cols-[1.15fr_1fr]">
-        <div className="relative hidden lg:block">
-          <AuthCarousel />
-        </div>
+      <div className="grid min-h-screen grid-cols-1 min-[901px]:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        <AuthCarousel />
 
-        <div className="flex items-center justify-center px-4 py-10 sm:px-8">
-          <div className="w-full max-w-[440px] rounded-[var(--radius-xl)] p-6 glass-panel sm:p-8">
-            <div className="mb-6 text-xl">
-              <BrandMark />
-            </div>
+        <div className="flex flex-col items-center justify-center gap-[22px] px-4 pb-10 pt-6 min-[901px]:px-10 min-[901px]:py-14">
+          <div className="w-full max-w-[440px] text-2xl">
+            <BrandMark />
+          </div>
 
+          <div
+            className="w-full max-w-[440px] rounded-[28px] border border-[var(--glass-border)] bg-[var(--glass)] p-7 backdrop-blur-[22px] backdrop-saturate-[1.15]"
+            style={{ boxShadow: "var(--glass-shadow), var(--glass-highlight)" }}
+          >
             {invite ? (
-              <ClientInviteForm invite={invite} onSuccess={goToApp} />
+              <ClientInviteForm
+                invite={invite}
+                onSuccess={goHome}
+                onLogin={() => navigate({ to: "/", search: {} })}
+              />
             ) : mode === "recuperar" ? (
               <ForgotPasswordForm onBack={() => setMode("entrar")} />
             ) : (
               <>
-                <div className="mb-6 grid grid-cols-2 gap-1 rounded-[var(--radius-md)] bg-[var(--muted)] p-1">
-                  {(
-                    [
-                      { value: "entrar", label: "Entrar" },
-                      { value: "criar", label: "Criar conta" },
-                    ] as const
-                  ).map((tab) => (
+                <div
+                  role="tablist"
+                  className="grid grid-cols-2 gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] p-1"
+                >
+                  {tabs.map((tab) => (
                     <button
                       key={tab.value}
                       type="button"
+                      role="tab"
                       onClick={() => setMode(tab.value)}
-                      aria-pressed={mode === tab.value}
+                      aria-selected={mode === tab.value}
                       className={cn(
-                        "min-h-11 rounded-[var(--radius-sm)] text-sm transition-colors",
+                        "min-h-10 rounded-full px-3 text-sm transition-colors",
                         mode === tab.value
-                          ? "bg-[var(--accent)] text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
+                          ? "bg-[var(--eb-ivory-a10)] font-medium text-foreground"
+                          : "text-[var(--text-secondary)] hover:text-foreground",
                       )}
                     >
                       {tab.label}
@@ -87,12 +106,12 @@ function AuthPage() {
 
                 {mode === "entrar" ? (
                   <LoginForm
-                    onSuccess={goToApp}
+                    onSuccess={goHome}
                     onForgot={() => setMode("recuperar")}
                     onCreate={() => setMode("criar")}
                   />
                 ) : (
-                  <SignupFlow onSuccess={goToApp} />
+                  <SignupFlow onSuccess={goHome} onLogin={() => setMode("entrar")} />
                 )}
               </>
             )}

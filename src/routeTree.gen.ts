@@ -11,11 +11,13 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgendaRouteImport } from './routes/agenda'
+import { Route as ClienteRouteImport } from './routes/cliente'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as CredenciaisRouteImport } from './routes/credenciais'
 import { Route as GestaoRouteImport } from './routes/gestao'
 import { Route as HojeRouteImport } from './routes/hoje'
+import { Route as MapaFacialRouteImport } from './routes/mapa-facial'
 import { Route as NotificacoesRouteImport } from './routes/notificacoes'
 
 const IndexRoute = IndexRouteImport.update({
@@ -26,6 +28,11 @@ const IndexRoute = IndexRouteImport.update({
 const AgendaRoute = AgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClienteRoute = ClienteRouteImport.update({
+  id: '/cliente',
+  path: '/cliente',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientesRoute = ClientesRouteImport.update({
@@ -53,6 +60,11 @@ const HojeRoute = HojeRouteImport.update({
   path: '/hoje',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MapaFacialRoute = MapaFacialRouteImport.update({
+  id: '/mapa-facial',
+  path: '/mapa-facial',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NotificacoesRoute = NotificacoesRouteImport.update({
   id: '/notificacoes',
   path: '/notificacoes',
@@ -62,32 +74,38 @@ const NotificacoesRoute = NotificacoesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/cliente': typeof ClienteRoute
   '/clientes': typeof ClientesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/credenciais': typeof CredenciaisRoute
   '/gestao': typeof GestaoRoute
   '/hoje': typeof HojeRoute
+  '/mapa-facial': typeof MapaFacialRoute
   '/notificacoes': typeof NotificacoesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/cliente': typeof ClienteRoute
   '/clientes': typeof ClientesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/credenciais': typeof CredenciaisRoute
   '/gestao': typeof GestaoRoute
   '/hoje': typeof HojeRoute
+  '/mapa-facial': typeof MapaFacialRoute
   '/notificacoes': typeof NotificacoesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/cliente': typeof ClienteRoute
   '/clientes': typeof ClientesRoute
   '/configuracoes': typeof ConfiguracoesRoute
   '/credenciais': typeof CredenciaisRoute
   '/gestao': typeof GestaoRoute
   '/hoje': typeof HojeRoute
+  '/mapa-facial': typeof MapaFacialRoute
   '/notificacoes': typeof NotificacoesRoute
 }
 export interface FileRouteTypes {
@@ -95,42 +113,50 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agenda'
+    | '/cliente'
     | '/clientes'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
     | '/hoje'
+    | '/mapa-facial'
     | '/notificacoes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/agenda'
+    | '/cliente'
     | '/clientes'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
     | '/hoje'
+    | '/mapa-facial'
     | '/notificacoes'
   id:
     | '__root__'
     | '/'
     | '/agenda'
+    | '/cliente'
     | '/clientes'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
     | '/hoje'
+    | '/mapa-facial'
     | '/notificacoes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgendaRoute: typeof AgendaRoute
+  ClienteRoute: typeof ClienteRoute
   ClientesRoute: typeof ClientesRoute
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   CredenciaisRoute: typeof CredenciaisRoute
   GestaoRoute: typeof GestaoRoute
   HojeRoute: typeof HojeRoute
+  MapaFacialRoute: typeof MapaFacialRoute
   NotificacoesRoute: typeof NotificacoesRoute
 }
 
@@ -148,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof AgendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cliente': {
+      id: '/cliente'
+      path: '/cliente'
+      fullPath: '/cliente'
+      preLoaderRoute: typeof ClienteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clientes': {
@@ -185,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HojeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mapa-facial': {
+      id: '/mapa-facial'
+      path: '/mapa-facial'
+      fullPath: '/mapa-facial'
+      preLoaderRoute: typeof MapaFacialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/notificacoes': {
       id: '/notificacoes'
       path: '/notificacoes'
@@ -198,11 +238,13 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgendaRoute: AgendaRoute,
+  ClienteRoute: ClienteRoute,
   ClientesRoute: ClientesRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   CredenciaisRoute: CredenciaisRoute,
   GestaoRoute: GestaoRoute,
   HojeRoute: HojeRoute,
+  MapaFacialRoute: MapaFacialRoute,
   NotificacoesRoute: NotificacoesRoute,
 }
 export const routeTree = rootRouteImport
