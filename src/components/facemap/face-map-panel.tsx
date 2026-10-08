@@ -5,7 +5,9 @@ import { findZone, type FaceZone } from "@/components/facemap/face-data";
 import { FaceGeneralActions } from "@/components/facemap/face-general-actions";
 import { FaceMap } from "@/components/facemap/face-map";
 import { FaceMapHistory } from "@/components/facemap/face-map-history";
+import type { ZonePhotos } from "@/components/eb/face-zone-photos";
 import { FaceMapSheet } from "@/components/facemap/face-map-sheet";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useGeneralActions } from "@/lib/face-general-actions";
 import {
   buildMarks,
@@ -23,13 +25,22 @@ const label =
  * Mapa facial de uma cliente, só na vista frontal. Toque numa região para
  * selecionar, toque de novo dentro dela para pousar um ponto e registre no painel.
  */
-export function FaceMapPanel({ clientId, seed }: { clientId: string; seed?: FaceMark[] }) {
+export function FaceMapPanel({
+  clientId,
+  seed,
+  showGeneralActions = true,
+}: {
+  clientId: string;
+  seed?: FaceMark[] | undefined;
+  showGeneralActions?: boolean;
+}) {
   const { marks, add, remove, removeZone } = useFaceMap(clientId, seed);
   const { actions, update } = useGeneralActions();
   const [selected, setSelected] = useState<string | null>(null);
   const [points, setPoints] = useState<Record<string, FacePoint[]>>({});
   const [applied, setApplied] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [zonePhotos, setZonePhotos] = useState<Record<string, ZonePhotos>>({});
 
   useEffect(() => {
     if (!notice) return;
@@ -37,6 +48,7 @@ export function FaceMapPanel({ clientId, seed }: { clientId: string; seed?: Face
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  const wide = useMediaQuery("(min-width: 1024px)");
   const zone = selected ? findZone(selected) : null;
   const pending = selected ? (points[selected] ?? []) : [];
 
@@ -59,6 +71,22 @@ export function FaceMapPanel({ clientId, seed }: { clientId: string; seed?: Face
     setPoints((current) => ({ ...current, [zone.id]: [] }));
     setSelected(null);
   };
+
+  const sheet = (
+    <FaceMapSheet
+      inline={wide}
+      zone={zone}
+      pointCount={pending.length}
+      history={zone ? historyForZone(marks, zone.id) : []}
+      photos={zone ? zonePhotos[zone.id] : undefined}
+      onPhotosChange={(next) => {
+        if (zone) setZonePhotos((current) => ({ ...current, [zone.id]: next }));
+      }}
+      onClose={() => setSelected(null)}
+      onSave={save}
+      onClear={clear}
+    />
+  );
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
@@ -84,17 +112,11 @@ export function FaceMapPanel({ clientId, seed }: { clientId: string; seed?: Face
           </div>
         ) : null}
 
-        <FaceMapSheet
-          zone={zone}
-          pointCount={pending.length}
-          history={zone ? historyForZone(marks, zone.id) : []}
-          onClose={() => setSelected(null)}
-          onSave={save}
-          onClear={clear}
-        />
+        {wide ? null : sheet}
       </div>
 
       <div className="flex min-w-0 flex-col gap-5">
+        {wide && zone ? sheet : null}
         <div className="flex flex-col gap-1.5">
           <span className={label}>Região selecionada</span>
           <span
@@ -109,12 +131,14 @@ export function FaceMapPanel({ clientId, seed }: { clientId: string; seed?: Face
           </span>
         </div>
 
-        <FaceGeneralActions
-          actions={actions}
-          onChange={update}
-          applied={applied}
-          onApply={(action, on) => setApplied((current) => ({ ...current, [action.id]: on }))}
-        />
+        {showGeneralActions ? (
+          <FaceGeneralActions
+            actions={actions}
+            onChange={update}
+            applied={applied}
+            onApply={(action, on) => setApplied((current) => ({ ...current, [action.id]: on }))}
+          />
+        ) : null}
 
         <div className="flex flex-col gap-2.5">
           <span className={label}>Histórico</span>

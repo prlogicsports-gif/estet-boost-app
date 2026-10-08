@@ -19,10 +19,12 @@ export function FaceMapHistory({
   marks,
   onSelect,
   onRemove,
+  emptyLabel = "Nenhuma marcação ainda. Toque em uma região do rosto para registrar.",
 }: {
   marks: FaceMark[];
   onSelect?: (mark: FaceMark) => void;
   onRemove?: (mark: FaceMark) => void;
+  emptyLabel?: string;
 }) {
   const groups = useMemo(() => {
     const buckets = new Map<string, FaceMark[]>();
@@ -35,9 +37,7 @@ export function FaceMapHistory({
   if (!marks.length) {
     return (
       <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--border-card)] bg-[var(--eb-ivory-a06)] px-[18px] py-[22px] text-center">
-        <p className="text-[13.5px] text-[var(--text-secondary)]">
-          Nenhuma marcação ainda. Toque em uma região do rosto para registrar.
-        </p>
+        <p className="text-[13.5px] text-[var(--text-secondary)]">{emptyLabel}</p>
       </div>
     );
   }

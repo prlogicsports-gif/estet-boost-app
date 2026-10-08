@@ -57,6 +57,12 @@ export const authService = {
     await wait();
     return open({ role: "cliente", name: data.name, email: data.email.trim().toLowerCase() });
   },
+  /** Acesso livre temporário: abre a área do perfil sem credencial, até o app ser ativado. */
+  enterAs(role: Session["role"]): Session {
+    const session = demoAccounts.find((item) => item.role === role) ?? demoAccounts[0]!;
+    sessionStore.set(session);
+    return session;
+  },
   signOut() {
     sessionStore.clear();
   },

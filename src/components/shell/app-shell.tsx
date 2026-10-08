@@ -1,51 +1,77 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
 
 import { RoleGate } from "@/components/auth/role-gate";
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { BrandMark } from "@/components/brand/brand-mark";
+import { Button } from "@/components/ui/button";
+import { NotificationCenter, type NotificationItem } from "@/components/eb/notification-center";
+import { Drawer } from "@/components/eb/overlays";
 import { DesktopSidebar } from "@/components/shell/desktop-sidebar";
 import { MobileDock } from "@/components/shell/mobile-dock";
+import type { NavConfig } from "@/components/shell/nav-items";
+import { ShellContext } from "@/components/shell/shell-context";
 
+/**
+ * Uma casca para os dois perfis: dock flutuante no celular e barra lateral no
+ * desktop, as mesmas rotas nos dois. Só deixa passar o perfil indicado.
+ */
 export function AppShell({
-  title,
-  subtitle,
+  nav,
+  notifications,
   children,
 }: {
-  title: string;
-  subtitle?: string;
-  children?: ReactNode;
+  nav: NavConfig;
+  notifications: NotificationItem[];
+  children: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const unread = notifications.filter((item) => item.unread).length;
+
   return (
-    <RoleGate role="gestor">
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto flex w-full max-w-6xl gap-6 px-4 py-6 lg:px-6">
-          <DesktopSidebar />
-
-          <main className="min-w-0 flex-1 pb-32 lg:pb-6">
-            <div className="mb-6 lg:hidden">
-              <span className="text-lg">
-                <BrandMark />
-              </span>
-            </div>
-
-            <header className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-light text-foreground">{title}</h1>
-                {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+    <RoleGate role={nav.role}>
+      <ShellContext.Provider value={{ openNotifications: () => setOpen(true), unread }}>
+        <div className="min-h-screen bg-background">
+          <div
+            className="mx-auto flex w-full gap-6 px-4 py-6 lg:px-8"
+            style={{
+              maxWidth:
+                nav.role === "gestor"
+                  ? "calc(var(--content-max, 1120px) + 236px + 64px)"
+                  : undefined,
+            }}
+          >
+            <DesktopSidebar nav={nav} />
+            <main
+              className="mx-auto min-w-0 flex-1 pb-32 lg:pb-6"
+              style={{ maxWidth: nav.maxWidth }}
+            >
+              <div key={pathname} style={{ animation: "fade-up 320ms cubic-bezier(.16,1,.3,1)" }}>
+                {children}
               </div>
-              <SignOutButton />
-            </header>
-
-            {children ?? (
-              <div className="rounded-[var(--radius-xl)] border border-border bg-[var(--card)] p-6 text-sm text-muted-foreground">
-                Esta tela chega na próxima etapa.
-              </div>
-            )}
-          </main>
+            </main>
+          </div>
+          <MobileDock nav={nav} />
         </div>
 
-        <MobileDock />
-      </div>
+        <Drawer
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Notificações"
+          subtitle={unread === 1 ? "1 não lida" : `${unread} não lidas`}
+          footer={
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => setOpen(false)}
+            >
+              Fechar
+            </Button>
+          }
+        >
+          <NotificationCenter items={notifications} onMarkAll={() => {}} />
+        </Drawer>
+      </ShellContext.Provider>
     </RoleGate>
   );
 }

@@ -58,6 +58,7 @@ export function FaceMap({
   points,
   onAddPoint,
   marks,
+  allowPoints = true,
   className,
 }: {
   selected: string | null;
@@ -66,6 +67,8 @@ export function FaceMap({
   points: FacePoint[];
   onAddPoint: (zoneId: string, point: FacePoint) => void;
   marks: FaceMark[];
+  /** Falso na visão da cliente: ela só consulta o mapa. */
+  allowPoints?: boolean;
   className?: string;
 }) {
   const clipId = useId();
@@ -83,6 +86,7 @@ export function FaceMap({
       onSelectZone(zone);
       return;
     }
+    if (!allowPoints) return;
     const svg = event.currentTarget.ownerSVGElement;
     const matrix = svg?.getScreenCTM();
     if (!svg || !matrix) return;

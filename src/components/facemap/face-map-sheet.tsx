@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { FACE_PAIRS, findZone, type FaceZone } from "@/components/facemap/face-data";
+import { FaceZonePhotos, type ZonePhotos } from "@/components/eb/face-zone-photos";
 import { Button } from "@/components/ui/button";
 import { PRODUTOS } from "@/data/estoque";
 import { emptyRecord, type FaceMark, type FaceRecord } from "@/lib/face-map-store";
@@ -135,6 +136,9 @@ export function FaceMapSheet({
   zone,
   pointCount,
   history,
+  photos,
+  onPhotosChange,
+  inline = false,
   onClose,
   onSave,
   onClear,
@@ -142,6 +146,10 @@ export function FaceMapSheet({
   zone: FaceZone | null;
   pointCount: number;
   history: FaceMark[];
+  /** Em tela larga o painel fica ao lado do mapa, sem cobrir o rosto. */
+  inline?: boolean;
+  photos?: ZonePhotos | undefined;
+  onPhotosChange?: ((next: ZonePhotos) => void) | undefined;
   onClose: () => void;
   onSave: (record: FaceRecord, mirror: boolean) => void;
   onClear: () => void;
@@ -179,15 +187,24 @@ export function FaceMapSheet({
     <div
       role="dialog"
       aria-label={`Registro em ${zone.nome}`}
-      className="absolute inset-x-0 bottom-0 z-10 flex max-h-[78%] flex-col rounded-t-[var(--radius-2xl)] border border-b-0 border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]"
+      className={cn(
+        "flex flex-col border border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
+        inline
+          ? "max-h-[calc(100vh-3rem)] rounded-[var(--radius-2xl)]"
+          : "absolute inset-x-0 bottom-0 z-10 max-h-[78%] rounded-t-[var(--radius-2xl)] border-b-0",
+      )}
       style={{
-        boxShadow: "var(--shadow-sheet), var(--glass-highlight)",
+        boxShadow: inline
+          ? "var(--glass-shadow), var(--glass-highlight)"
+          : "var(--shadow-sheet), var(--glass-highlight)",
         animation: "sheet-in 280ms cubic-bezier(.16,1,.3,1)",
       }}
     >
-      <div className="grid place-items-center pt-3">
-        <span className="h-[5px] w-[46px] rounded-full bg-[var(--eb-nude-a32)]" />
-      </div>
+      {inline ? null : (
+        <div className="grid place-items-center pt-3">
+          <span className="h-[5px] w-[46px] rounded-full bg-[var(--eb-nude-a32)]" />
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-3.5">
         <div className="flex items-start gap-3">
@@ -292,6 +309,18 @@ export function FaceMapSheet({
               Registrar também no lado oposto: {pair.nome}
             </span>
           </label>
+        ) : null}
+
+        {onPhotosChange ? (
+          <Section title="Fotografias desta região">
+            <div className="mt-2">
+              <FaceZonePhotos
+                photos={photos ?? {}}
+                onChange={onPhotosChange}
+                zoneLabel={zone.nome}
+              />
+            </div>
+          </Section>
         ) : null}
 
         {history.length ? (

@@ -2,14 +2,15 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 
-import { primaryItems, secondaryItems } from "@/components/shell/nav-items";
+import type { NavConfig } from "@/components/shell/nav-items";
 
-export function MobileDock() {
+export function MobileDock({ nav }: { nav: NavConfig }) {
+  const { primary, secondary } = nav;
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      {open ? (
+      {open && secondary.length ? (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-background/60" />
           <div
@@ -17,7 +18,7 @@ export function MobileDock() {
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.25rem)" }}
             onClick={(event) => event.stopPropagation()}
           >
-            {secondaryItems.map((item) => (
+            {secondary.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -38,10 +39,11 @@ export function MobileDock() {
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
         aria-label="Navegação principal"
       >
-        {primaryItems.map((item) => (
+        {primary.map((item) => (
           <Link
             key={item.to}
             to={item.to}
+            activeOptions={{ exact: item.to === "/cliente" }}
             className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-[11px] text-muted-foreground"
             activeProps={{ className: "bg-[var(--accent)] text-foreground" }}
           >
@@ -49,15 +51,17 @@ export function MobileDock() {
             {item.label}
           </Link>
         ))}
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-[11px] text-muted-foreground"
-        >
-          <MoreHorizontal className="size-4" aria-hidden />
-          Mais
-        </button>
+        {secondary.length ? (
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-[11px] text-muted-foreground"
+          >
+            <MoreHorizontal className="size-4" aria-hidden />
+            Mais
+          </button>
+        ) : null}
       </nav>
     </>
   );

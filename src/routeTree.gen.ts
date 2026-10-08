@@ -10,24 +10,31 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AgendaRouteImport } from './routes/agenda'
+import { Route as GestorRouteImport } from './routes/_gestor'
 import { Route as ClienteRouteImport } from './routes/cliente'
-import { Route as ClientesRouteImport } from './routes/clientes'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as CredenciaisRouteImport } from './routes/credenciais'
-import { Route as GestaoRouteImport } from './routes/gestao'
-import { Route as HojeRouteImport } from './routes/hoje'
-import { Route as MapaFacialRouteImport } from './routes/mapa-facial'
-import { Route as NotificacoesRouteImport } from './routes/notificacoes'
+import { Route as GestorAgendaRouteImport } from './routes/_gestor/agenda'
+import { Route as GestorConfiguracoesRouteImport } from './routes/_gestor/configuracoes'
+import { Route as GestorCredenciaisRouteImport } from './routes/_gestor/credenciais'
+import { Route as GestorGestaoRouteImport } from './routes/_gestor/gestao'
+import { Route as GestorHojeRouteImport } from './routes/_gestor/hoje'
+import { Route as GestorNotificacoesRouteImport } from './routes/_gestor/notificacoes'
+import { Route as AtendimentoSessionIdRouteImport } from './routes/atendimento.$sessionId'
+import { Route as AtendimentoNovoRouteImport } from './routes/atendimento.novo'
+import { Route as ClienteIndexRouteImport } from './routes/cliente/index'
+import { Route as ClienteAgendaRouteImport } from './routes/cliente/agenda'
+import { Route as ClienteEvolucaoRouteImport } from './routes/cliente/evolucao'
+import { Route as ClientePerfilRouteImport } from './routes/cliente/perfil'
+import { Route as GestorAtendimentosAppointmentIdRouteImport } from './routes/_gestor/atendimentos.$appointmentId'
+import { Route as GestorClientesIndexRouteImport } from './routes/_gestor/clientes/index'
+import { Route as GestorClientesClientIdRouteImport } from './routes/_gestor/clientes/$clientId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgendaRoute = AgendaRouteImport.update({
-  id: '/agenda',
-  path: '/agenda',
+const GestorRoute = GestorRouteImport.update({
+  id: '/_gestor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClienteRoute = ClienteRouteImport.update({
@@ -35,129 +42,207 @@ const ClienteRoute = ClienteRouteImport.update({
   path: '/cliente',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ClientesRoute = ClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
-  getParentRoute: () => rootRouteImport,
+const GestorAgendaRoute = GestorAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
+  getParentRoute: () => GestorRoute,
 } as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+const GestorConfiguracoesRoute = GestorConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => GestorRoute,
 } as any)
-const CredenciaisRoute = CredenciaisRouteImport.update({
+const GestorCredenciaisRoute = GestorCredenciaisRouteImport.update({
   id: '/credenciais',
   path: '/credenciais',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => GestorRoute,
 } as any)
-const GestaoRoute = GestaoRouteImport.update({
+const GestorGestaoRoute = GestorGestaoRouteImport.update({
   id: '/gestao',
   path: '/gestao',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => GestorRoute,
 } as any)
-const HojeRoute = HojeRouteImport.update({
+const GestorHojeRoute = GestorHojeRouteImport.update({
   id: '/hoje',
   path: '/hoje',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => GestorRoute,
 } as any)
-const MapaFacialRoute = MapaFacialRouteImport.update({
-  id: '/mapa-facial',
-  path: '/mapa-facial',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NotificacoesRoute = NotificacoesRouteImport.update({
+const GestorNotificacoesRoute = GestorNotificacoesRouteImport.update({
   id: '/notificacoes',
   path: '/notificacoes',
+  getParentRoute: () => GestorRoute,
+} as any)
+const AtendimentoSessionIdRoute = AtendimentoSessionIdRouteImport.update({
+  id: '/atendimento/$sessionId',
+  path: '/atendimento/$sessionId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AtendimentoNovoRoute = AtendimentoNovoRouteImport.update({
+  id: '/atendimento/novo',
+  path: '/atendimento/novo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClienteIndexRoute = ClienteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ClienteRoute,
+} as any)
+const ClienteAgendaRoute = ClienteAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
+  getParentRoute: () => ClienteRoute,
+} as any)
+const ClienteEvolucaoRoute = ClienteEvolucaoRouteImport.update({
+  id: '/evolucao',
+  path: '/evolucao',
+  getParentRoute: () => ClienteRoute,
+} as any)
+const ClientePerfilRoute = ClientePerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => ClienteRoute,
+} as any)
+const GestorAtendimentosAppointmentIdRoute =
+  GestorAtendimentosAppointmentIdRouteImport.update({
+    id: '/atendimentos/$appointmentId',
+    path: '/atendimentos/$appointmentId',
+    getParentRoute: () => GestorRoute,
+  } as any)
+const GestorClientesIndexRoute = GestorClientesIndexRouteImport.update({
+  id: '/clientes/',
+  path: '/clientes/',
+  getParentRoute: () => GestorRoute,
+} as any)
+const GestorClientesClientIdRoute = GestorClientesClientIdRouteImport.update({
+  id: '/clientes/$clientId',
+  path: '/clientes/$clientId',
+  getParentRoute: () => GestorRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agenda': typeof AgendaRoute
-  '/cliente': typeof ClienteRoute
-  '/clientes': typeof ClientesRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/credenciais': typeof CredenciaisRoute
-  '/gestao': typeof GestaoRoute
-  '/hoje': typeof HojeRoute
-  '/mapa-facial': typeof MapaFacialRoute
-  '/notificacoes': typeof NotificacoesRoute
+  '/cliente': typeof ClienteRouteWithChildren
+  '/agenda': typeof GestorAgendaRoute
+  '/configuracoes': typeof GestorConfiguracoesRoute
+  '/credenciais': typeof GestorCredenciaisRoute
+  '/gestao': typeof GestorGestaoRoute
+  '/hoje': typeof GestorHojeRoute
+  '/notificacoes': typeof GestorNotificacoesRoute
+  '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
+  '/atendimento/novo': typeof AtendimentoNovoRoute
+  '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/evolucao': typeof ClienteEvolucaoRoute
+  '/cliente/perfil': typeof ClientePerfilRoute
+  '/cliente/': typeof ClienteIndexRoute
+  '/atendimentos/$appointmentId': typeof GestorAtendimentosAppointmentIdRoute
+  '/clientes/$clientId': typeof GestorClientesClientIdRoute
+  '/clientes/': typeof GestorClientesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agenda': typeof AgendaRoute
-  '/cliente': typeof ClienteRoute
-  '/clientes': typeof ClientesRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/credenciais': typeof CredenciaisRoute
-  '/gestao': typeof GestaoRoute
-  '/hoje': typeof HojeRoute
-  '/mapa-facial': typeof MapaFacialRoute
-  '/notificacoes': typeof NotificacoesRoute
+  '/agenda': typeof GestorAgendaRoute
+  '/configuracoes': typeof GestorConfiguracoesRoute
+  '/credenciais': typeof GestorCredenciaisRoute
+  '/gestao': typeof GestorGestaoRoute
+  '/hoje': typeof GestorHojeRoute
+  '/notificacoes': typeof GestorNotificacoesRoute
+  '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
+  '/atendimento/novo': typeof AtendimentoNovoRoute
+  '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/evolucao': typeof ClienteEvolucaoRoute
+  '/cliente/perfil': typeof ClientePerfilRoute
+  '/cliente': typeof ClienteIndexRoute
+  '/atendimentos/$appointmentId': typeof GestorAtendimentosAppointmentIdRoute
+  '/clientes/$clientId': typeof GestorClientesClientIdRoute
+  '/clientes': typeof GestorClientesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/agenda': typeof AgendaRoute
-  '/cliente': typeof ClienteRoute
-  '/clientes': typeof ClientesRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/credenciais': typeof CredenciaisRoute
-  '/gestao': typeof GestaoRoute
-  '/hoje': typeof HojeRoute
-  '/mapa-facial': typeof MapaFacialRoute
-  '/notificacoes': typeof NotificacoesRoute
+  '/_gestor': typeof GestorRouteWithChildren
+  '/cliente': typeof ClienteRouteWithChildren
+  '/_gestor/agenda': typeof GestorAgendaRoute
+  '/_gestor/configuracoes': typeof GestorConfiguracoesRoute
+  '/_gestor/credenciais': typeof GestorCredenciaisRoute
+  '/_gestor/gestao': typeof GestorGestaoRoute
+  '/_gestor/hoje': typeof GestorHojeRoute
+  '/_gestor/notificacoes': typeof GestorNotificacoesRoute
+  '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
+  '/atendimento/novo': typeof AtendimentoNovoRoute
+  '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/evolucao': typeof ClienteEvolucaoRoute
+  '/cliente/perfil': typeof ClientePerfilRoute
+  '/cliente/': typeof ClienteIndexRoute
+  '/_gestor/atendimentos/$appointmentId': typeof GestorAtendimentosAppointmentIdRoute
+  '/_gestor/clientes/$clientId': typeof GestorClientesClientIdRoute
+  '/_gestor/clientes/': typeof GestorClientesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/agenda'
     | '/cliente'
-    | '/clientes'
+    | '/agenda'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
     | '/hoje'
-    | '/mapa-facial'
     | '/notificacoes'
+    | '/atendimento/$sessionId'
+    | '/atendimento/novo'
+    | '/cliente/agenda'
+    | '/cliente/evolucao'
+    | '/cliente/perfil'
+    | '/cliente/'
+    | '/atendimentos/$appointmentId'
+    | '/clientes/$clientId'
+    | '/clientes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/agenda'
-    | '/cliente'
-    | '/clientes'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
     | '/hoje'
-    | '/mapa-facial'
     | '/notificacoes'
+    | '/atendimento/$sessionId'
+    | '/atendimento/novo'
+    | '/cliente/agenda'
+    | '/cliente/evolucao'
+    | '/cliente/perfil'
+    | '/cliente'
+    | '/atendimentos/$appointmentId'
+    | '/clientes/$clientId'
+    | '/clientes'
   id:
     | '__root__'
     | '/'
-    | '/agenda'
+    | '/_gestor'
     | '/cliente'
-    | '/clientes'
-    | '/configuracoes'
-    | '/credenciais'
-    | '/gestao'
-    | '/hoje'
-    | '/mapa-facial'
-    | '/notificacoes'
+    | '/_gestor/agenda'
+    | '/_gestor/configuracoes'
+    | '/_gestor/credenciais'
+    | '/_gestor/gestao'
+    | '/_gestor/hoje'
+    | '/_gestor/notificacoes'
+    | '/atendimento/$sessionId'
+    | '/atendimento/novo'
+    | '/cliente/agenda'
+    | '/cliente/evolucao'
+    | '/cliente/perfil'
+    | '/cliente/'
+    | '/_gestor/atendimentos/$appointmentId'
+    | '/_gestor/clientes/$clientId'
+    | '/_gestor/clientes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgendaRoute: typeof AgendaRoute
-  ClienteRoute: typeof ClienteRoute
-  ClientesRoute: typeof ClientesRoute
-  ConfiguracoesRoute: typeof ConfiguracoesRoute
-  CredenciaisRoute: typeof CredenciaisRoute
-  GestaoRoute: typeof GestaoRoute
-  HojeRoute: typeof HojeRoute
-  MapaFacialRoute: typeof MapaFacialRoute
-  NotificacoesRoute: typeof NotificacoesRoute
+  GestorRoute: typeof GestorRouteWithChildren
+  ClienteRoute: typeof ClienteRouteWithChildren
+  AtendimentoSessionIdRoute: typeof AtendimentoSessionIdRoute
+  AtendimentoNovoRoute: typeof AtendimentoNovoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -169,11 +254,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agenda': {
-      id: '/agenda'
-      path: '/agenda'
-      fullPath: '/agenda'
-      preLoaderRoute: typeof AgendaRouteImport
+    '/_gestor': {
+      id: '/_gestor'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof GestorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cliente': {
@@ -183,69 +268,164 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClienteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/clientes': {
-      id: '/clientes'
-      path: '/clientes'
-      fullPath: '/clientes'
-      preLoaderRoute: typeof ClientesRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_gestor/agenda': {
+      id: '/_gestor/agenda'
+      path: '/agenda'
+      fullPath: '/agenda'
+      preLoaderRoute: typeof GestorAgendaRouteImport
+      parentRoute: typeof GestorRoute
     }
-    '/configuracoes': {
-      id: '/configuracoes'
+    '/_gestor/configuracoes': {
+      id: '/_gestor/configuracoes'
       path: '/configuracoes'
       fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof GestorConfiguracoesRouteImport
+      parentRoute: typeof GestorRoute
     }
-    '/credenciais': {
-      id: '/credenciais'
+    '/_gestor/credenciais': {
+      id: '/_gestor/credenciais'
       path: '/credenciais'
       fullPath: '/credenciais'
-      preLoaderRoute: typeof CredenciaisRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof GestorCredenciaisRouteImport
+      parentRoute: typeof GestorRoute
     }
-    '/gestao': {
-      id: '/gestao'
+    '/_gestor/gestao': {
+      id: '/_gestor/gestao'
       path: '/gestao'
       fullPath: '/gestao'
-      preLoaderRoute: typeof GestaoRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof GestorGestaoRouteImport
+      parentRoute: typeof GestorRoute
     }
-    '/hoje': {
-      id: '/hoje'
+    '/_gestor/hoje': {
+      id: '/_gestor/hoje'
       path: '/hoje'
       fullPath: '/hoje'
-      preLoaderRoute: typeof HojeRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof GestorHojeRouteImport
+      parentRoute: typeof GestorRoute
     }
-    '/mapa-facial': {
-      id: '/mapa-facial'
-      path: '/mapa-facial'
-      fullPath: '/mapa-facial'
-      preLoaderRoute: typeof MapaFacialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/notificacoes': {
-      id: '/notificacoes'
+    '/_gestor/notificacoes': {
+      id: '/_gestor/notificacoes'
       path: '/notificacoes'
       fullPath: '/notificacoes'
-      preLoaderRoute: typeof NotificacoesRouteImport
+      preLoaderRoute: typeof GestorNotificacoesRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/atendimento/$sessionId': {
+      id: '/atendimento/$sessionId'
+      path: '/atendimento/$sessionId'
+      fullPath: '/atendimento/$sessionId'
+      preLoaderRoute: typeof AtendimentoSessionIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/atendimento/novo': {
+      id: '/atendimento/novo'
+      path: '/atendimento/novo'
+      fullPath: '/atendimento/novo'
+      preLoaderRoute: typeof AtendimentoNovoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cliente/': {
+      id: '/cliente/'
+      path: '/'
+      fullPath: '/cliente/'
+      preLoaderRoute: typeof ClienteIndexRouteImport
+      parentRoute: typeof ClienteRoute
+    }
+    '/cliente/agenda': {
+      id: '/cliente/agenda'
+      path: '/agenda'
+      fullPath: '/cliente/agenda'
+      preLoaderRoute: typeof ClienteAgendaRouteImport
+      parentRoute: typeof ClienteRoute
+    }
+    '/cliente/evolucao': {
+      id: '/cliente/evolucao'
+      path: '/evolucao'
+      fullPath: '/cliente/evolucao'
+      preLoaderRoute: typeof ClienteEvolucaoRouteImport
+      parentRoute: typeof ClienteRoute
+    }
+    '/cliente/perfil': {
+      id: '/cliente/perfil'
+      path: '/perfil'
+      fullPath: '/cliente/perfil'
+      preLoaderRoute: typeof ClientePerfilRouteImport
+      parentRoute: typeof ClienteRoute
+    }
+    '/_gestor/atendimentos/$appointmentId': {
+      id: '/_gestor/atendimentos/$appointmentId'
+      path: '/atendimentos/$appointmentId'
+      fullPath: '/atendimentos/$appointmentId'
+      preLoaderRoute: typeof GestorAtendimentosAppointmentIdRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/clientes/': {
+      id: '/_gestor/clientes/'
+      path: '/clientes'
+      fullPath: '/clientes/'
+      preLoaderRoute: typeof GestorClientesIndexRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/clientes/$clientId': {
+      id: '/_gestor/clientes/$clientId'
+      path: '/clientes/$clientId'
+      fullPath: '/clientes/$clientId'
+      preLoaderRoute: typeof GestorClientesClientIdRouteImport
+      parentRoute: typeof GestorRoute
     }
   }
 }
 
+interface GestorRouteChildren {
+  GestorAgendaRoute: typeof GestorAgendaRoute
+  GestorConfiguracoesRoute: typeof GestorConfiguracoesRoute
+  GestorCredenciaisRoute: typeof GestorCredenciaisRoute
+  GestorGestaoRoute: typeof GestorGestaoRoute
+  GestorHojeRoute: typeof GestorHojeRoute
+  GestorNotificacoesRoute: typeof GestorNotificacoesRoute
+  GestorAtendimentosAppointmentIdRoute: typeof GestorAtendimentosAppointmentIdRoute
+  GestorClientesClientIdRoute: typeof GestorClientesClientIdRoute
+  GestorClientesIndexRoute: typeof GestorClientesIndexRoute
+}
+
+const GestorRouteChildren: GestorRouteChildren = {
+  GestorAgendaRoute: GestorAgendaRoute,
+  GestorConfiguracoesRoute: GestorConfiguracoesRoute,
+  GestorCredenciaisRoute: GestorCredenciaisRoute,
+  GestorGestaoRoute: GestorGestaoRoute,
+  GestorHojeRoute: GestorHojeRoute,
+  GestorNotificacoesRoute: GestorNotificacoesRoute,
+  GestorAtendimentosAppointmentIdRoute: GestorAtendimentosAppointmentIdRoute,
+  GestorClientesClientIdRoute: GestorClientesClientIdRoute,
+  GestorClientesIndexRoute: GestorClientesIndexRoute,
+}
+
+const GestorRouteWithChildren =
+  GestorRoute._addFileChildren(GestorRouteChildren)
+
+interface ClienteRouteChildren {
+  ClienteAgendaRoute: typeof ClienteAgendaRoute
+  ClienteEvolucaoRoute: typeof ClienteEvolucaoRoute
+  ClientePerfilRoute: typeof ClientePerfilRoute
+  ClienteIndexRoute: typeof ClienteIndexRoute
+}
+
+const ClienteRouteChildren: ClienteRouteChildren = {
+  ClienteAgendaRoute: ClienteAgendaRoute,
+  ClienteEvolucaoRoute: ClienteEvolucaoRoute,
+  ClientePerfilRoute: ClientePerfilRoute,
+  ClienteIndexRoute: ClienteIndexRoute,
+}
+
+const ClienteRouteWithChildren =
+  ClienteRoute._addFileChildren(ClienteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgendaRoute: AgendaRoute,
-  ClienteRoute: ClienteRoute,
-  ClientesRoute: ClientesRoute,
-  ConfiguracoesRoute: ConfiguracoesRoute,
-  CredenciaisRoute: CredenciaisRoute,
-  GestaoRoute: GestaoRoute,
-  HojeRoute: HojeRoute,
-  MapaFacialRoute: MapaFacialRoute,
-  NotificacoesRoute: NotificacoesRoute,
+  GestorRoute: GestorRouteWithChildren,
+  ClienteRoute: ClienteRouteWithChildren,
+  AtendimentoSessionIdRoute: AtendimentoSessionIdRoute,
+  AtendimentoNovoRoute: AtendimentoNovoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

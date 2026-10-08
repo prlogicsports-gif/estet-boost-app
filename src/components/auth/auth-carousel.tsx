@@ -5,9 +5,8 @@ import photo2 from "@/assets/images/auth/estetboost-auth-2.jpg";
 import photo3 from "@/assets/images/auth/estetboost-auth-3.jpg";
 import photo4 from "@/assets/images/auth/estetboost-auth-4.jpg";
 import photo5 from "@/assets/images/auth/estetboost-auth-5.jpg";
-import photo6 from "@/assets/images/auth/estetboost-auth-6.jpg";
 
-const photos = [photo1, photo2, photo3, photo4, photo5, photo6];
+const photos = [photo1, photo2, photo3, photo4, photo5];
 
 /** Desfoque progressivo na base da foto, como no protótipo. */
 const blurs = [

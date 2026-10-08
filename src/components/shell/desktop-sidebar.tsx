@@ -1,44 +1,53 @@
 import { Link } from "@tanstack/react-router";
 
 import { BrandMark } from "@/components/brand/brand-mark";
-import { desktopItems } from "@/components/shell/nav-items";
+import type { NavConfig } from "@/components/shell/nav-items";
 import { initialsOf, roleLabel } from "@/data/mock-auth";
 import { useSession } from "@/lib/session";
 
-export function DesktopSidebar() {
+/** O dock do celular em pé: o mesmo vidro, as mesmas rotas, o perfil fixo embaixo. */
+export function DesktopSidebar({ nav }: { nav: NavConfig }) {
   const session = useSession();
-  return (
-    <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-64 shrink-0 flex-col justify-between rounded-[var(--radius-xl)] p-4 glass-panel lg:flex">
-      <div>
-        <div className="px-2 py-3 text-lg">
-          <BrandMark />
-        </div>
-        <nav className="mt-4 space-y-1">
-          {desktopItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="flex min-h-11 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-muted-foreground transition-colors hover:bg-[var(--accent)] hover:text-foreground"
-              activeProps={{ className: "bg-[var(--accent)] text-foreground" }}
-            >
-              <item.icon className="size-4" aria-hidden />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+  const items = [...nav.primary, ...nav.secondary];
 
-      <div className="flex items-center gap-3 rounded-[var(--radius-md)] bg-[var(--muted)] p-3">
-        <span className="flex size-9 items-center justify-center rounded-full bg-primary font-mono text-xs text-primary-foreground">
-          {session ? initialsOf(session.name) : ""}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm text-foreground">{session?.name}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {session ? roleLabel[session.role] : ""}
-          </span>
-        </span>
+  return (
+    <aside
+      aria-label="Navegação principal"
+      className="sticky top-6 hidden h-[calc(100vh-3rem)] w-[236px] shrink-0 flex-col gap-5 rounded-[var(--radius-xl)] px-3 py-[18px] glass-panel lg:flex"
+    >
+      <div className="px-2.5 text-[19px]">
+        <BrandMark />
       </div>
+      <nav className="flex flex-1 flex-col gap-0.5">
+        {items.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            activeOptions={{ exact: item.to === "/cliente" }}
+            className="flex min-h-11 items-center gap-[11px] rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--accent)] hover:text-foreground"
+            activeProps={{
+              className: "bg-[var(--eb-ivory-a10)] font-medium text-foreground",
+              "aria-current": "page",
+            }}
+          >
+            <item.icon className="size-[18px]" aria-hidden />
+            <span className="flex-1">{item.label}</span>
+          </Link>
+        ))}
+      </nav>
+      {session ? (
+        <div className="flex items-center gap-2.5 border-t border-[var(--border-hairline)] p-2.5">
+          <span className="grid size-[34px] flex-none place-items-center rounded-full bg-[var(--eb-nude-a32)] text-[13px] font-medium text-foreground">
+            {initialsOf(session.name)}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13.5px] text-foreground">{session.name}</span>
+            <span className="block text-[11.5px] text-muted-foreground">
+              {roleLabel[session.role]}
+            </span>
+          </span>
+        </div>
+      ) : null}
     </aside>
   );
 }

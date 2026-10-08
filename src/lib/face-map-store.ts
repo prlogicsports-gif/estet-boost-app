@@ -24,7 +24,8 @@ export const emptyRecord: FaceRecord = { procedimento: "", produto: "", acao: ""
 
 const PREFIX = "estetboost:facemap:";
 
-function load(clientId: string): FaceMark[] | null {
+/** Lê o mapa da cliente: `null` quando ela ainda não tem nenhum guardado. */
+export function readFaceMap(clientId: string): FaceMark[] | null {
   try {
     const raw = window.localStorage.getItem(PREFIX + clientId);
     if (raw === null) return null;
@@ -35,7 +36,7 @@ function load(clientId: string): FaceMark[] | null {
   }
 }
 
-function save(clientId: string, marks: FaceMark[]) {
+export function writeFaceMap(clientId: string, marks: FaceMark[]) {
   try {
     window.localStorage.setItem(PREFIX + clientId, JSON.stringify(marks));
   } catch {
@@ -52,6 +53,7 @@ export function buildMarks(
   record: FaceRecord,
   points: FacePoint[],
   mirror: boolean,
+  state: MarkState = "done",
 ): FaceMark[] {
   const stamp = Date.now();
   const ids = mirror && FACE_PAIRS[zoneId] ? [zoneId, FACE_PAIRS[zoneId]] : [zoneId];
@@ -59,7 +61,7 @@ export function buildMarks(
     ...record,
     id: `m${stamp}-${index}`,
     zoneId: id,
-    state: "done" as const,
+    state,
     date: shortDate(),
     savedAt: new Date(stamp + index).toISOString(),
     // Só a região escolhida leva os pontos: o espelho pousa no centroide.
@@ -82,7 +84,7 @@ export function useFaceMap(clientId: string, seed: FaceMark[] = []) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setMarks(load(clientId) ?? seed);
+    setMarks(readFaceMap(clientId) ?? seed);
     setReady(true);
     // `seed` só vale na primeira leitura de cada cliente.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,7 +93,7 @@ export function useFaceMap(clientId: string, seed: FaceMark[] = []) {
   const commit = useCallback(
     (next: FaceMark[]) => {
       setMarks(next);
-      save(clientId, next);
+      writeFaceMap(clientId, next);
     },
     [clientId],
   );

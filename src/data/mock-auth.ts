@@ -2,7 +2,7 @@ import type { Session } from "@/lib/auth.types";
 
 /** Contas de demonstração. Qualquer senha é aceita enquanto não há backend. */
 export const demoAccounts: Session[] = [
-  { role: "gestor", name: "Fernanda Lima", email: "fernanda@estudio.com.br" },
+  { role: "gestor", name: "Fernanda Costa", email: "fernanda@estudio.com.br" },
   { role: "cliente", name: "Mariana Silva", email: "mariana@email.com" },
 ];
 

@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-ro
 
 import { AuthCarousel } from "@/components/auth/auth-carousel";
 import { ClientInviteForm } from "@/components/auth/client-invite-form";
+import { FreeAccess } from "@/components/auth/free-access";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { LoginForm } from "@/components/auth/login-form";
 import { SignupFlow } from "@/components/auth/signup-flow";
@@ -109,6 +110,7 @@ function AuthPage() {
                 ) : (
                   <SignupFlow onSuccess={goHome} onLogin={() => setMode("entrar")} />
                 )}
+                <FreeAccess onEnter={goHome} />
               </>
             )}
           </div>

@@ -16,6 +16,9 @@ const buttonVariants = cva(
           "border-[var(--border-card)] bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        tech: "bg-[var(--eb-teal-500)] text-[var(--eb-plum-900)] hover:bg-[var(--eb-teal-500)]/90",
+        danger:
+          "border-[rgba(201,109,109,.32)] bg-[var(--eb-coral-a16)] text-[var(--eb-coral-500)] hover:bg-[var(--eb-coral-a16)]/80",
       },
       size: {
         default: "h-11 px-5 text-[15px]",
