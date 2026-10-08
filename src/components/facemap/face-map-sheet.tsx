@@ -10,7 +10,8 @@ import {
   X,
 } from "lucide-react";
 
-import { FACE_PAIRS, findZone, type FaceZone } from "@/components/facemap/face-data";
+import type { FaceZone } from "@/components/facemap/face-data";
+import { useFaceLayout } from "@/lib/face-layout";
 import { FaceZonePhotos, type ZonePhotos } from "@/components/eb/face-zone-photos";
 import { Button } from "@/components/ui/button";
 import { PRODUTOS } from "@/data/estoque";
@@ -151,9 +152,10 @@ export function FaceMapSheet({
   photos?: ZonePhotos | undefined;
   onPhotosChange?: ((next: ZonePhotos) => void) | undefined;
   onClose: () => void;
-  onSave: (record: FaceRecord, mirror: boolean) => void;
+  onSave: (record: FaceRecord, pairId: string | null) => void;
   onClear: () => void;
 }) {
+  const layout = useFaceLayout();
   const [row, setRow] = useState<RowKey | null>(null);
   const [form, setForm] = useState<FaceRecord>(emptyRecord);
   const [mirror, setMirror] = useState(false);
@@ -179,8 +181,8 @@ export function FaceMapSheet({
   const set = (key: RowKey, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const toggle = (key: RowKey) => setRow((current) => (current === key ? null : key));
   const ready = Boolean(form.procedimento || form.produto || form.acao || form.observacao);
-  const pairId = FACE_PAIRS[zone.id];
-  const pair = pairId ? findZone(pairId) : null;
+  const pairId = layout.pairOf(zone.id);
+  const pair = pairId ? layout.zoneById(pairId) : null;
   const alreadySaved = history.length > 0;
 
   return (
@@ -306,7 +308,7 @@ export function FaceMapSheet({
               className="mt-0.5 size-[18px] flex-none accent-[var(--teal)]"
             />
             <span className="text-[13px] leading-[1.45] text-[var(--text-secondary)]">
-              Registrar também no lado oposto: {pair.nome}
+              Registrar também no lado oposto: {layout.nameOf(pair.id)}
             </span>
           </label>
         ) : null}
@@ -349,7 +351,7 @@ export function FaceMapSheet({
         <button
           type="button"
           disabled={!ready}
-          onClick={() => onSave(form, mirror)}
+          onClick={() => onSave(form, mirror ? pairId : null)}
           className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-500)] text-base font-medium text-[var(--eb-plum-900)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
         >
           {mirror && pair ? "Salvar nas duas regiões" : "Salvar marcação"}

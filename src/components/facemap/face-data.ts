@@ -21,8 +21,12 @@ export type FaceZone = {
   id: string;
   nome: string;
   /** Centroide interno: onde a marcação pousa quando não há ponto escolhido. */
-  c: readonly [number, number];
+  c?: readonly [number, number] | undefined;
   d: string;
+  /** Região-mãe, quando esta é uma microrregião criada dentro dela. */
+  mae?: string | null | undefined;
+  /** Região do lado oposto, para as criadas no editor. */
+  par?: string | undefined;
 };
 
 export const FACE_ZONES: FaceZone[] = [

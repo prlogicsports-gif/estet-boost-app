@@ -222,12 +222,24 @@
   }
 }
 
-@utility glass-panel {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), var(--glass-highlight);
-  backdrop-filter: blur(22px) saturate(1.15);
-  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+/* Vidro do design system. Em classe própria (e não @utility) para o desfoque sempre ser aplicado. */
+@layer components {
+  .glass-panel {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    -webkit-backdrop-filter: blur(22px) saturate(1.15);
+    backdrop-filter: blur(22px) saturate(1.15);
+  }
+
+  /* Dock do celular: o mesmo vidro, com um véu de ameixa por baixo para o texto atrás não competir com os ícones. */
+  .glass-dock {
+    background: linear-gradient(rgba(44, 33, 39, 0.5), rgba(44, 33, 39, 0.5)), var(--glass);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    -webkit-backdrop-filter: blur(26px) saturate(1.2);
+    backdrop-filter: blur(26px) saturate(1.2);
+  }
 }
 
 @keyframes splash-estet {

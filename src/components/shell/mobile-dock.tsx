@@ -3,31 +3,44 @@ import { Link } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 
 import type { NavConfig } from "@/components/shell/nav-items";
+import { cn } from "@/lib/utils";
 
+const item =
+  "relative flex min-h-11 min-w-11 flex-col items-center gap-[3px] rounded-[18px] px-3 pb-2 pt-1.5 text-[var(--text-secondary)] transition-colors";
+const itemActive = "bg-[var(--eb-ivory-a10)] text-[var(--eb-nude-300)]";
+
+/** Dock flutuante de vidro, centralizada. O item ativo leva o rótulo em nude e um ponto verde. */
 export function MobileDock({ nav }: { nav: NavConfig }) {
   const { primary, secondary } = nav;
   const [open, setOpen] = useState(false);
+  const bottom = "calc(env(safe-area-inset-bottom) + 16px)";
 
   return (
     <>
       {open && secondary.length ? (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-background/60" />
           <div
-            className="absolute inset-x-4 rounded-[var(--radius-xl)] p-2 glass-panel"
-            style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.25rem)" }}
+            className="absolute inset-0 bg-[rgba(20,14,17,.45)]"
+            style={{ animation: "fade-in 200ms ease-out" }}
+          />
+          <div
+            className="glass-dock absolute left-1/2 w-[min(320px,calc(100%-32px))] -translate-x-1/2 rounded-[var(--radius-xl)] p-2"
+            style={{
+              bottom: "calc(env(safe-area-inset-bottom) + 92px)",
+              animation: "sheet-in 240ms cubic-bezier(.16,1,.3,1)",
+            }}
             onClick={(event) => event.stopPropagation()}
           >
-            {secondary.map((item) => (
+            {secondary.map((entry) => (
               <Link
-                key={item.to}
-                to={item.to}
+                key={entry.to}
+                to={entry.to}
                 onClick={() => setOpen(false)}
-                className="flex min-h-11 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-muted-foreground hover:bg-[var(--accent)] hover:text-foreground"
-                activeProps={{ className: "bg-[var(--accent)] text-foreground" }}
+                className="flex min-h-12 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-foreground"
+                activeProps={{ className: "bg-[var(--eb-ivory-a10)] text-foreground" }}
               >
-                <item.icon className="size-4" aria-hidden />
-                {item.label}
+                <entry.icon className="size-[18px]" aria-hidden />
+                {entry.label}
               </Link>
             ))}
           </div>
@@ -35,20 +48,29 @@ export function MobileDock({ nav }: { nav: NavConfig }) {
       ) : null}
 
       <nav
-        className="fixed inset-x-4 z-40 flex items-center justify-between gap-1 rounded-[var(--radius-xl)] p-2 glass-panel lg:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
         aria-label="Navegação principal"
+        className="glass-dock fixed left-1/2 z-40 flex -translate-x-1/2 gap-0.5 rounded-[var(--radius-xl)] p-1.5 lg:hidden"
+        style={{ bottom }}
       >
-        {primary.map((item) => (
+        {primary.map((entry) => (
           <Link
-            key={item.to}
-            to={item.to}
-            activeOptions={{ exact: item.to === "/cliente" }}
-            className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-[11px] text-muted-foreground"
-            activeProps={{ className: "bg-[var(--accent)] text-foreground" }}
+            key={entry.to}
+            to={entry.to}
+            activeOptions={{ exact: entry.to === "/cliente" }}
+            className={item}
+            activeProps={{ className: itemActive, "aria-current": "page" }}
           >
-            <item.icon className="size-4" aria-hidden />
-            {item.label}
+            {({ isActive }) => (
+              <>
+                <entry.icon className="size-5" strokeWidth={isActive ? 1.9 : 1.6} aria-hidden />
+                <span className={cn("text-[10.5px] tracking-[0.01em]", isActive && "font-medium")}>
+                  {entry.label}
+                </span>
+                {isActive ? (
+                  <span className="absolute bottom-[3px] size-1 rounded-full bg-[var(--eb-teal-500)]" />
+                ) : null}
+              </>
+            )}
           </Link>
         ))}
         {secondary.length ? (
@@ -56,10 +78,10 @@ export function MobileDock({ nav }: { nav: NavConfig }) {
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
-            className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 py-1.5 text-[11px] text-muted-foreground"
+            className={cn(item, open && itemActive)}
           >
-            <MoreHorizontal className="size-4" aria-hidden />
-            Mais
+            <MoreHorizontal className="size-5" aria-hidden />
+            <span className="text-[10.5px] tracking-[0.01em]">Mais</span>
           </button>
         ) : null}
       </nav>

@@ -35,7 +35,7 @@ type SurfaceProps = {
   open: boolean;
   onClose: () => void;
   title: string;
-  subtitle?: string;
+  subtitle?: string | undefined;
   children?: ReactNode;
   footer?: ReactNode;
 };
@@ -149,7 +149,8 @@ export function BottomSheet({
   children,
   footer,
   className,
-}: SurfaceProps & { className?: string }) {
+  tall,
+}: SurfaceProps & { className?: string; tall?: boolean }) {
   useEscape(open, onClose);
   if (!open) return null;
   return (
@@ -161,7 +162,8 @@ export function BottomSheet({
           aria-modal="true"
           aria-label={title}
           className={cn(
-            "relative flex max-h-[78%] w-full flex-col rounded-t-[var(--radius-2xl)] border border-b-0 border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
+            "relative flex w-full flex-col rounded-t-[var(--radius-2xl)] border border-b-0 border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
+            tall ? "h-[calc(100dvh-env(safe-area-inset-top)-12px)]" : "max-h-[78%]",
             className,
           )}
           style={{

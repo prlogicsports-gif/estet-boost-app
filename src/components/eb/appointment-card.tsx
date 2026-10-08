@@ -16,6 +16,8 @@ export type Appointment = {
   status: StatusTone;
   price: string;
   alert?: string;
+  /** Atendimento já realizado. */
+  done?: boolean;
 };
 
 function Chip({ icon, label, warn }: { icon: string; label: string; warn?: boolean }) {
@@ -45,6 +47,7 @@ export function AppointmentCard({
   status = "confirmed",
   price,
   alert,
+  done,
   variant = "row",
   onOpen,
   actionLabel = "Ver atendimento",
@@ -102,7 +105,13 @@ export function AppointmentCard({
             {procedure}
           </div>
         </div>
-        <StatusBadge tone={status} size={hero ? "md" : "sm"} />
+        <StatusBadge
+          tone={status}
+          size={hero ? "md" : "sm"}
+          {...(done ? { icon: "CheckCheck" } : {})}
+        >
+          {done ? "Concluído" : undefined}
+        </StatusBadge>
       </div>
 
       {hero || alert ? (

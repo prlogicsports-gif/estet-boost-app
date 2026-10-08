@@ -4,12 +4,12 @@ import { Icon } from "@/components/eb/icon";
 import { cn } from "@/lib/utils";
 
 type Base = {
-  label?: string;
-  icon?: string;
-  hint?: string;
-  error?: string;
+  label?: string | undefined;
+  icon?: string | undefined;
+  hint?: string | undefined;
+  error?: string | undefined;
   trailing?: ReactNode;
-  className?: string;
+  className?: string | undefined;
 };
 
 const control =

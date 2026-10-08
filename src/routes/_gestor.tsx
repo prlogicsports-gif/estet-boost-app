@@ -2,7 +2,6 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { gestorNav } from "@/components/shell/nav-items";
-import { notifications } from "@/data/gestor-mock";
 
 export const Route = createFileRoute("/_gestor")({
   component: GestorLayout,
@@ -10,7 +9,7 @@ export const Route = createFileRoute("/_gestor")({
 
 function GestorLayout() {
   return (
-    <AppShell nav={gestorNav} notifications={notifications}>
+    <AppShell nav={gestorNav}>
       <Outlet />
     </AppShell>
   );

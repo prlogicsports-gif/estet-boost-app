@@ -29,7 +29,11 @@ export function ClientInviteForm({
         const data = new FormData(event.currentTarget);
         setLoading(true);
         const result = await authService.acceptInvite(
-          { name: String(data.get("nome")), email: String(data.get("email")) },
+          {
+            name: String(data.get("nome")),
+            email: String(data.get("email")),
+            phone: String(data.get("celular") ?? ""),
+          },
           invite,
         );
         setLoading(false);

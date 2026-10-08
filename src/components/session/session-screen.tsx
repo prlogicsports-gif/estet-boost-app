@@ -14,7 +14,10 @@ import { ToastHost } from "@/components/eb/toast";
 import { FaceMapPanel } from "@/components/facemap/face-map-panel";
 import { Button } from "@/components/ui/button";
 import { faceSeed } from "@/data/face-seed";
-import { clients, stock } from "@/data/gestor-mock";
+import { appointmentsDb, clientsDb, stockDb } from "@/data/db";
+import { completeAppointment } from "@/services/appointments.service";
+import { PRICES } from "@/components/agenda/new-appointment-drawer";
+import { Select } from "@/components/eb/select";
 import { buildMarks, readFaceMap, writeFaceMap } from "@/lib/face-map-store";
 import type { WrapUpResult } from "@/lib/session-care";
 
@@ -88,7 +91,19 @@ export function SessionScreen({
   const [closing, setClosing] = useState(false);
   const [done, setDone] = useState(false);
   const [summary, setSummary] = useState<WrapUpResult | null>(null);
-  const client = clients.find((item) => item.id === a.clientId);
+  const client = clientsDb.use().find((item) => item.id === a.clientId);
+  const stock = stockDb.use();
+  const known = appointmentsDb.use().find((item) => item.id === a.id);
+  const [used, setUsed] = useState<string[]>(() =>
+    stockDb
+      .get()
+      .filter((item) => item.name.includes("mandélico"))
+      .map((item) => item.name),
+  );
+  const [price, setPrice] = useState(String(known?.price ?? PRICES[a.procedure] ?? 180));
+  const [payment, setPayment] = useState(
+    known?.payment && known.payment !== "A definir" ? known.payment : "Pix",
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -106,7 +121,7 @@ export function SessionScreen({
         item.zoneId,
         { procedimento: item.product ?? "", produto: "", acao: "", observacao: item.observation },
         [],
-        false,
+        null,
         "planned",
       ),
     );
@@ -138,6 +153,13 @@ export function SessionScreen({
           onBack={() => setClosing(false)}
           onConfirm={(result) => {
             setSummary(result);
+            completeAppointment(a, {
+              price: Number(price.replace(",", ".")) || 0,
+              payment,
+              products: used,
+              cuidados: result.cuidados,
+              retorno: result.retorno,
+            });
             setDone(true);
           }}
         />
@@ -256,14 +278,21 @@ export function SessionScreen({
 
       {step === 5 ? (
         <div className="flex flex-col gap-2.5">
-          {stock.slice(0, 3).map((item) => (
+          {stock.map((item) => (
             <label
               key={item.name}
               className="flex min-h-12 items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 text-[13.5px]"
             >
               <input
                 type="checkbox"
-                defaultChecked={item.name.includes("mandélico")}
+                checked={used.includes(item.name)}
+                onChange={() =>
+                  setUsed((current) =>
+                    current.includes(item.name)
+                      ? current.filter((name) => name !== item.name)
+                      : [...current, item.name],
+                  )
+                }
                 className="size-[18px] accent-[var(--teal)]"
               />
               <span className="flex-1">{item.name}</span>
@@ -276,7 +305,11 @@ export function SessionScreen({
             tone="warn"
             icon="PackageMinus"
             title="Baixa automática no estoque"
-            description="1 frasco de ácido mandélico será descontado ao finalizar."
+            description={
+              used.length
+                ? `1 unidade de ${used.join(", ")} será descontada ao finalizar.`
+                : "Nenhum produto marcado: o estoque não muda."
+            }
           />
         </div>
       ) : null}
@@ -296,8 +329,19 @@ export function SessionScreen({
 
       {step === 8 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-          <Input label="Valor" trailing="R$" defaultValue="180" />
-          <Input label="Forma de pagamento" defaultValue="Pix" />
+          <Input
+            label="Valor"
+            trailing="R$"
+            inputMode="decimal"
+            value={price}
+            onChange={(event) => setPrice(event.target.value)}
+          />
+          <Select
+            label="Forma de pagamento"
+            options={["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"]}
+            value={payment}
+            onChange={(event) => setPayment(event.target.value)}
+          />
         </div>
       ) : null}
 

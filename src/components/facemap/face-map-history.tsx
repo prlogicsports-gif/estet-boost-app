@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 
-import { findZone } from "@/components/facemap/face-data";
+import { useFaceLayout } from "@/lib/face-layout";
 import type { FaceMark } from "@/lib/face-map-store";
 
 const dotColor = (state: FaceMark["state"]) =>
@@ -26,6 +26,7 @@ export function FaceMapHistory({
   onRemove?: (mark: FaceMark) => void;
   emptyLabel?: string;
 }) {
+  const layout = useFaceLayout();
   const groups = useMemo(() => {
     const buckets = new Map<string, FaceMark[]>();
     for (const mark of marks) buckets.set(mark.date, [...(buckets.get(mark.date) ?? []), mark]);
@@ -60,7 +61,7 @@ export function FaceMapHistory({
               />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-foreground">
-                  {findZone(mark.zoneId)?.nome ?? mark.zoneId}
+                  {layout.nameOf(mark.zoneId)}
                 </div>
                 <div className="mt-0.5 text-[12.5px] text-[var(--text-secondary)]">
                   {summarize(mark)}
@@ -82,7 +83,7 @@ export function FaceMapHistory({
                 <button
                   type="button"
                   onClick={() => onRemove(mark)}
-                  aria-label={`Remover marcação de ${findZone(mark.zoneId)?.nome ?? mark.zoneId}`}
+                  aria-label={`Remover marcação de ${layout.nameOf(mark.zoneId)}`}
                   className="grid size-11 flex-none place-items-center text-muted-foreground hover:text-foreground"
                 >
                   <Trash2 className="size-3.5" aria-hidden />

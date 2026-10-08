@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { NotificationCenter } from "@/components/eb/notification-center";
+import { NotificationsPanel } from "@/components/eb/notifications-panel";
 import { TopBar } from "@/components/eb/top-bar";
-import { notifications, pro } from "@/data/gestor-mock";
+import { notificationsDb } from "@/data/db";
+import { usePro } from "@/lib/use-pro";
+import { notificationsFor } from "@/services/notify";
 
 export const Route = createFileRoute("/_gestor/notificacoes")({
   head: () => ({
@@ -23,11 +26,23 @@ export const Route = createFileRoute("/_gestor/notificacoes")({
 });
 
 function NotificacoesPage() {
-  const unread = notifications.filter((item) => item.unread).length;
+  const pro = usePro();
+  const navigate = useNavigate();
+  const all = notificationsDb.use();
+  const items = useMemo(() => notificationsFor(all, "gestor"), [all]);
+  const unread = items.filter((item) => !item.read).length;
   return (
     <div className="flex flex-col gap-4">
-      <TopBar title="Notificações" context={`${unread} não lidas`} user={pro} />
-      <NotificationCenter items={notifications} onMarkAll={() => {}} />
+      <TopBar
+        title="Notificações"
+        context={unread ? `${unread} não lidas` : "Tudo em dia"}
+        user={pro}
+      />
+      <NotificationsPanel
+        items={items}
+        audience="gestor"
+        onOpen={(href) => navigate({ to: href })}
+      />
     </div>
   );
 }

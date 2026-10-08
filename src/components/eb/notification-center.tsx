@@ -18,7 +18,7 @@ export type NotificationItem = {
   unread?: boolean;
 };
 
-const kinds: Record<NotificationKind, { icon: string; fg: string }> = {
+export const NOTIFICATION_KINDS: Record<NotificationKind, { icon: string; fg: string }> = {
   request: { icon: "CalendarPlus", fg: "var(--eb-teal-500)" },
   confirmed: { icon: "CheckCheck", fg: "var(--eb-teal-500)" },
   reschedule: { icon: "CalendarClock", fg: "var(--eb-amber-500)" },
@@ -58,7 +58,7 @@ export function NotificationCenter({
       </div>
       {items.length ? (
         items.map((item) => {
-          const kind = kinds[item.kind] ?? kinds.reminder;
+          const kind = NOTIFICATION_KINDS[item.kind] ?? NOTIFICATION_KINDS.reminder;
           return (
             <button
               key={item.id}

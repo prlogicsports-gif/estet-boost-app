@@ -3,16 +3,19 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { AlertCard } from "@/components/eb/alert-card";
 import { ClientTimeline } from "@/components/eb/client-timeline";
-import { MetricCard } from "@/components/eb/metric-card";
 import { PhotoVault } from "@/components/eb/photo-vault";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { TopBar } from "@/components/eb/top-bar";
-import { findZone } from "@/components/facemap/face-data";
 import { FaceMap } from "@/components/facemap/face-map";
 import { FaceMapHistory } from "@/components/facemap/face-map-history";
+import { useFaceLayout } from "@/lib/face-layout";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { CLIENT_ID, client, history, recommendations } from "@/data/cliente-mock";
+import { history as mockHistory } from "@/data/cliente-mock";
+import { appointmentsDb, careDb } from "@/data/db";
+import { formatShort } from "@/lib/dates";
+import { useClient } from "@/lib/use-client";
+import type { TimelineEntry } from "@/components/eb/client-timeline";
 import { faceSeed } from "@/data/face-seed";
 import { historyForZone, readFaceMap, type FaceMark } from "@/lib/face-map-store";
 
@@ -25,22 +28,41 @@ type Tab = "mapa" | "fotos" | "linha" | "recom";
 
 /** O mapa e as fotos são os mesmos que a esteticista registra no perfil desta cliente, só para leitura. */
 const withoutInternal = (mark: FaceMark): FaceMark => ({ ...mark, observacao: "" });
-const load = () => (readFaceMap(CLIENT_ID) ?? faceSeed[CLIENT_ID] ?? []).map(withoutInternal);
+const load = (clientId: string) =>
+  (readFaceMap(clientId) ?? faceSeed[clientId] ?? []).map(withoutInternal);
 
 function EvolucaoPage() {
   const { openNotifications, unread } = useShell();
+  const { clientId, profile } = useClient();
+  const care = careDb
+    .use()
+    .filter((item) => item.clientId === clientId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const done = appointmentsDb.use().filter((item) => item.clientId === clientId && item.done);
+  const history: TimelineEntry[] = [
+    ...done
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((item) => ({
+        id: item.id,
+        date: formatShort(item.date),
+        procedure: item.procedure,
+        professional: "Fernanda Costa",
+      })),
+    ...(clientId === "c1" ? mockHistory : []),
+  ];
   const [tab, setTab] = useState<Tab>("mapa");
   const [marks, setMarks] = useState<FaceMark[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
-    setMarks(load());
-    const refresh = () => setMarks(load());
+    setMarks(load(clientId));
+    const refresh = () => setMarks(load(clientId));
     window.addEventListener("storage", refresh);
     return () => window.removeEventListener("storage", refresh);
-  }, []);
+  }, [clientId]);
 
-  const zone = selected ? findZone(selected) : null;
+  const layout = useFaceLayout();
+  const zone = selected ? layout.zoneById(selected) : null;
   const list = selected ? historyForZone(marks, selected) : marks;
 
   return (
@@ -49,7 +71,7 @@ function EvolucaoPage() {
         title="Minha evolução"
         context="Somente o que foi autorizado por você"
         notifications={unread}
-        user={client}
+        user={profile}
         onNotifications={openNotifications}
       />
       <SegmentedTabs<Tab>
@@ -80,7 +102,7 @@ function EvolucaoPage() {
           <div className="flex min-w-0 flex-col gap-2.5">
             <div className="flex items-center gap-2.5">
               <span className="flex-1 text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-                {zone ? zone.nome : "Registros no seu rosto"}
+                {zone ? layout.nameOf(zone.id) : "Registros no seu rosto"}
               </span>
               {zone ? (
                 <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
@@ -105,26 +127,45 @@ function EvolucaoPage() {
         </div>
       ) : null}
 
-      {tab === "fotos" ? <PhotoVault clientId={CLIENT_ID} canEdit={false} /> : null}
-      {tab === "linha" ? <ClientTimeline entries={history} /> : null}
+      {tab === "fotos" ? <PhotoVault clientId={clientId} canEdit={false} /> : null}
+      {tab === "linha" ? (
+        history.length ? (
+          <ClientTimeline entries={history} />
+        ) : (
+          <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-card)] px-4 py-6 text-center text-[13px] text-muted-foreground">
+            Seus atendimentos concluídos aparecem aqui.
+          </p>
+        )
+      ) : null}
       {tab === "recom" ? (
         <div className="flex flex-col gap-2.5">
-          {recommendations.map((item) => (
-            <AlertCard
-              key={item.title}
-              tone="info"
-              icon={item.icon}
-              title={item.title}
-              description={item.detail}
-            />
-          ))}
-          <MetricCard
-            label="Sessões restantes"
-            value="2"
-            hint="de 4 no pacote"
-            icon="Layers"
-            tone="tech"
-          />
+          {care.length ? (
+            care.map((item) => (
+              <AlertCard
+                key={item.id}
+                tone="info"
+                icon={
+                  /manh|protetor/i.test(item.text)
+                    ? "Sun"
+                    : /noite/i.test(item.text)
+                      ? "Moon"
+                      : "Droplets"
+                }
+                title={item.text.split(/[.!?]/)[0] ?? item.text}
+                {...(item.text.includes(".")
+                  ? {
+                      description: `${item.text.split(".").slice(1).join(".").trim()}${item.reminderTime ? ` · Lembrete todo dia às ${item.reminderTime}` : ""}`,
+                    }
+                  : item.reminderTime
+                    ? { description: `Lembrete todo dia às ${item.reminderTime}` }
+                    : {})}
+              />
+            ))
+          ) : (
+            <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--border-card)] px-4 py-6 text-center text-[13px] text-muted-foreground">
+              As recomendações da sua esteticista aparecem aqui depois de cada atendimento.
+            </p>
+          )}
         </div>
       ) : null}
     </div>

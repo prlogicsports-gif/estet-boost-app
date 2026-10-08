@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
+import { NewClientDrawer } from "@/components/clients/new-client-drawer";
 import { ClientCard } from "@/components/eb/client-card";
 import { EmptyState } from "@/components/eb/empty-state";
 import { FilterBar } from "@/components/eb/filter-bar";
 import { Icon } from "@/components/eb/icon";
-import { Drawer } from "@/components/eb/overlays";
-import { ClientInvite } from "@/components/eb/client-invite";
 import { SearchBar } from "@/components/eb/search-bar";
 import { Skeleton } from "@/components/eb/skeleton";
+import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { clients, pro } from "@/data/gestor-mock";
+import { clientsDb } from "@/data/db";
+import { usePro } from "@/lib/use-pro";
 
 export const Route = createFileRoute("/_gestor/clientes/")({
   head: () => ({
@@ -35,12 +36,15 @@ export const Route = createFileRoute("/_gestor/clientes/")({
 type Filter = "all" | "return" | "package" | "debt" | "cold";
 
 function ClientesPage() {
+  const pro = usePro();
   const navigate = useNavigate();
   const { openNotifications, unread } = useShell();
+  const clients = clientsDb.use();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);
   const [invite, setInvite] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) return;
@@ -48,14 +52,25 @@ function ClientesPage() {
     return () => window.clearTimeout(timer);
   }, [loading]);
 
-  const list = clients.filter((client) => {
-    if (query && !client.name.toLowerCase().includes(query.toLowerCase())) return false;
-    if (filter === "return") return client.nextReturn !== "—";
-    if (filter === "package") return client.mainProcedure.includes("pacote");
-    if (filter === "debt") return client.alert === "Pagamento pendente";
-    if (filter === "cold") return client.alert === "Sem atendimento recente";
-    return true;
-  });
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const matches: Record<Filter, (client: (typeof clients)[number]) => boolean> = {
+    all: () => true,
+    return: (client) => client.nextReturn !== "—",
+    package: (client) => client.mainProcedure.includes("pacote"),
+    debt: (client) => client.alert === "Pagamento pendente",
+    cold: (client) => client.alert === "Sem atendimento recente",
+  };
+  const list = clients.filter(
+    (client) =>
+      (!query || client.name.toLowerCase().includes(query.toLowerCase())) &&
+      matches[filter](client),
+  );
+  const count = (id: Filter) => clients.filter(matches[id]).length;
 
   const newClient = (
     <Button type="button" onClick={() => setInvite(true)}>
@@ -85,11 +100,11 @@ function ClientesPage() {
           setLoading(true);
         }}
         filters={[
-          { id: "all", label: "Todas", count: clients.length },
-          { id: "return", label: "Retorno próximo", icon: "RotateCcw", count: 4 },
-          { id: "package", label: "Pacote ativo", count: 3 },
-          { id: "debt", label: "Pagamento pendente", count: 1 },
-          { id: "cold", label: "Sem atendimento recente", count: 1 },
+          { id: "all", label: "Todas", count: count("all") },
+          { id: "return", label: "Retorno próximo", icon: "RotateCcw", count: count("return") },
+          { id: "package", label: "Pacote ativo", count: count("package") },
+          { id: "debt", label: "Pagamento pendente", count: count("debt") },
+          { id: "cold", label: "Sem atendimento recente", count: count("cold") },
         ]}
       />
       {loading ? (
@@ -113,19 +128,25 @@ function ClientesPage() {
         <EmptyState
           icon="UserSearch"
           title="Nenhuma cliente encontrada"
-          description={`Nada corresponde a "${query}". Verifique a escrita ou cadastre uma nova cliente.`}
+          description={
+            query
+              ? `Nada corresponde a "${query}". Verifique a escrita ou cadastre uma nova cliente.`
+              : "Nenhuma cliente neste filtro."
+          }
           action={newClient}
         />
       )}
 
-      <Drawer
+      <ToastHost toast={toast ? { message: toast } : null} />
+      <NewClientDrawer
         open={invite}
         onClose={() => setInvite(false)}
-        title="Nova cliente"
-        subtitle="Envie o seu link ou gere uma credencial: a cliente já entra na sua carteira"
-      >
-        <ClientInvite professional={{ id: "fernanda", name: pro.name }} compact />
-      </Drawer>
+        onCreated={(client) => {
+          setInvite(false);
+          setToast(`${client.name} cadastrada`);
+          navigate({ to: "/clientes/$clientId", params: { clientId: client.id } });
+        }}
+      />
     </div>
   );
 }

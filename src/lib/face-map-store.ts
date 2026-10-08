@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { FACE_PAIRS } from "@/components/facemap/face-data";
-
 export type MarkState = "done" | "planned" | "sensitive";
 export type FacePoint = { x: number; y: number };
 export type FaceRecord = {
@@ -47,16 +45,16 @@ export function writeFaceMap(clientId: string, marks: FaceMark[]) {
 const shortDate = () =>
   new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 
-/** Uma marcação por região. Com `mirror`, a região par recebe o mesmo registro. */
+/** Uma marcação por região. Com `pairId`, a região do lado oposto recebe o mesmo registro. */
 export function buildMarks(
   zoneId: string,
   record: FaceRecord,
   points: FacePoint[],
-  mirror: boolean,
+  pairId: string | null,
   state: MarkState = "done",
 ): FaceMark[] {
   const stamp = Date.now();
-  const ids = mirror && FACE_PAIRS[zoneId] ? [zoneId, FACE_PAIRS[zoneId]] : [zoneId];
+  const ids = pairId ? [zoneId, pairId] : [zoneId];
   return ids.map((id, index) => ({
     ...record,
     id: `m${stamp}-${index}`,

@@ -1,26 +1,32 @@
-import { useId, useState, type CSSProperties, type MouseEvent } from "react";
+import {
+  useId,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import {
   FACE_EARS,
   FACE_NECK,
   FACE_OUTLINE,
   FACE_VIEWBOX,
-  FACE_ZONES,
   type FaceZone,
 } from "@/components/facemap/face-data";
+import { useFaceLayout, type ResolvedLayout } from "@/lib/face-layout";
 import type { FaceMark, FacePoint, MarkState } from "@/lib/face-map-store";
 import { cn } from "@/lib/utils";
 
 /**
- * Se existir, a ilustração do rosto (853 x 1110) entra por trás das regiões.
- * Sem ela, o mapa usa a silhueta vetorial e continua inteiro.
+ * Ilustração do rosto (853 x 1110) por trás das regiões. Se o arquivo faltar, o mapa
+ * usa a silhueta vetorial e continua inteiro.
  */
-export const FACE_IMAGE = "/face-front.png";
-
-const fade = "radial-gradient(ellipse 78% 74% at 50% 46%, #000 62%, transparent 100%)";
+export const FACE_IMAGE = "/face-front.jpg";
 
 function zoneStyle(selected: boolean, hovered: boolean, saved?: MarkState): CSSProperties {
-  let fill = "transparent";
+  let fill = "rgba(195,148,142,.06)";
   let stroke = "rgba(195,148,142,.55)";
   let width = 0.9;
   if (selected) {
@@ -33,8 +39,6 @@ function zoneStyle(selected: boolean, hovered: boolean, saved?: MarkState): CSSP
   } else if (hovered) {
     fill = "rgba(195,148,142,.16)";
     stroke = "rgba(220,200,186,.85)";
-  } else {
-    fill = "rgba(195,148,142,.06)";
   }
   return {
     fill,
@@ -47,11 +51,6 @@ function zoneStyle(selected: boolean, hovered: boolean, saved?: MarkState): CSSP
   };
 }
 
-/** Pontos de uma marcação: os que a esteticista pousou, ou o centroide da região. */
-function markPoints(mark: FaceMark, zone: FaceZone): FacePoint[] {
-  return mark.points?.length ? mark.points : [{ x: zone.c[0], y: zone.c[1] }];
-}
-
 export function FaceMap({
   selected,
   onSelectZone,
@@ -59,6 +58,11 @@ export function FaceMap({
   onAddPoint,
   marks,
   allowPoints = true,
+  editing = false,
+  onZonePointerDown,
+  overlay,
+  svgRef,
+  layout: layoutOverride,
   className,
 }: {
   selected: string | null;
@@ -69,9 +73,19 @@ export function FaceMap({
   marks: FaceMark[];
   /** Falso na visão da cliente: ela só consulta o mapa. */
   allowPoints?: boolean;
+  /** No editor: arrastar a região move a região, e a camada de toque não reage a cliques. */
+  editing?: boolean;
+  onZonePointerDown?: ((zone: FaceZone, event: PointerEvent<SVGPathElement>) => void) | undefined;
+  /** Camada livre acima das regiões (alças do editor, rascunho de região nova). */
+  overlay?: ReactNode;
+  svgRef?: RefObject<SVGSVGElement | null>;
+  /** O editor passa o rascunho; sem isso vale o layout salvo. */
+  layout?: ResolvedLayout;
   className?: string;
 }) {
   const clipId = useId();
+  const saved_ = useFaceLayout();
+  const layout = layoutOverride ?? saved_;
   const [hovered, setHovered] = useState<string | null>(null);
   const [imageOk, setImageOk] = useState(false);
 
@@ -100,7 +114,7 @@ export function FaceMap({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-[var(--radius-xl)] bg-background",
+        "relative w-full overflow-hidden rounded-[var(--radius-xl)] bg-[#1d1719]",
         className,
       )}
       style={{ aspectRatio: `${FACE_VIEWBOX.width} / ${FACE_VIEWBOX.height}` }}
@@ -115,10 +129,10 @@ export function FaceMap({
           "absolute inset-0 size-full object-fill transition-opacity duration-500",
           imageOk ? "opacity-100" : "opacity-0",
         )}
-        style={{ WebkitMaskImage: fade, maskImage: fade }}
       />
 
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${FACE_VIEWBOX.width} ${FACE_VIEWBOX.height}`}
         role="group"
         aria-label="Mapa facial, vista frontal"
@@ -136,9 +150,37 @@ export function FaceMap({
             ))}
             <path d={FACE_NECK} />
           </clipPath>
+          {Object.entries(layout.masks).map(([id, d]) => (
+            <mask
+              key={id}
+              id={`${clipId}-mask-${id}`}
+              maskUnits="userSpaceOnUse"
+              x={0}
+              y={0}
+              width={FACE_VIEWBOX.width}
+              height={FACE_VIEWBOX.height}
+            >
+              <rect
+                x={0}
+                y={0}
+                width={FACE_VIEWBOX.width}
+                height={FACE_VIEWBOX.height}
+                fill="#fff"
+              />
+              <path d={d} fill="#000" />
+            </mask>
+          ))}
         </defs>
 
-        {/* Silhueta vetorial: só aparece enquanto a ilustração não existe. */}
+        {/* Contorno do rosto: referência para o editor saber o que é "dentro". */}
+        <path
+          className="eb-limite"
+          d={`${FACE_OUTLINE} ${FACE_NECK}`}
+          fill="transparent"
+          style={{ pointerEvents: "none" }}
+        />
+
+        {/* Silhueta vetorial: só aparece enquanto a ilustração não carrega. */}
         {!imageOk ? (
           <g fill={`url(#${clipId}-skin)`} stroke="rgba(220,200,186,.22)" strokeWidth={2}>
             <path d={FACE_NECK} />
@@ -150,10 +192,14 @@ export function FaceMap({
         ) : null}
 
         <g clipPath={`url(#${clipId})`}>
-          {FACE_ZONES.map((zone) => (
+          {layout.zones.map((zone) => (
             <path
               key={zone.id}
+              className="eb-zona"
+              data-zona={zone.id}
               d={zone.d}
+              transform={layout.transforms[zone.id]}
+              mask={layout.masks[zone.id] ? `url(#${clipId}-mask-${zone.id})` : undefined}
               style={zoneStyle(selected === zone.id, hovered === zone.id, saved[zone.id])}
             />
           ))}
@@ -161,14 +207,18 @@ export function FaceMap({
 
         {/* Camada de toque: invisível e mais larga que a borda, para o dedo acertar. */}
         <g clipPath={`url(#${clipId})`}>
-          {FACE_ZONES.map((zone) => (
+          {layout.zones.map((zone) => (
             <path
               key={zone.id}
               d={zone.d}
+              transform={layout.transforms[zone.id]}
               tabIndex={0}
               role="button"
-              aria-label={zone.nome}
+              aria-label={layout.nameOf(zone.id)}
               aria-pressed={selected === zone.id}
+              onPointerDown={
+                onZonePointerDown ? (event) => onZonePointerDown(zone, event) : undefined
+              }
               onClick={(event) => tap(zone, event)}
               onPointerEnter={() => setHovered(zone.id)}
               onPointerLeave={() => setHovered((current) => (current === zone.id ? null : current))}
@@ -180,22 +230,23 @@ export function FaceMap({
                   onSelectZone(zone);
                 }
               }}
-              className="cursor-pointer outline-none"
+              className="outline-none"
               style={{
                 fill: "transparent",
                 stroke: "transparent",
                 strokeWidth: 28,
                 strokeLinejoin: "round",
                 pointerEvents: "all",
+                cursor: editing ? "move" : "pointer",
               }}
             />
           ))}
         </g>
 
         {marks.flatMap((mark) => {
-          const zone = FACE_ZONES.find((item) => item.id === mark.zoneId);
-          if (!zone) return [];
-          return markPoints(mark, zone).map((point, index) => (
+          const anchor = layout.anchorOf(mark.zoneId);
+          const pts = mark.points?.length ? mark.points : anchor ? [anchor] : [];
+          return pts.map((point, index) => (
             <circle
               key={`${mark.id}-${index}`}
               cx={point.x}
@@ -229,6 +280,8 @@ export function FaceMap({
             />
           </g>
         ))}
+
+        {overlay}
       </svg>
     </div>
   );

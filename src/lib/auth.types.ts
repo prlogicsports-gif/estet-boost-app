@@ -10,5 +10,10 @@ export type SignupData = {
   document: string;
   size: StudioSize;
 };
-export type Session = { role: Role; name: string; email: string };
+export type Session = {
+  role: Role;
+  name: string;
+  email: string;
+  /** Cliente: qual cliente da carteira ela é. */ clientId?: string | undefined;
+};
 export type AuthResult = { ok: true; session: Session } | { ok: false; message: string };

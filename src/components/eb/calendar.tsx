@@ -61,8 +61,8 @@ export function Calendar({
         size={44}
         onClick={() => onNavigate?.(-1)}
       />
-      <div className="flex-1 text-center text-[15px] font-medium capitalize">
-        {MONTHS[month]} de {year}
+      <div className="flex-1 text-center text-[15px] font-medium">
+        {(MONTHS[month] ?? "").charAt(0).toUpperCase() + (MONTHS[month] ?? "").slice(1)} de {year}
       </div>
       <IconButton
         icon="ChevronRight"

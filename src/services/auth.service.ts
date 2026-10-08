@@ -1,6 +1,7 @@
 import { demoAccounts } from "@/data/mock-auth";
 import type { AuthResult, Invite, Session, SignupData } from "@/lib/auth.types";
 import { sessionStore } from "@/lib/session";
+import { createClient } from "@/services/clients.service";
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 350));
 
@@ -53,9 +54,24 @@ export const authService = {
     return open({ role: "gestor", name: data.name, email: data.email.trim().toLowerCase() });
   },
   /** Cadastro por convite: quem entra por convite é cliente. */
-  async acceptInvite(data: { name: string; email: string }, _invite: Invite): Promise<AuthResult> {
+  async acceptInvite(
+    data: { name: string; email: string; phone?: string },
+    invite: Invite,
+  ): Promise<AuthResult> {
     await wait();
-    return open({ role: "cliente", name: data.name, email: data.email.trim().toLowerCase() });
+    // Quem entra por convite entra na carteira da esteticista que convidou.
+    const client = createClient({
+      name: data.name,
+      email: data.email,
+      ...(data.phone ? { phone: data.phone } : {}),
+      procedure: invite.professional ? `Convidada por ${invite.professional}` : undefined,
+    });
+    return open({
+      role: "cliente",
+      name: data.name,
+      email: data.email.trim().toLowerCase(),
+      clientId: client.id,
+    });
   },
   /** Acesso livre temporário: abre a área do perfil sem credencial, até o app ser ativado. */
   enterAs(role: Session["role"]): Session {

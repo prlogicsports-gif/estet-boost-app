@@ -1,20 +1,28 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AlertCard } from "@/components/eb/alert-card";
 import { CashSummary, type CashKind } from "@/components/eb/cash-summary";
 import { Icon } from "@/components/eb/icon";
+import { Input } from "@/components/eb/input";
 import { MetricCard } from "@/components/eb/metric-card";
 import { Drawer } from "@/components/eb/overlays";
 import { SearchBar } from "@/components/eb/search-bar";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
+import { Select } from "@/components/eb/select";
 import { StatusBadge } from "@/components/eb/status-badge";
 import { StockItem } from "@/components/eb/stock-item";
+import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { bills, ledger, moves, pro, stock, type LedgerEntry } from "@/data/gestor-mock";
+import { billsDb, ledgerDb, stockDb } from "@/data/db";
+import type { LedgerEntry } from "@/data/gestor-mock";
+import { usePro } from "@/lib/use-pro";
+import { addDays, daysBetween, formatShort, monthName, relativeDay, todayISO } from "@/lib/dates";
+import { brl } from "@/lib/view";
 import { cn } from "@/lib/utils";
+import { addBill, addLedgerEntry, addStockItem, payBill } from "@/services/finance.service";
 
 export const Route = createFileRoute("/_gestor/gestao")({
   head: () => ({
@@ -34,12 +42,10 @@ export const Route = createFileRoute("/_gestor/gestao")({
   component: GestaoPage,
 });
 
-const brl = (value: number) => `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
-
-// O resumo do mês é a soma do livro-caixa, para o número e o detalhe nunca divergirem.
-const MONTH = "2026-08";
+// O resumo é a soma do livro-caixa do mês anterior e do atual, para o número e o detalhe nunca divergirem.
+const periodStart = () => `${addDays(todayISO().slice(0, 8) + "01", -1).slice(0, 7)}`;
 const ofPeriod = (list: LedgerEntry[]) =>
-  list.filter((entry) => entry.kind === "receber" || entry.date.slice(0, 7) >= MONTH);
+  list.filter((entry) => entry.kind === "receber" || entry.date.slice(0, 7) >= periodStart());
 const sum = (list: LedgerEntry[], kind: CashKind) =>
   list.filter((entry) => entry.kind === kind).reduce((total, entry) => total + entry.value, 0);
 
@@ -70,6 +76,15 @@ const KINDS: Record<
   },
 };
 
+const METHODS = [
+  "Pix",
+  "Cartão de crédito",
+  "Cartão de débito",
+  "Dinheiro",
+  "Transferência",
+  "Boleto",
+];
+
 const longDate = (iso: string) => {
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR", {
@@ -82,15 +97,8 @@ const longDate = (iso: string) => {
   }
 };
 
-const monthName = (key: string) => {
-  const text = new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  });
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
 function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => void }) {
+  const ledger = ledgerDb.use();
   const [all, setAll] = useState(false);
   const [method, setMethod] = useState("todos");
   const meta = KINDS[kind ?? "entradas"];
@@ -132,7 +140,7 @@ function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => v
       <div className="flex flex-col gap-4">
         <div className="rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] px-4 py-3.5">
           <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-            {all ? "Todo o histórico" : "Agosto e setembro"}
+            {all ? "Todo o histórico" : "Mês anterior e atual"}
           </span>
           <div
             className="mt-1 font-mono text-[34px] font-medium tracking-[-0.02em]"
@@ -169,7 +177,9 @@ function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => v
         {groups.map((group) => (
           <div key={group.month} className="flex flex-col gap-2">
             <div className="flex items-baseline gap-2.5 border-b border-[var(--border-hairline)] pb-1.5">
-              <span className="flex-1 text-[13.5px] font-medium">{monthName(group.month)}</span>
+              <span className="flex-1 text-[13.5px] font-medium">
+                {monthName(`${group.month}-15`)}
+              </span>
               <span className="font-mono text-[12.5px] text-muted-foreground">
                 {brl(group.items.reduce((acc, entry) => acc + entry.value, 0))}
               </span>
@@ -215,32 +225,70 @@ function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => v
 }
 
 type Tab = "caixa" | "contas" | "estoque";
+type Sheet = "movimento" | "conta" | "produto" | null;
 
 function GestaoPage() {
+  const pro = usePro();
   const { openNotifications, unread } = useShell();
+  const ledger = ledgerDb.use();
+  const bills = billsDb.use();
+  const stock = stockDb.use();
   const [tab, setTab] = useState<Tab>("caixa");
   const [detail, setDetail] = useState<CashKind | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [query, setQuery] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  const [draftProduct, setDraftProduct] = useState("");
+  const today = todayISO();
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   const period = ofPeriod(ledger);
   const income = sum(period, "entradas");
   const expense = sum(period, "saidas");
   const receivable = sum(period, "receber");
+  const moves = useMemo(
+    () =>
+      ledger
+        .filter((entry) => entry.kind !== "receber")
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 6),
+    [ledger],
+  );
+  const orderedBills = [...bills].sort(
+    (a, b) => Number(a.paid) - Number(b.paid) || a.due.localeCompare(b.due),
+  );
+  const openBills = bills.filter((bill) => !bill.paid);
+  const low = stock.filter((item) => item.quantity <= item.min);
+  const shown = stock.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+
+  const addLabel =
+    tab === "caixa"
+      ? "Nova movimentação"
+      : tab === "contas"
+        ? "Adicionar conta"
+        : "Adicionar produto";
+  const openAdd = () => {
+    setDraftProduct("");
+    setSheet(tab === "caixa" ? "movimento" : tab === "contas" ? "conta" : "produto");
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <TopBar
         title="Gestão"
-        context="Setembro de 2026"
+        context={monthName(today)}
         notifications={unread}
         user={pro}
         onNotifications={openNotifications}
         actions={
-          <Button type="button" size="sm">
+          <Button type="button" size="sm" onClick={openAdd}>
             <Icon name="Plus" size={15} />
-            {tab === "caixa"
-              ? "Nova movimentação"
-              : tab === "contas"
-                ? "Adicionar conta"
-                : "Adicionar produto"}
+            {addLabel}
           </Button>
         }
       />
@@ -271,20 +319,25 @@ function GestaoPage() {
             </span>
             {moves.map((move) => (
               <div
-                key={`${move.label}-${move.when}`}
+                key={move.id}
                 className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
               >
-                <span className="flex-1 text-[13.5px]">
-                  {move.label}
-                  <span className="block text-[11.5px] text-muted-foreground">{move.when}</span>
+                <span className="min-w-0 flex-1 text-[13.5px]">
+                  <span className="block truncate">
+                    {move.label} · {move.origin}
+                  </span>
+                  <span className="block text-[11.5px] text-muted-foreground">
+                    {relativeDay(move.date)}
+                  </span>
                 </span>
                 <span
                   className="font-mono text-sm font-medium"
                   style={{
-                    color: move.kind === "in" ? "var(--eb-teal-500)" : "var(--eb-coral-500)",
+                    color: move.kind === "entradas" ? "var(--eb-teal-500)" : "var(--eb-coral-500)",
                   }}
                 >
-                  {move.value}
+                  {move.kind === "entradas" ? "+ " : "- "}
+                  {brl(move.value)}
                 </span>
               </div>
             ))}
@@ -295,51 +348,432 @@ function GestaoPage() {
       {tab === "contas" ? (
         <div className="flex flex-col gap-2.5">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
-            <MetricCard label="A pagar no mês" value="R$ 1.147" icon="Receipt" tone="warn" />
-            <MetricCard label="Vencendo em 7 dias" value="2" icon="CalendarClock" tone="danger" />
-            <MetricCard label="Pagas" value="1" icon="CheckCheck" tone="tech" />
+            <MetricCard
+              label="A pagar"
+              value={brl(openBills.reduce((total, bill) => total + bill.value, 0))}
+              icon="Receipt"
+              tone="warn"
+            />
+            <MetricCard
+              label="Vencendo em 7 dias"
+              value={
+                openBills.filter(
+                  (bill) => daysBetween(today, bill.due) >= 0 && daysBetween(today, bill.due) <= 7,
+                ).length
+              }
+              icon="CalendarClock"
+              tone="danger"
+            />
+            <MetricCard
+              label="Pagas"
+              value={bills.filter((bill) => bill.paid).length}
+              icon="CheckCheck"
+              tone="tech"
+            />
           </div>
-          {bills.map((bill) => (
-            <div
-              key={bill.name}
-              className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{bill.name}</div>
-                <div className="text-[11.5px] text-muted-foreground">
-                  Vence {bill.due} · {bill.recurrence} · lembrete 2 dias antes
+          {orderedBills.map((bill) => {
+            const days = daysBetween(today, bill.due);
+            const late = !bill.paid && days < 0;
+            return (
+              <div
+                key={bill.id}
+                className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
+              >
+                <div className="min-w-[160px] flex-1">
+                  <div className="text-sm font-medium">{bill.name}</div>
+                  <div className="text-[11.5px] text-muted-foreground">
+                    Vence {formatShort(bill.due)} · {bill.recurrence}
+                    {bill.paid ? "" : " · lembrete diário nos 3 dias antes"}
+                  </div>
                 </div>
+                <span className="font-mono text-sm font-medium">{brl(bill.value)}</span>
+                <StatusBadge
+                  tone={bill.paid ? "confirmed" : late ? "cancelled" : "pending"}
+                  size="sm"
+                >
+                  {bill.paid ? "Paga" : late ? "Atrasada" : "A pagar"}
+                </StatusBadge>
+                {bill.paid ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      payBill(bill.id);
+                      setToast(`${bill.name} paga e lançada no caixa`);
+                    }}
+                  >
+                    Marcar como paga
+                  </Button>
+                )}
               </div>
-              <span className="font-mono text-sm font-medium">{bill.value}</span>
-              <StatusBadge tone={bill.status} size="sm">
-                {bill.status === "confirmed"
-                  ? "Paga"
-                  : bill.status === "pending"
-                    ? "A pagar"
-                    : "Atrasada"}
-              </StatusBadge>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
       {tab === "estoque" ? (
         <div className="flex flex-col gap-2.5">
-          <SearchBar placeholder="Buscar produto" />
-          <AlertCard
-            tone="warn"
-            icon="PackageMinus"
-            title="2 produtos abaixo do mínimo"
-            description="Ácido mandélico 5% e máscara calmante"
-            actionLabel="Repor"
+          <SearchBar
+            placeholder="Buscar produto"
+            value={query}
+            onChange={setQuery}
+            onClear={() => setQuery("")}
           />
-          {stock.map((item) => (
-            <StockItem key={item.name} {...item} />
+          {low.length ? (
+            <AlertCard
+              tone="warn"
+              icon="PackageMinus"
+              title={`${low.length} ${low.length === 1 ? "produto abaixo do mínimo" : "produtos abaixo do mínimo"}`}
+              description={low.map((item) => item.name).join(" e ")}
+              actionLabel="Repor"
+              onAction={() => (setDraftProduct(low[0]?.name ?? ""), setSheet("produto"))}
+            />
+          ) : null}
+          {shown.map((item) => (
+            <StockItem
+              key={item.name}
+              {...item}
+              onRestock={() => {
+                setDraftProduct(item.name);
+                setSheet("produto");
+              }}
+            />
           ))}
+          {!shown.length ? (
+            <p className="py-2 text-[13px] text-muted-foreground">Nenhum produto com esse nome.</p>
+          ) : null}
         </div>
       ) : null}
 
       <CashDetail kind={detail} onClose={() => setDetail(null)} />
+      <MovementDrawer
+        open={sheet === "movimento"}
+        onClose={() => setSheet(null)}
+        onSaved={(text) => (setSheet(null), setToast(text))}
+      />
+      <BillDrawer
+        open={sheet === "conta"}
+        onClose={() => setSheet(null)}
+        onSaved={(text) => (setSheet(null), setToast(text))}
+      />
+      <ProductDrawer
+        open={sheet === "produto"}
+        name={draftProduct}
+        onClose={() => setSheet(null)}
+        onSaved={(text) => (setSheet(null), setToast(text))}
+      />
+      <ToastHost toast={toast ? { message: toast } : null} />
     </div>
+  );
+}
+
+const drawerFooter = (onClose: () => void, submit: () => void, text: string) => (
+  <>
+    <Button type="button" variant="ghost" onClick={onClose}>
+      Cancelar
+    </Button>
+    <Button type="button" variant="tech" className="flex-1" onClick={submit}>
+      <Icon name="Check" size={18} /> {text}
+    </Button>
+  </>
+);
+
+const parseMoney = (text: string) => Number(text.replace(/\./g, "").replace(",", "."));
+
+function MovementDrawer({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: (text: string) => void;
+}) {
+  const [kind, setKind] = useState<"entradas" | "saidas" | "receber">("entradas");
+  const [label, setLabel] = useState("");
+  const [value, setValue] = useState("");
+  const [method, setMethod] = useState(METHODS[0] ?? "Pix");
+  const [date, setDate] = useState(todayISO());
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setKind("entradas");
+      setLabel("");
+      setValue("");
+      setDate(todayISO());
+      setTried(false);
+    }
+  }, [open]);
+
+  const amount = parseMoney(value);
+  const labelError = label.trim() ? undefined : "Descreva a movimentação.";
+  const valueError = amount > 0 ? undefined : "Informe um valor maior que zero.";
+
+  function submit() {
+    setTried(true);
+    if (labelError || valueError) return;
+    addLedgerEntry({
+      kind,
+      date,
+      label: label.trim(),
+      origin:
+        kind === "entradas"
+          ? "Entrada avulsa"
+          : kind === "saidas"
+            ? "Saída avulsa"
+            : "Cobrança combinada",
+      method,
+      value: amount,
+      ...(kind === "receber" ? { due: date } : {}),
+    });
+    onSaved(
+      `${kind === "entradas" ? "Entrada" : kind === "saidas" ? "Saída" : "Cobrança"} de ${brl(amount)} lançada`,
+    );
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="Nova movimentação"
+      subtitle="Entra no caixa e nos totais do mês"
+      footer={drawerFooter(onClose, submit, "Lançar")}
+    >
+      <div className="flex flex-col gap-3.5">
+        <SegmentedTabs
+          active={kind}
+          onSelect={setKind}
+          tabs={[
+            { id: "entradas", label: "Entrada" },
+            { id: "saidas", label: "Saída" },
+            { id: "receber", label: "A receber" },
+          ]}
+        />
+        <Input
+          label="Descrição"
+          placeholder={kind === "saidas" ? "Compra de insumos" : "Venda de produto"}
+          value={label}
+          error={tried ? labelError : undefined}
+          onChange={(event) => setLabel(event.target.value)}
+        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <Input
+            label="Valor"
+            trailing="R$"
+            inputMode="decimal"
+            value={value}
+            error={tried ? valueError : undefined}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <Input
+            label={kind === "receber" ? "Vencimento" : "Data"}
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+          />
+        </div>
+        <Select
+          label="Forma de pagamento"
+          options={METHODS}
+          value={method}
+          onChange={(event) => setMethod(event.target.value)}
+        />
+      </div>
+    </Drawer>
+  );
+}
+
+function BillDrawer({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: (text: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [value, setValue] = useState("");
+  const [due, setDue] = useState(addDays(todayISO(), 7));
+  const [recurrence, setRecurrence] = useState<"Mensal" | "Avulsa">("Mensal");
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setValue("");
+      setDue(addDays(todayISO(), 7));
+      setRecurrence("Mensal");
+      setTried(false);
+    }
+  }, [open]);
+
+  const amount = parseMoney(value);
+  const nameError = name.trim() ? undefined : "Dê um nome para a conta.";
+  const valueError = amount > 0 ? undefined : "Informe um valor maior que zero.";
+
+  function submit() {
+    setTried(true);
+    if (nameError || valueError || !due) return;
+    addBill({ name: name.trim(), value: amount, due, recurrence });
+    onSaved(`${name.trim()} adicionada: você é avisada 3 dias antes`);
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="Adicionar conta"
+      subtitle="O lembrete chega todo dia, de 3 dias antes até o vencimento"
+      footer={drawerFooter(onClose, submit, "Adicionar conta")}
+    >
+      <div className="flex flex-col gap-3.5">
+        <Input
+          label="Conta"
+          placeholder="Aluguel da sala"
+          value={name}
+          error={tried ? nameError : undefined}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <Input
+            label="Valor"
+            trailing="R$"
+            inputMode="decimal"
+            value={value}
+            error={tried ? valueError : undefined}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <Input
+            label="Vencimento"
+            type="date"
+            value={due}
+            onChange={(event) => setDue(event.target.value)}
+          />
+        </div>
+        <Select
+          label="Recorrência"
+          options={["Mensal", "Avulsa"]}
+          value={recurrence}
+          onChange={(event) => setRecurrence(event.target.value as "Mensal" | "Avulsa")}
+        />
+      </div>
+    </Drawer>
+  );
+}
+
+function ProductDrawer({
+  open,
+  name: preset,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  name: string;
+  onClose: () => void;
+  onSaved: (text: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [unit, setUnit] = useState("un");
+  const [min, setMin] = useState("2");
+  const [expiry, setExpiry] = useState("");
+  const [batch, setBatch] = useState("");
+  const [cost, setCost] = useState("");
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(preset);
+      setQuantity("1");
+      setUnit("un");
+      setMin("2");
+      setExpiry("");
+      setBatch("");
+      setCost("");
+      setTried(false);
+    }
+  }, [open, preset]);
+
+  const nameError = name.trim() ? undefined : "Informe o produto.";
+  const qtyError = Number(quantity) > 0 ? undefined : "Informe a quantidade.";
+
+  function submit() {
+    setTried(true);
+    if (nameError || qtyError) return;
+    addStockItem({
+      name: name.trim(),
+      quantity: Number(quantity),
+      unit,
+      min: Number(min) || 0,
+      expiry: expiry || "—",
+      batch: batch || "—",
+      cost: cost ? `R$ ${cost}` : "—",
+    });
+    onSaved(`${name.trim()}: ${quantity} ${unit} no estoque`);
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={preset ? "Repor produto" : "Adicionar produto"}
+      subtitle="Se o produto já existe, a quantidade é somada"
+      footer={drawerFooter(onClose, submit, preset ? "Registrar reposição" : "Adicionar produto")}
+    >
+      <div className="flex flex-col gap-3.5">
+        <Input
+          label="Produto"
+          placeholder="Ácido mandélico 5%"
+          value={name}
+          error={tried ? nameError : undefined}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <div className="grid grid-cols-3 gap-2.5">
+          <Input
+            label="Quantidade"
+            inputMode="numeric"
+            value={quantity}
+            error={tried ? qtyError : undefined}
+            onChange={(event) => setQuantity(event.target.value)}
+          />
+          <Select
+            label="Unidade"
+            options={["un", "fr", "pt", "pc"]}
+            value={unit}
+            onChange={(event) => setUnit(event.target.value)}
+          />
+          <Input
+            label="Mínimo"
+            inputMode="numeric"
+            value={min}
+            onChange={(event) => setMin(event.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Input
+            label="Validade"
+            placeholder="03/2027"
+            value={expiry}
+            onChange={(event) => setExpiry(event.target.value)}
+          />
+          <Input
+            label="Lote"
+            placeholder="A-2291"
+            value={batch}
+            onChange={(event) => setBatch(event.target.value)}
+          />
+        </div>
+        <Input
+          label="Custo"
+          trailing="R$"
+          inputMode="decimal"
+          value={cost}
+          onChange={(event) => setCost(event.target.value)}
+        />
+      </div>
+    </Drawer>
   );
 }
