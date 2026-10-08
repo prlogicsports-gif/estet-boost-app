@@ -1,5 +1,12 @@
 # Próxima etapa: banco de dados, fluxos e auditoria
 
+> **Projeto aprovado em documentos** (Firebase, site na Cloudflare via Lovable, Docker só para o emulador):
+> [Arquitetura](./ARQUITETURA.md) · [Segurança e privacidade](./SEGURANCA-PRIVACIDADE.md) · [Firestore e regras](./FIRESTORE-MODELO-E-REGRAS.md) · [Fluxos](./FLUXOS.md) · [Docker e deploy](./AMBIENTE-DOCKER-E-DEPLOY.md) · [Guia do console Firebase](./FIREBASE-CONSOLE-GUIA.md)
+>
+> **Ordem de implementação:** 1) projetos Firebase dev/staging/prod + Blaze com alerta de orçamento (você, com o guia) → 2) emulador em Docker + regras negando tudo + testes das regras → 3) Auth real, claims, `createClinic` e `acceptInvite`; remover acesso livre e contas demo → 4) trocar `src/services/*` por Firestore, uma área por vez (clientes, agenda, atendimento/caixa/estoque, avisos, fotos) → 5) cabeçalhos de segurança, App Check, push e agendador → 6) teste de invasão e só então auditoria de código e PWA.
+>
+> **Você precisa fornecer:** conta Google, cartão para o plano Blaze, domínio próprio, e-mail do encarregado de dados (LGPD) e as respostas às decisões em aberto de `ARQUITETURA.md` §8.
+
 O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/services/*`). Esta etapa troca a camada local por um backend real **sem mexer nas telas**, e só depois faz a auditoria de código.
 
 ## 1. O que o app já faz (e precisa persistir)
