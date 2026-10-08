@@ -1,15 +1,13 @@
-import { appointmentsDb, careDb, clientsDb } from "@/data/db";
-import { formatWeekday, todayISO, addDays } from "@/lib/dates";
+import { appointmentsDb, clientsDb } from "@/data/db";
 import type { AppointmentRec, AppointmentStatus } from "@/lib/models";
-import { addLedgerEntry, consumeStock } from "@/services/finance.service";
 import { createClient } from "@/services/clients.service";
+import { events } from "@/services/notification-events";
 import { notify } from "@/services/notify";
 
 const newId = () => `ap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const update = (id: string, patch: Partial<AppointmentRec>) =>
   appointmentsDb.set((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
 const find = (id: string) => appointmentsDb.get().find((item) => item.id === id);
-const when = (a: Pick<AppointmentRec, "date" | "time">) => `${formatWeekday(a.date)} · ${a.time}`;
 
 export type NewAppointment = {
   /** Cliente da carteira; sem id, `clientName` cria uma nova. */
@@ -48,16 +46,7 @@ export function scheduleAppointment(input: NewAppointment): AppointmentRec {
     createdAt: new Date().toISOString(),
   };
   appointmentsDb.set((list) => [...list, rec]);
-  if (input.sendConfirmation) {
-    notify({
-      audience: "cliente",
-      clientId: client.id,
-      kind: "reminder",
-      title: "Novo horário agendado",
-      body: `${rec.procedure} · ${when(rec)}`,
-      href: "/cliente/agenda",
-    });
-  }
+  if (input.sendConfirmation) notify(events.appointmentScheduled(rec));
   return rec;
 }
 
@@ -90,13 +79,7 @@ export function requestAppointment(input: {
     createdAt: new Date().toISOString(),
   };
   appointmentsDb.set((list) => [...list, rec]);
-  notify({
-    audience: "gestor",
-    kind: "request",
-    title: "Nova solicitação de horário",
-    body: `${client.name} · ${when(rec)}`,
-    href: "/agenda",
-  });
+  notify(events.appointmentRequested(rec));
   return rec;
 }
 
@@ -104,52 +87,21 @@ export function approveRequest(id: string) {
   const a = find(id);
   if (!a) return;
   update(id, { status: "confirmed", request: false, alert: undefined });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "confirmed",
-    title: "Horário confirmado",
-    body: `${a.procedure} · ${when(a)}`,
-    href: "/cliente/agenda",
-  });
+  notify(events.requestApproved(a));
 }
 
 export function declineRequest(id: string) {
   const a = find(id);
   if (!a) return;
   update(id, { status: "cancelled", request: false });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "reschedule",
-    title: "Horário não disponível",
-    body: `${formatWeekday(a.date)} não está livre. Peça outro horário.`,
-    href: "/cliente/agenda",
-  });
+  notify(events.requestDeclined(a));
 }
 
 export function confirmAppointment(id: string, by: "gestor" | "cliente") {
   const a = find(id);
   if (!a) return;
   update(id, { status: "confirmed", alert: undefined });
-  if (by === "cliente") {
-    notify({
-      audience: "gestor",
-      kind: "confirmed",
-      title: `${a.client.split(" ")[0]} confirmou presença`,
-      body: `${a.procedure} · ${when(a)}`,
-      href: `/atendimentos/${a.id}`,
-    });
-  } else {
-    notify({
-      audience: "cliente",
-      clientId: a.clientId,
-      kind: "confirmed",
-      title: "Horário confirmado",
-      body: `${a.procedure} · ${when(a)}`,
-      href: "/cliente/agenda",
-    });
-  }
+  notify(by === "cliente" ? events.confirmedByClient(a) : events.confirmedByStudio(a));
 }
 
 export function cancelAppointment(id: string, by: "gestor" | "cliente") {
@@ -160,34 +112,15 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
     if (hours < 24) {
       // Menos de 24 horas: a esteticista precisa aprovar.
       update(id, { cancelRequest: true });
-      notify({
-        audience: "gestor",
-        kind: "reschedule",
-        title: "Pedido de cancelamento",
-        body: `${a.client} · ${when(a)} (menos de 24 h)`,
-        href: `/atendimentos/${a.id}`,
-      });
+      notify(events.cancelRequested(a));
       return;
     }
     update(id, { status: "cancelled" });
-    notify({
-      audience: "gestor",
-      kind: "reschedule",
-      title: "Horário cancelado",
-      body: `${a.client} · ${when(a)}`,
-      href: "/agenda",
-    });
+    notify(events.cancelledByClient(a));
     return;
   }
   update(id, { status: "cancelled", cancelRequest: false });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "reschedule",
-    title: "Atendimento cancelado",
-    body: `${a.procedure} · ${when(a)}. A sessão volta para o pacote.`,
-    href: "/cliente/agenda",
-  });
+  notify(events.cancelledByStudio(a));
 }
 
 export function approveCancel(id: string) {
@@ -199,13 +132,7 @@ export function requestReschedule(id: string, date: string, time: string) {
   const a = find(id);
   if (!a) return;
   update(id, { reschedule: true, proposedDate: date, proposedTime: time });
-  notify({
-    audience: "gestor",
-    kind: "reschedule",
-    title: "Pedido de remarcação",
-    body: `${a.client} propõe ${formatWeekday(date)} · ${time}`,
-    href: `/atendimentos/${a.id}`,
-  });
+  notify(events.rescheduleRequested(a, date, time));
 }
 
 export function approveReschedule(id: string) {
@@ -219,28 +146,14 @@ export function approveReschedule(id: string) {
     proposedTime: undefined,
     status: "confirmed",
   });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "confirmed",
-    title: "Remarcação confirmada",
-    body: `${a.procedure} · ${formatWeekday(a.proposedDate)} · ${a.proposedTime}`,
-    href: "/cliente/agenda",
-  });
+  notify(events.rescheduleApproved(a, a.proposedDate, a.proposedTime));
 }
 
 export function declineReschedule(id: string) {
   const a = find(id);
   if (!a) return;
   update(id, { reschedule: false, proposedDate: undefined, proposedTime: undefined });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "reschedule",
-    title: "Remarcação não confirmada",
-    body: `Seu horário continua em ${when(a)}.`,
-    href: "/cliente/agenda",
-  });
+  notify(events.rescheduleDeclined(a));
 }
 
 /** A esteticista move o horário: a cliente é avisada. */
@@ -248,126 +161,34 @@ export function rescheduleAppointment(id: string, date: string, time: string) {
   const a = find(id);
   if (!a) return;
   update(id, { date, time, reschedule: false, proposedDate: undefined, proposedTime: undefined });
-  notify({
-    audience: "cliente",
-    clientId: a.clientId,
-    kind: "reschedule",
-    title: "Horário alterado",
-    body: `${a.procedure} passou para ${formatWeekday(date)} · ${time}`,
-    href: "/cliente/agenda",
-  });
+  notify(events.movedByStudio(a, date, time));
 }
 
-export type CompletedSession = {
-  /** Valor cobrado e como foi pago. */
-  price: number;
-  payment: string;
-  products: string[];
-  cuidados: string[];
-  retorno: { data: string; hora: string } | null;
-};
-
-/** Fecha o atendimento: caixa, estoque, cuidados para a cliente e retorno aguardando confirmação. */
-export function completeAppointment(
-  a: { id: string; clientId: string; client: string; initials: string; procedure: string },
-  session: CompletedSession,
+/** Cria o retorno sugerido ao fechar um atendimento: fica aguardando a confirmação da cliente. */
+export function suggestReturn(
+  a: Pick<AppointmentRec, "clientId" | "client" | "initials" | "procedure" | "price" | "payment">,
+  data: string,
+  hora: string,
 ) {
-  const known = find(a.id);
-  if (known)
-    update(a.id, {
-      done: true,
-      status: "confirmed",
-      price: session.price,
-      payment: session.payment,
-    });
-  else {
-    appointmentsDb.set((list) => [
-      ...list,
-      {
-        id: a.id,
-        clientId: a.clientId,
-        client: a.client,
-        initials: a.initials,
-        procedure: a.procedure,
-        date: todayISO(),
-        time: new Date().toTimeString().slice(0, 5),
-        duration: 60,
-        price: session.price,
-        payment: session.payment,
-        status: "confirmed",
-        kind: "retorno",
-        origin: "gestor",
-        done: true,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-  }
-
-  if (session.price > 0) {
-    addLedgerEntry({
-      kind: "entradas",
-      date: todayISO(),
-      label: a.client,
-      origin: a.procedure,
-      method: session.payment,
-      value: session.price,
-    });
-  }
-  if (session.products.length) consumeStock(session.products);
-
-  if (session.cuidados.length) {
-    const createdAt = new Date().toISOString();
-    careDb.set((list) => [
-      ...session.cuidados.map((text, index) => ({
-        id: `care-${Date.now()}-${index}`,
-        clientId: a.clientId,
-        text,
-        createdAt,
-        ...(/manh|protetor/i.test(text)
-          ? { reminderTime: "08:00", until: addDays(todayISO(), 30) }
-          : /noite|dormir/i.test(text)
-            ? { reminderTime: "21:00", until: addDays(todayISO(), 30) }
-            : {}),
-      })),
-      ...list,
-    ]);
-    notify({
-      audience: "cliente",
-      clientId: a.clientId,
-      kind: "recommendation",
-      title: "Novos cuidados de Fernanda",
-      body: `${session.cuidados.length} recomendações para você`,
-      href: "/cliente/evolucao",
-    });
-  }
-
-  if (session.retorno) {
-    const rec: AppointmentRec = {
-      id: newId(),
-      clientId: a.clientId,
-      client: a.client,
-      initials: a.initials,
-      procedure: a.procedure,
-      date: session.retorno.data,
-      time: session.retorno.hora,
-      duration: 60,
-      price: session.price,
-      payment: session.payment,
-      status: "pending",
-      kind: "retorno",
-      origin: "gestor",
-      createdAt: new Date().toISOString(),
-    };
-    appointmentsDb.set((list) => [...list, rec]);
-    notify({
-      audience: "cliente",
-      clientId: a.clientId,
-      kind: "reminder",
-      title: "Retorno sugerido",
-      body: `${a.procedure} · ${when(rec)}. Confirme sua presença.`,
-      href: "/cliente/agenda",
-    });
-  }
+  const rec: AppointmentRec = {
+    id: newId(),
+    clientId: a.clientId,
+    client: a.client,
+    initials: a.initials,
+    procedure: a.procedure,
+    date: data,
+    time: hora,
+    duration: 60,
+    price: a.price,
+    payment: a.payment,
+    status: "pending",
+    kind: "retorno",
+    origin: "gestor",
+    createdAt: new Date().toISOString(),
+  };
+  appointmentsDb.set((list) => [...list, rec]);
+  notify(events.returnSuggested(rec));
+  return rec;
 }
 
 export const statusLabel: Record<AppointmentStatus, string> = {

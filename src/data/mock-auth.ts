@@ -2,8 +2,19 @@ import type { Session } from "@/lib/auth.types";
 
 /** Contas de demonstração. Qualquer senha é aceita enquanto não há backend. */
 export const demoAccounts: Session[] = [
-  { role: "gestor", name: "Fernanda Costa", email: "fernanda@estudio.com.br" },
-  { role: "cliente", name: "Mariana Silva", email: "mariana@email.com", clientId: "c1" },
+  {
+    role: "gestor",
+    name: "Fernanda Costa",
+    email: "fernanda@estudio.com.br",
+    clinicId: "clinica-fernanda",
+  },
+  {
+    role: "cliente",
+    name: "Mariana Silva",
+    email: "mariana@email.com",
+    clientId: "c1",
+    clinicId: "clinica-fernanda",
+  },
 ];
 
 export const roleLabel = { gestor: "Esteticista", cliente: "Cliente" } as const;

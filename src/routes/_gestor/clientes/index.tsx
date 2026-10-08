@@ -14,6 +14,7 @@ import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { clientsDb } from "@/data/db";
 import { usePro } from "@/lib/use-pro";
+import { useClinicClients } from "@/lib/use-clinic";
 
 export const Route = createFileRoute("/_gestor/clientes/")({
   head: () => ({
@@ -39,7 +40,7 @@ function ClientesPage() {
   const pro = usePro();
   const navigate = useNavigate();
   const { openNotifications, unread } = useShell();
-  const clients = clientsDb.use();
+  const clients = useClinicClients();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);

@@ -5,29 +5,14 @@ import { Input } from "@/components/eb/input";
 import { Drawer } from "@/components/eb/overlays";
 import { Select } from "@/components/eb/select";
 import { Button } from "@/components/ui/button";
-import { appointmentsDb, clientsDb } from "@/data/db";
+import { blocksDb, hoursDb, proceduresDb } from "@/data/db";
+import { unavailableReason } from "@/lib/availability";
 import { formatWeekday } from "@/lib/dates";
 import { scheduleAppointment } from "@/services/appointments.service";
-import type { AppointmentRec } from "@/lib/models";
+import type { AppointmentRec, ProcedureRec } from "@/lib/models";
+import { useClinicAppointments, useClinicClients } from "@/lib/use-clinic";
 
-export const PROCEDURES = [
-  "Limpeza de pele profunda",
-  "Peeling suave",
-  "Hidratação facial",
-  "Drenagem facial",
-  "Avaliação inicial",
-  "Microagulhamento",
-];
 const PAYMENTS = ["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"];
-export const PRICES: Record<string, number> = {
-  "Limpeza de pele profunda": 180,
-  "Peeling suave": 160,
-  "Hidratação facial": 150,
-  "Drenagem facial": 180,
-  "Avaliação inicial": 120,
-  Microagulhamento: 260,
-};
-
 type Form = {
   client: string;
   clientId: string;
@@ -41,14 +26,19 @@ type Form = {
   confirm: boolean;
 };
 
-const blank = (date: string, clientId = "", client = ""): Form => ({
+const blank = (
+  date: string,
+  first: ProcedureRec | undefined,
+  clientId = "",
+  client = "",
+): Form => ({
   client,
   clientId,
-  procedure: PROCEDURES[0] ?? "",
+  procedure: first?.name ?? "",
   date,
   time: "11:00",
-  duration: "60",
-  price: String(PRICES[PROCEDURES[0] ?? ""] ?? 180),
+  duration: String(first?.duration ?? 60),
+  price: String(first?.price ?? 0),
   payment: "Pix",
   notes: "",
   confirm: true,
@@ -68,15 +58,20 @@ export function NewAppointmentDrawer({
   onClose: () => void;
   onCreated: (rec: AppointmentRec) => void;
 }) {
-  const clients = clientsDb.use();
-  const appointments = appointmentsDb.use();
+  const clients = useClinicClients();
+  const appointments = useClinicAppointments();
+  const procedures = proceduresDb.use();
+  const hours = hoursDb.use();
+  const blocks = blocksDb.use();
   const preset = clients.find((client) => client.id === clientId);
-  const [form, setForm] = useState<Form>(() => blank(date, preset?.id, preset?.name));
+  const [form, setForm] = useState<Form>(() =>
+    blank(date, procedures[0], preset?.id, preset?.name),
+  );
   const [tried, setTried] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setForm(blank(date, preset?.id, preset?.name));
+      setForm(blank(date, procedures[0], preset?.id, preset?.name));
       setTried(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +100,9 @@ export function NewAppointmentDrawer({
       ? "Escolha o horário."
       : clash
         ? `Já existe atendimento às ${form.time} (${clash.client}).`
-        : undefined,
+        : form.date
+          ? unavailableReason(form.date, form.time, hours, blocks)
+          : undefined,
   };
   const valid = !errors.client && !errors.date && !errors.time;
 
@@ -183,15 +180,17 @@ export function NewAppointmentDrawer({
 
         <Select
           label="Procedimento"
-          options={PROCEDURES}
+          options={procedures.map((item) => item.name)}
           value={form.procedure}
-          onChange={(event) =>
+          onChange={(event) => {
+            const picked = procedures.find((item) => item.name === event.target.value);
             setForm((current) => ({
               ...current,
               procedure: event.target.value,
-              price: String(PRICES[event.target.value] ?? current.price),
-            }))
-          }
+              price: picked ? String(picked.price) : current.price,
+              duration: picked ? String(picked.duration) : current.duration,
+            }));
+          }}
         />
         <div className="grid grid-cols-2 gap-2.5">
           <Input
@@ -209,10 +208,8 @@ export function NewAppointmentDrawer({
             onChange={(event) => set("time", event.target.value)}
           />
         </div>
-        {!tried && clash ? (
-          <p className="-mt-2 text-xs text-[var(--eb-amber-500)]">
-            Já existe atendimento às {form.time} ({clash.client}).
-          </p>
+        {!tried && (clash || errors.time) ? (
+          <p className="-mt-2 text-xs text-[var(--eb-amber-500)]">{errors.time}</p>
         ) : null}
         <div className="grid grid-cols-2 gap-2.5">
           <Input

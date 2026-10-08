@@ -11,10 +11,12 @@ import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { appointmentsDb } from "@/data/db";
+import { blocksDb, hoursDb, proceduresDb } from "@/data/db";
 import { proName } from "@/data/cliente-mock";
 import { addDays, formatShort, formatWeekday, todayISO } from "@/lib/dates";
+import { slotsFor } from "@/lib/availability";
 import { useClient } from "@/lib/use-client";
+import { useClinicAppointments } from "@/lib/use-clinic";
 import type { AppointmentRec } from "@/lib/models";
 import { byDateTime } from "@/lib/view";
 import {
@@ -30,19 +32,15 @@ export const Route = createFileRoute("/cliente/agenda")({
   component: AgendaClientePage,
 });
 
-const SERVICES = [
-  "Limpeza de pele profunda",
-  "Peeling suave",
-  "Hidratação facial",
-  "Drenagem facial",
-];
-const TIMES = ["09:00", "10:30", "14:00", "16:30", "18:00"];
 const STEPS = ["Escolher serviço", "Escolher data", "Escolher horário", "Confirmar solicitação"];
 
 function AgendaClientePage() {
   const { openNotifications, unread } = useShell();
   const { clientId, profile } = useClient();
-  const all = appointmentsDb.use();
+  const all = useClinicAppointments();
+  const hours = hoursDb.use();
+  const blocks = blocksDb.use();
+  const SERVICES = proceduresDb.use().map((item) => item.name);
   const today = todayISO();
   const mine = all
     .filter(
@@ -57,7 +55,7 @@ function AgendaClientePage() {
   const [mode, setMode] = useState<"novo" | "remarcar" | null>(null);
   const [target, setTarget] = useState<AppointmentRec | null>(null);
   const [step, setStep] = useState(0);
-  const [service, setService] = useState(SERVICES[0] ?? "");
+  const [service, setService] = useState("");
   const [date, setDate] = useState(addDays(today, 7));
   const [cursor, setCursor] = useState(() => ({
     year: new Date().getFullYear(),
@@ -84,6 +82,8 @@ function AgendaClientePage() {
     [all, date],
   );
   const past = date < today;
+  const TIMES = slotsFor(date, hours, blocks);
+  const chosenService = service || SERVICES[0] || "";
 
   const open = (next: "novo" | "remarcar", appointment: AppointmentRec | null = null) => {
     setMode(next);
@@ -98,7 +98,7 @@ function AgendaClientePage() {
 
   const send = () => {
     if (mode === "novo") {
-      requestAppointment({ clientId, procedure: service, date, time, notes });
+      requestAppointment({ clientId, procedure: chosenService, date, time, notes });
       setToast({ message: "Solicitação enviada", detail: `${proName} responde em até 24 horas.` });
     } else if (target) {
       requestReschedule(target.id, date, time);
@@ -111,7 +111,12 @@ function AgendaClientePage() {
   };
 
   const lastStep = mode === "remarcar" ? 2 : 3;
-  const canGo = step === 1 ? !past : step === 2 ? !taken.has(time) : true;
+  const canGo =
+    step === 1
+      ? !past && slotsFor(date, hours, blocks).length > 0
+      : step === 2
+        ? TIMES.includes(time) && !taken.has(time)
+        : true;
   const title = mode === "remarcar" ? "Pedir remarcação" : "Solicitar novo horário";
   const labels = mode === "remarcar" ? ["", "Escolher data", "Escolher horário"] : STEPS;
   const stepNumber = mode === "remarcar" ? step : step + 1;
@@ -258,7 +263,7 @@ function AgendaClientePage() {
                 onClick={() => setService(item)}
                 className={cn(
                   "min-h-12 rounded-[var(--radius-md)] border px-3.5 text-left text-sm",
-                  service === item
+                  chosenService === item
                     ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)]"
                     : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)]",
                 )}
@@ -286,6 +291,10 @@ function AgendaClientePage() {
             />
             {past ? (
               <p className="text-xs text-[var(--coral)]">Escolha uma data a partir de hoje.</p>
+            ) : !TIMES.length ? (
+              <p className="text-xs text-[var(--coral)]">
+                A agenda não atende nesse dia. Escolha outra data.
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -317,7 +326,7 @@ function AgendaClientePage() {
         {step === 3 && mode === "novo" ? (
           <div className="flex flex-col gap-2.5">
             <div className="rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] px-4 py-3.5 text-sm leading-[1.8]">
-              <div>{service}</div>
+              <div>{chosenService}</div>
               <div className="text-[var(--text-secondary)]">
                 {formatWeekday(date)} · {time}
               </div>

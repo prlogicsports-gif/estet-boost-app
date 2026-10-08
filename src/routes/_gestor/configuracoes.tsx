@@ -1,11 +1,25 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
+import { ClientInvite } from "@/components/eb/client-invite";
 import { Icon } from "@/components/eb/icon";
+import { IconButton } from "@/components/eb/icon-button";
+import { Input } from "@/components/eb/input";
+import { Drawer } from "@/components/eb/overlays";
 import { TopBar } from "@/components/eb/top-bar";
 import { NotificationPrefsEditor } from "@/components/eb/notifications-panel";
-import { resetDemoData } from "@/data/db";
+import { ToastHost } from "@/components/eb/toast";
+import { NewProcedureForm } from "@/components/session/new-procedure-form";
+import { Button } from "@/components/ui/button";
+import { blocksDb, hoursDb, proceduresDb, resetDemoData, settingsDb } from "@/data/db";
+import { formatShort, todayISO } from "@/lib/dates";
+import { sessionStore, useSession } from "@/lib/session";
+import { useClinic } from "@/lib/use-clinic";
 import { usePro } from "@/lib/use-pro";
 import { authService } from "@/services/auth.service";
+import { updateClinic } from "@/services/clinic.service";
+import { removeProcedure, saveProcedure } from "@/services/sessions.service";
+import { brl } from "@/lib/view";
 
 export const Route = createFileRoute("/_gestor/configuracoes")({
   head: () => ({
@@ -25,33 +39,91 @@ export const Route = createFileRoute("/_gestor/configuracoes")({
   component: ConfiguracoesPage,
 });
 
-const items: [string, string, string][] = [
-  ["Clock", "Horários de atendimento", "Dias e horários livres na agenda"],
-  ["Sparkles", "Procedimentos e valores", "Duração, preço e retorno sugerido"],
-  ["FileText", "Modelos de anamnese", "Perguntas de cada etapa"],
-  ["ShieldCheck", "Consentimentos e autorizações", "Termos e autorização de imagem"],
-  ["Bell", "Notificações", "Lembretes e avisos"],
-];
-
 const row =
   "flex min-h-14 w-full items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-2 text-left";
+const heading =
+  "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
+
+type Sheet =
+  | "perfil"
+  | "horarios"
+  | "procedimentos"
+  | "anamnese"
+  | "consentimento"
+  | "bloqueios"
+  | "link"
+  | null;
+
+const ITEMS: [Sheet & string, string, string, string][] = [
+  ["perfil", "UserCog", "Perfil e clínica", "Seus dados, nome e contato da clínica"],
+  ["link", "Link", "Link e credenciais de cadastro", "Como as clientes se filiam à sua clínica"],
+  ["horarios", "Clock", "Horários de atendimento", "Dias e horários livres na agenda"],
+  ["bloqueios", "CalendarX", "Bloqueios de agenda", "Folgas, férias e compromissos"],
+  ["procedimentos", "Sparkles", "Procedimentos e valores", "Duração, preço e retorno sugerido"],
+  ["anamnese", "FileText", "Modelos de anamnese", "Perguntas de cada etapa"],
+  [
+    "consentimento",
+    "ShieldCheck",
+    "Consentimentos e autorizações",
+    "Termo de autorização de imagem",
+  ],
+];
+
+const DAYS: [string, string][] = [
+  ["1", "Segunda"],
+  ["2", "Terça"],
+  ["3", "Quarta"],
+  ["4", "Quinta"],
+  ["5", "Sexta"],
+  ["6", "Sábado"],
+  ["0", "Domingo"],
+];
 
 function ConfiguracoesPage() {
   const pro = usePro();
+  const session = useSession();
+  const { clinic } = useClinic();
   const navigate = useNavigate();
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const close = (message?: string) => {
+    setSheet(null);
+    if (message) setToast(message);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <TopBar title="Configurações" context={pro.name} user={pro} />
-      <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-        Avisos
-      </span>
+      <TopBar title="Configurações" context={clinic?.name ?? pro.name} user={pro} />
+
+      <div className="flex items-center gap-3.5">
+        <span className="grid size-16 place-items-center rounded-full bg-[var(--eb-nude-a32)] text-[21px] font-medium">
+          {pro.initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-xl font-medium">{pro.name}</div>
+          <div className="truncate text-[13px] text-[var(--text-secondary)]">
+            {[clinic?.name, clinic?.city].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setSheet("perfil")}>
+          <Icon name="PencilLine" size={15} /> Editar perfil
+        </Button>
+      </div>
+
+      <span className={heading}>Avisos</span>
       <NotificationPrefsEditor audience="gestor" />
-      <span className="mt-2 text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-        Estúdio
-      </span>
+
+      <span className={`${heading} mt-2`}>Estúdio</span>
       <div className="flex flex-col gap-2">
-        {items.map(([icon, title, detail]) => (
-          <button key={title} type="button" className={row}>
+        {ITEMS.map(([id, icon, title, detail]) => (
+          <button key={id} type="button" className={row} onClick={() => setSheet(id)}>
             <Icon name={icon} size={18} color="var(--eb-nude-300)" />
             <span className="min-w-0 flex-1">
               <span className="block text-[14.5px]">{title}</span>
@@ -92,6 +164,471 @@ function ConfiguracoesPage() {
           <span className="flex-1 text-[14.5px]">Sair da conta</span>
         </button>
       </div>
+
+      <ProfileDrawer open={sheet === "perfil"} onClose={close} session={session ?? null} />
+      <Drawer
+        open={sheet === "link"}
+        onClose={() => close()}
+        title="Link e credenciais"
+        subtitle="Cada clínica tem o próprio link: quem se cadastra por ele fica filiada a você"
+        width={520}
+      >
+        {clinic ? <ClientInvite clinic={clinic} compact /> : null}
+      </Drawer>
+      <HoursDrawer open={sheet === "horarios"} onClose={close} />
+      <BlocksDrawer open={sheet === "bloqueios"} onClose={close} />
+      <ProceduresDrawer open={sheet === "procedimentos"} onClose={close} />
+      <QuestionsDrawer open={sheet === "anamnese"} onClose={close} />
+      <ConsentDrawer open={sheet === "consentimento"} onClose={close} />
+      <ToastHost toast={toast ? { message: toast } : null} />
     </div>
+  );
+}
+
+const footer = (onClose: () => void, submit: () => void, text: string) => (
+  <>
+    <Button type="button" variant="ghost" onClick={onClose}>
+      Cancelar
+    </Button>
+    <Button type="button" variant="tech" className="flex-1" onClick={submit}>
+      <Icon name="Check" size={18} /> {text}
+    </Button>
+  </>
+);
+
+function ProfileDrawer({
+  open,
+  onClose,
+  session,
+}: {
+  open: boolean;
+  onClose: (message?: string) => void;
+  session: ReturnType<typeof useSession>;
+}) {
+  const { clinic } = useClinic();
+  const [f, setF] = useState({
+    name: "",
+    email: "",
+    studio: "",
+    phone: "",
+    city: "",
+    document: "",
+  });
+  useEffect(() => {
+    if (!open) return;
+    setF({
+      name: session?.name ?? "",
+      email: session?.email ?? "",
+      studio: clinic?.name ?? "",
+      phone: clinic?.phone ?? "",
+      city: clinic?.city ?? "",
+      document: clinic?.document ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const set = (key: keyof typeof f) => (event: { target: { value: string } }) =>
+    setF((c) => ({ ...c, [key]: event.target.value }));
+
+  const save = () => {
+    if (!f.name.trim() || !f.studio.trim()) return;
+    if (session)
+      sessionStore.set({
+        ...session,
+        name: f.name.trim(),
+        email: f.email.trim().toLowerCase() || session.email,
+      });
+    if (clinic)
+      updateClinic(clinic.id, {
+        name: f.studio.trim(),
+        owner: f.name.trim(),
+        email: f.email.trim().toLowerCase(),
+        phone: f.phone.trim() || undefined,
+        city: f.city.trim() || undefined,
+        document: f.document.trim() || undefined,
+      });
+    onClose("Perfil atualizado");
+  };
+
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Perfil e clínica"
+      subtitle="Aparece para as suas clientes"
+      footer={footer(() => onClose(), save, "Salvar perfil")}
+    >
+      <div className="flex flex-col gap-3.5">
+        <Input
+          label="Seu nome"
+          icon="User"
+          value={f.name}
+          error={f.name.trim() ? undefined : "Informe seu nome."}
+          onChange={set("name")}
+        />
+        <Input label="E-mail" icon="Mail" type="email" value={f.email} onChange={set("email")} />
+        <Input
+          label="Nome da clínica"
+          icon="Sparkles"
+          value={f.studio}
+          error={f.studio.trim() ? undefined : "Informe o nome da clínica."}
+          onChange={set("studio")}
+        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <Input label="Celular" type="tel" value={f.phone} onChange={set("phone")} />
+          <Input label="Cidade" value={f.city} onChange={set("city")} />
+        </div>
+        <Input
+          label="CNPJ ou CPF"
+          inputMode="numeric"
+          value={f.document}
+          onChange={set("document")}
+        />
+        <p className="text-xs text-muted-foreground">
+          Endereço do seu link de cadastro: <span className="font-mono">/?p={clinic?.slug}</span>
+        </p>
+      </div>
+    </Drawer>
+  );
+}
+
+function HoursDrawer({ open, onClose }: { open: boolean; onClose: (message?: string) => void }) {
+  const stored = hoursDb.use();
+  const [hours, setHours] = useState(stored);
+  useEffect(() => {
+    if (open) setHours(hoursDb.get());
+  }, [open]);
+  const setDay = (id: string, patch: Partial<(typeof hours)["days"][string]>) =>
+    setHours((c) => ({
+      ...c,
+      days: {
+        ...c.days,
+        [id]: { ...(c.days[id] ?? { open: false, start: "09:00", end: "18:00" }), ...patch },
+      },
+    }));
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Horários de atendimento"
+      subtitle="A agenda e as solicitações das clientes respeitam estes horários"
+      footer={footer(
+        () => onClose(),
+        () => (hoursDb.set(hours), onClose("Horários salvos")),
+        "Salvar horários",
+      )}
+    >
+      <div className="flex flex-col gap-2.5">
+        {DAYS.map(([id, name]) => {
+          const day = hours.days[id] ?? { open: false, start: "09:00", end: "18:00" };
+          return (
+            <div
+              key={id}
+              className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-2.5"
+            >
+              <label className="flex min-w-[110px] items-center gap-2.5 text-[14px]">
+                <input
+                  type="checkbox"
+                  checked={day.open}
+                  onChange={() => setDay(id, { open: !day.open })}
+                  className="size-[18px] accent-[var(--teal)]"
+                />
+                {name}
+              </label>
+              {day.open ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    aria-label={`${name} abre`}
+                    type="time"
+                    value={day.start}
+                    onChange={(event) => setDay(id, { start: event.target.value })}
+                  />
+                  <span className="text-muted-foreground">às</span>
+                  <Input
+                    aria-label={`${name} fecha`}
+                    type="time"
+                    value={day.end}
+                    onChange={(event) => setDay(id, { end: event.target.value })}
+                  />
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">Fechado</span>
+              )}
+            </div>
+          );
+        })}
+        <Input
+          label="Intervalo entre horários"
+          trailing="min"
+          inputMode="numeric"
+          value={String(hours.slot)}
+          onChange={(event) =>
+            setHours((c) => ({ ...c, slot: Math.max(10, Number(event.target.value) || 30) }))
+          }
+        />
+      </div>
+    </Drawer>
+  );
+}
+
+function BlocksDrawer({ open, onClose }: { open: boolean; onClose: (message?: string) => void }) {
+  const blocks = blocksDb.use().sort((a, b) => a.date.localeCompare(b.date));
+  const [f, setF] = useState({ date: todayISO(), start: "12:00", end: "13:00", reason: "" });
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Bloqueios de agenda"
+      subtitle="Horários em que você não atende"
+    >
+      <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-2.5 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5">
+          <Input
+            label="Dia"
+            type="date"
+            value={f.date}
+            onChange={(event) => setF({ ...f, date: event.target.value })}
+          />
+          <div className="grid grid-cols-2 gap-2.5">
+            <Input
+              label="Das"
+              type="time"
+              value={f.start}
+              onChange={(event) => setF({ ...f, start: event.target.value })}
+            />
+            <Input
+              label="Às"
+              type="time"
+              value={f.end}
+              onChange={(event) => setF({ ...f, end: event.target.value })}
+            />
+          </div>
+          <Input
+            label="Motivo"
+            placeholder="Almoço, consulta, folga…"
+            value={f.reason}
+            onChange={(event) => setF({ ...f, reason: event.target.value })}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="self-start"
+            disabled={!f.date || f.end <= f.start}
+            onClick={() => {
+              blocksDb.set((list) => [
+                ...list,
+                { id: `bl-${Date.now()}`, ...f, reason: f.reason.trim() },
+              ]);
+              setF({ ...f, reason: "" });
+            }}
+          >
+            <Icon name="Plus" size={15} /> Bloquear horário
+          </Button>
+        </div>
+        {blocks.map((block) => (
+          <div
+            key={block.id}
+            className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px]">{block.reason || "Bloqueio"}</div>
+              <div className="font-mono text-xs text-muted-foreground">
+                {formatShort(block.date)} · {block.start} às {block.end}
+              </div>
+            </div>
+            <IconButton
+              icon="Trash2"
+              label="Remover bloqueio"
+              onClick={() => blocksDb.set((list) => list.filter((item) => item.id !== block.id))}
+            />
+          </div>
+        ))}
+        {!blocks.length ? (
+          <p className="text-[13px] text-muted-foreground">Nenhum bloqueio.</p>
+        ) : null}
+      </div>
+    </Drawer>
+  );
+}
+
+function ProceduresDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: (message?: string) => void;
+}) {
+  const list = proceduresDb.use();
+  const [adding, setAdding] = useState(false);
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Procedimentos e valores"
+      subtitle="Usados na agenda, no atendimento e no cálculo de resultado"
+      width={520}
+    >
+      <div className="flex flex-col gap-2.5">
+        {list.map((item) => (
+          <div
+            key={item.id}
+            className="flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label="Nome"
+                className="flex-1"
+                value={item.name}
+                onChange={(event) => saveProcedure({ ...item, name: event.target.value })}
+              />
+              <IconButton
+                icon="Trash2"
+                label={`Remover ${item.name}`}
+                onClick={() => removeProcedure(item.id)}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              <Input
+                label="Valor"
+                trailing="R$"
+                inputMode="decimal"
+                value={String(item.price)}
+                onChange={(event) =>
+                  saveProcedure({
+                    ...item,
+                    price: Number(event.target.value.replace(",", ".")) || 0,
+                  })
+                }
+              />
+              <Input
+                label="Duração"
+                trailing="min"
+                inputMode="numeric"
+                value={String(item.duration)}
+                onChange={(event) =>
+                  saveProcedure({ ...item, duration: Number(event.target.value) || 0 })
+                }
+              />
+              <Input
+                label="Retorno"
+                trailing="dias"
+                inputMode="numeric"
+                value={String(item.returnDays)}
+                onChange={(event) =>
+                  saveProcedure({ ...item, returnDays: Number(event.target.value) || 0 })
+                }
+              />
+            </div>
+          </div>
+        ))}
+        {adding ? (
+          <NewProcedureForm onCancel={() => setAdding(false)} onCreate={() => setAdding(false)} />
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            className="self-start"
+            onClick={() => setAdding(true)}
+          >
+            <Icon name="Plus" size={16} /> Novo procedimento
+          </Button>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {list.length} procedimentos · ticket médio{" "}
+          {brl(list.length ? list.reduce((sum, item) => sum + item.price, 0) / list.length : 0)}
+        </p>
+      </div>
+    </Drawer>
+  );
+}
+
+function QuestionsDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: (message?: string) => void;
+}) {
+  const stored = settingsDb.use();
+  const [questions, setQuestions] = useState(stored.questions);
+  useEffect(() => {
+    if (open) setQuestions(settingsDb.get().questions);
+  }, [open]);
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Modelos de anamnese"
+      subtitle="Estas perguntas aparecem na ficha de cada cliente"
+      footer={footer(
+        () => onClose(),
+        () => (
+          settingsDb.set((c) => ({ ...c, questions: questions.filter((q) => q.label.trim()) })),
+          onClose("Perguntas salvas")
+        ),
+        "Salvar perguntas",
+      )}
+    >
+      <div className="flex flex-col gap-2.5">
+        {questions.map((question, index) => (
+          <div key={question.id} className="flex items-center gap-2">
+            <Input
+              aria-label={`Pergunta ${index + 1}`}
+              className="flex-1"
+              value={question.label}
+              onChange={(event) =>
+                setQuestions((list) =>
+                  list.map((item) =>
+                    item.id === question.id ? { ...item, label: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+            <IconButton
+              icon="Trash2"
+              label="Remover pergunta"
+              onClick={() => setQuestions((list) => list.filter((item) => item.id !== question.id))}
+            />
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="secondary"
+          className="self-start"
+          onClick={() => setQuestions((list) => [...list, { id: `q-${Date.now()}`, label: "" }])}
+        >
+          <Icon name="Plus" size={16} /> Nova pergunta
+        </Button>
+      </div>
+    </Drawer>
+  );
+}
+
+function ConsentDrawer({ open, onClose }: { open: boolean; onClose: (message?: string) => void }) {
+  const stored = settingsDb.use();
+  const [text, setText] = useState(stored.consentText);
+  useEffect(() => {
+    if (open) setText(settingsDb.get().consentText);
+  }, [open]);
+  return (
+    <Drawer
+      open={open}
+      onClose={() => onClose()}
+      title="Consentimentos"
+      subtitle="Termo de autorização de imagem"
+      footer={footer(
+        () => onClose(),
+        () => (settingsDb.set((c) => ({ ...c, consentText: text.trim() })), onClose("Termo salvo")),
+        "Salvar termo",
+      )}
+    >
+      <Input
+        label="Texto do termo"
+        multiline
+        rows={8}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+      />
+    </Drawer>
   );
 }

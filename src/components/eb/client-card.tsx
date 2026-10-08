@@ -9,14 +9,14 @@ export type Client = {
   lastVisit: string;
   nextReturn: string;
   status: StatusTone;
-  alert?: string;
+  alert?: string | undefined;
   age: number;
   phone: string;
-  goal?: string;
-  allergies?: string;
-  contra?: string;
-  session?: string;
-  note?: string;
+  goal?: string | undefined;
+  allergies?: string | undefined;
+  contra?: string | undefined;
+  session?: string | undefined;
+  note?: string | undefined;
 };
 
 export function ClientCard({

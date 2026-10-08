@@ -14,13 +14,7 @@ function NovoAtendimentoPage() {
     <SessionFrame>
       <NewSessionStart
         onCancel={() => navigate({ to: "/hoje" })}
-        onStart={(clientId, procedure) =>
-          navigate({
-            to: "/atendimento/$sessionId",
-            params: { sessionId: "livre" },
-            search: { cliente: clientId, procedimento: procedure },
-          })
-        }
+        onStart={(sessionId) => navigate({ to: "/atendimento/$sessionId", params: { sessionId } })}
       />
     </SessionFrame>
   );

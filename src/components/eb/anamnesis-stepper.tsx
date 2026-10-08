@@ -13,7 +13,7 @@ export function AnamnesisStepper({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-4 lg:flex-col lg:items-start lg:gap-1.5">
         <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
           Etapa {current + 1} de {steps.length}
         </span>
@@ -34,18 +34,18 @@ export function AnamnesisStepper({
           />
         ))}
       </div>
-      <ol className="m-0 flex list-none gap-2.5 overflow-x-auto p-0 pb-1.5">
+      <ol className="m-0 flex list-none gap-2.5 overflow-x-auto p-0 pb-1.5 lg:flex-col lg:overflow-visible lg:pb-0">
         {steps.map((step, index) => {
           const done = index < current;
           const on = index === current;
           return (
-            <li key={step.label} className="flex-none">
+            <li key={step.label} className="flex-none lg:w-full">
               <button
                 type="button"
                 onClick={() => onSelect?.(index)}
                 aria-current={on ? "step" : undefined}
                 className={cn(
-                  "flex min-h-11 items-center gap-2.5 whitespace-nowrap rounded-full border py-0 pl-2 pr-4 text-[13px]",
+                  "flex min-h-11 items-center gap-2.5 whitespace-nowrap rounded-full border py-0 pl-2 pr-4 text-[13px] lg:w-full lg:rounded-[var(--radius-md)]",
                   on
                     ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] text-foreground"
                     : "border-[var(--border-hairline)] bg-transparent",

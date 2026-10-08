@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { EmptyState } from "@/components/eb/empty-state";
 import { SessionFrame } from "@/components/session/session-frame";
-import { SessionScreen, type SessionAppointment } from "@/components/session/session-screen";
+import { SessionScreen } from "@/components/session/session-screen";
 import { Button } from "@/components/ui/button";
-import { appointments, clients } from "@/data/gestor-mock";
+import { appointmentsDb, sessionsDb } from "@/data/db";
+import { startSession } from "@/services/sessions.service";
 
 type Search = { cliente?: string | undefined; procedimento?: string | undefined };
 
@@ -17,44 +19,40 @@ export const Route = createFileRoute("/atendimento/$sessionId")({
   component: AtendimentoEmAndamentoPage,
 });
 
-/** `livre` é o atendimento aberto na hora (cliente e procedimento vêm na URL); qualquer outro id é um horário da agenda. */
-function resolve(sessionId: string, search: Search): SessionAppointment | null {
-  if (sessionId === "livre") {
-    const client = clients.find((item) => item.id === search.cliente);
-    if (!client) return null;
-    return {
-      id: `novo-${client.id}`,
-      novo: true,
-      clientId: client.id,
-      client: client.name,
-      initials: client.initials,
-      procedure: search.procedimento ?? "Limpeza de pele profunda",
-      time: new Date().toTimeString().slice(0, 5),
-    };
-  }
-  const found = appointments.find((item) => item.id === sessionId);
-  return found
-    ? {
-        id: found.id,
-        clientId: found.clientId,
-        client: found.client,
-        initials: found.initials,
-        procedure: found.procedure,
-        time: found.time,
-      }
-    : null;
-}
-
+/**
+ * O endereço pode ser o do próprio atendimento, o de um horário da agenda ou `livre` com a cliente na URL.
+ * Nos dois últimos casos o rascunho é aberto (ou retomado) e o endereço passa a ser o dele.
+ */
 function AtendimentoEmAndamentoPage() {
   const { sessionId } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const appointment = resolve(sessionId, search);
+  const session = sessionsDb.use().find((item) => item.id === sessionId);
+  const appt = appointmentsDb.use().find((item) => item.id === sessionId);
+
+  useEffect(() => {
+    if (session) return;
+    const clientId = appt?.clientId ?? (sessionId === "livre" ? search.cliente : undefined);
+    if (!clientId) return;
+    const opened = startSession({
+      clientId,
+      ...((search.procedimento ?? appt?.procedure)
+        ? { procedure: (search.procedimento ?? appt?.procedure) as string }
+        : {}),
+      ...(appt ? { apptId: appt.id } : {}),
+    });
+    if (opened)
+      void navigate({
+        to: "/atendimento/$sessionId",
+        params: { sessionId: opened.id },
+        replace: true,
+      });
+  }, [session, appt, sessionId, search.cliente, search.procedimento, navigate]);
 
   return (
     <SessionFrame>
-      {appointment ? (
-        <SessionScreen appointment={appointment} onExit={() => navigate({ to: "/hoje" })} />
+      {session ? (
+        <SessionScreen session={session} onExit={() => navigate({ to: "/hoje" })} />
       ) : (
         <EmptyState
           icon="CalendarClock"

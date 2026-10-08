@@ -84,3 +84,81 @@ export type NotificationPrefs = {
   push: boolean;
   whatsapp: boolean;
 };
+
+/** Clínica: cada esteticista tem a sua, com um link e credenciais próprios para filiar clientes. */
+export type ClinicRec = {
+  id: string;
+  /** Vai no link de cadastro: `/?p=slug`. */
+  slug: string;
+  name: string;
+  owner: string;
+  email: string;
+  phone?: string | undefined;
+  city?: string | undefined;
+  document?: string | undefined;
+  size?: "autonoma" | "clinica" | undefined;
+  createdAt: string;
+};
+
+export type StockRec = {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  min: number;
+  /** Validade ISO `AAAA-MM-DD`; vazio quando não vence. */
+  expiry: string;
+  batch: string;
+  /** Custo por unidade, em reais. */
+  cost: number;
+  supplier: string;
+};
+
+/** Procedimentos que a clínica oferece, com preço e retorno sugerido. */
+export type ProcedureRec = {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+  returnDays: number;
+};
+
+export type AnamnesisRec = {
+  clientId: string;
+  answers: Record<string, string>;
+  consent: boolean;
+  updatedAt: string;
+};
+
+export type SessionProcedure = { name: string; price: number };
+export type SessionProduct = { stockId: string; name: string; qty: number; unitCost: number };
+
+/** Atendimento em andamento: salvo sozinho a cada alteração, para retomar de onde parou. */
+export type SessionRec = {
+  id: string;
+  /** Horário da agenda a que pertence, quando houver. */
+  apptId?: string | undefined;
+  clientId: string;
+  client: string;
+  initials: string;
+  procedure: string;
+  step: number;
+  procedures: SessionProcedure[];
+  products: SessionProduct[];
+  beforePhotoId?: string | undefined;
+  afterPhotoId?: string | undefined;
+  notes: Record<string, string>;
+  payment: string;
+  /** Se o valor já foi pago ou fica a receber. */
+  paidNow: boolean;
+  dueDate: string;
+  status: "draft" | "done";
+  startedAt: string;
+  finishedAt?: string | undefined;
+};
+
+export type BlockRec = { id: string; date: string; start: string; end: string; reason: string };
+
+export type DayHours = { open: boolean; start: string; end: string };
+export type HoursRec = { days: Record<string, DayHours>; slot: number };

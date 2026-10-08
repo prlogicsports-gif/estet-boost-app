@@ -19,6 +19,7 @@ export function ClientInviteForm({
 }) {
   const [loading, setLoading] = useState(false);
   const [terms, setTerms] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const firstName = invite.professional.split(" ")[0] || "ela";
 
   return (
@@ -38,6 +39,7 @@ export function ClientInviteForm({
         );
         setLoading(false);
         if (result.ok) onSuccess(result.session);
+        else setError(result.message);
       }}
     >
       <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] px-3.5 py-3">
@@ -100,6 +102,12 @@ export function ClientInviteForm({
           required
         />
       </div>
+
+      {error ? (
+        <p role="alert" className="mt-4 text-[13px] text-[var(--eb-coral-500)]">
+          {error}
+        </p>
+      ) : null}
 
       <TermsCheck checked={terms} onChange={setTerms}>
         Concordo com os{" "}

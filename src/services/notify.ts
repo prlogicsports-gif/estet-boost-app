@@ -2,7 +2,10 @@ import { notificationsDb, prefsDb } from "@/data/db";
 import type { Audience, NotificationRec } from "@/lib/models";
 import { showPush } from "@/services/push.service";
 
-type Draft = Omit<NotificationRec, "id" | "createdAt" | "read"> & { createdAt?: string };
+export type NotificationDraft = Omit<NotificationRec, "id" | "createdAt" | "read"> & {
+  createdAt?: string;
+};
+type Draft = NotificationDraft;
 
 /** Cria uma notificação. Com `ruleKey`, não repete a mesma (as regras automáticas rodam o tempo todo). */
 export function notify(draft: Draft): NotificationRec | null {

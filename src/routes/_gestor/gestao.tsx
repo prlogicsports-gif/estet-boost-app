@@ -11,20 +11,36 @@ import { SearchBar } from "@/components/eb/search-bar";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { Select } from "@/components/eb/select";
 import { StatusBadge } from "@/components/eb/status-badge";
-import { StockItem } from "@/components/eb/stock-item";
+import { daysToExpire, StockItem } from "@/components/eb/stock-item";
 import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { billsDb, ledgerDb, stockDb } from "@/data/db";
 import type { LedgerEntry } from "@/data/gestor-mock";
+import { useClinicClients } from "@/lib/use-clinic";
 import { usePro } from "@/lib/use-pro";
 import { addDays, daysBetween, formatShort, monthName, relativeDay, todayISO } from "@/lib/dates";
 import { brl } from "@/lib/view";
 import { cn } from "@/lib/utils";
-import { addBill, addLedgerEntry, addStockItem, payBill } from "@/services/finance.service";
+import type { StockRec } from "@/lib/models";
+import {
+  addBill,
+  addLedgerEntry,
+  confirmPayment,
+  payBill,
+  rejectPayment,
+  removeStock,
+  saveStock,
+} from "@/services/finance.service";
+
+type Tab = "caixa" | "receber" | "contas" | "estoque";
+const TABS: Tab[] = ["caixa", "receber", "contas", "estoque"];
 
 export const Route = createFileRoute("/_gestor/gestao")({
+  validateSearch: (search): { aba?: Tab | undefined } => ({
+    aba: TABS.find((item) => item === search["aba"]),
+  }),
   head: () => ({
     meta: [
       { title: "Gestão — EstetBoost." },
@@ -224,7 +240,6 @@ function CashDetail({ kind, onClose }: { kind: CashKind | null; onClose: () => v
   );
 }
 
-type Tab = "caixa" | "contas" | "estoque";
 type Sheet = "movimento" | "conta" | "produto" | null;
 
 function GestaoPage() {
@@ -233,12 +248,19 @@ function GestaoPage() {
   const ledger = ledgerDb.use();
   const bills = billsDb.use();
   const stock = stockDb.use();
-  const [tab, setTab] = useState<Tab>("caixa");
+  const { aba } = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(aba ?? "caixa");
+  useEffect(() => {
+    if (aba) setTab(aba);
+  }, [aba]);
   const [detail, setDetail] = useState<CashKind | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<string | null>(null);
-  const [draftProduct, setDraftProduct] = useState("");
+  const [product, setProduct] = useState<{
+    item: StockRec | null;
+    mode: "novo" | "editar" | "repor";
+  }>({ item: null, mode: "novo" });
   const today = todayISO();
 
   useEffect(() => {
@@ -264,17 +286,29 @@ function GestaoPage() {
   );
   const openBills = bills.filter((bill) => !bill.paid);
   const low = stock.filter((item) => item.quantity <= item.min);
-  const shown = stock.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+  const shown = stock
+    .filter((item) =>
+      `${item.name} ${item.category} ${item.supplier}`.toLowerCase().includes(query.toLowerCase()),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const expiring = stock.filter((item) => {
+    const days = daysToExpire(item);
+    return days !== null && days <= 30;
+  });
+  const pendingReceivables = ledger.filter((entry) => entry.kind === "receber");
+  const reportedCount = pendingReceivables.filter((entry) => entry.reported).length;
 
   const addLabel =
-    tab === "caixa"
+    tab === "caixa" || tab === "receber"
       ? "Nova movimentação"
       : tab === "contas"
         ? "Adicionar conta"
         : "Adicionar produto";
   const openAdd = () => {
-    setDraftProduct("");
-    setSheet(tab === "caixa" ? "movimento" : tab === "contas" ? "conta" : "produto");
+    setProduct({ item: null, mode: "novo" });
+    setSheet(
+      tab === "caixa" || tab === "receber" ? "movimento" : tab === "contas" ? "conta" : "produto",
+    );
   };
 
   return (
@@ -297,6 +331,7 @@ function GestaoPage() {
         onSelect={setTab}
         tabs={[
           { id: "caixa", label: "Caixa" },
+          { id: "receber", label: reportedCount ? `A receber · ${reportedCount}` : "A receber" },
           { id: "contas", label: "Contas" },
           { id: "estoque", label: "Estoque" },
         ]}
@@ -342,6 +377,93 @@ function GestaoPage() {
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {tab === "receber" ? (
+        <div className="flex flex-col gap-2.5">
+          {reportedCount ? (
+            <AlertCard
+              tone="info"
+              icon="Wallet"
+              title={`${reportedCount} ${reportedCount === 1 ? "pagamento informado" : "pagamentos informados"} pela cliente`}
+              description="Confira no seu banco e confirme: o valor entra no caixa e a cliente é avisada."
+            />
+          ) : null}
+          {pendingReceivables
+            .sort(
+              (a, b) =>
+                Number(Boolean(b.reported)) - Number(Boolean(a.reported)) ||
+                (a.due ?? a.date).localeCompare(b.due ?? b.date),
+            )
+            .map((entry) => {
+              const days = daysBetween(today, entry.due ?? entry.date);
+              return (
+                <div
+                  key={entry.id}
+                  className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
+                >
+                  <div className="min-w-[160px] flex-1">
+                    <div className="text-sm font-medium">{entry.label}</div>
+                    <div className="text-[12.5px] text-[var(--text-secondary)]">{entry.origin}</div>
+                    <div className="font-mono text-[11.5px] text-muted-foreground">
+                      {entry.reported
+                        ? `Informou ${entry.reported.method} em ${formatShort(entry.reported.at.slice(0, 10))}`
+                        : days < 0
+                          ? `Venceu há ${-days} ${-days === 1 ? "dia" : "dias"}`
+                          : `Vence ${formatShort(entry.due ?? entry.date)}`}
+                    </div>
+                  </div>
+                  <span className="font-mono text-sm font-medium">{brl(entry.value)}</span>
+                  {entry.reported ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          rejectPayment(entry.id);
+                          setToast("Cliente avisada: pagamento não localizado");
+                        }}
+                      >
+                        Não recebi
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="tech"
+                        onClick={() => {
+                          confirmPayment(entry.id);
+                          setToast(`${brl(entry.value)} confirmado e lançado no caixa`);
+                        }}
+                      >
+                        <Icon name="Check" size={15} /> Confirmar recebimento
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <StatusBadge tone={days < 0 ? "cancelled" : "pending"} size="sm">
+                        {days < 0 ? "Atrasado" : "Em aberto"}
+                      </StatusBadge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          confirmPayment(entry.id);
+                          setToast(`${brl(entry.value)} recebido e lançado no caixa`);
+                        }}
+                      >
+                        Marcar recebido
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          {!pendingReceivables.length ? (
+            <p className="py-2 text-[13px] text-muted-foreground">Nada a receber por enquanto.</p>
+          ) : null}
         </div>
       ) : null}
 
@@ -427,15 +549,30 @@ function GestaoPage() {
               title={`${low.length} ${low.length === 1 ? "produto abaixo do mínimo" : "produtos abaixo do mínimo"}`}
               description={low.map((item) => item.name).join(" e ")}
               actionLabel="Repor"
-              onAction={() => (setDraftProduct(low[0]?.name ?? ""), setSheet("produto"))}
+              onAction={() => (
+                setProduct({ item: low[0] ?? null, mode: "repor" }),
+                setSheet("produto")
+              )}
+            />
+          ) : null}
+          {expiring.length ? (
+            <AlertCard
+              tone="danger"
+              icon="CalendarX"
+              title={`${expiring.length} ${expiring.length === 1 ? "produto vencido ou perto de vencer" : "produtos vencidos ou perto de vencer"}`}
+              description={expiring.map((item) => item.name).join(", ")}
             />
           ) : null}
           {shown.map((item) => (
             <StockItem
-              key={item.name}
-              {...item}
+              key={item.id}
+              item={item}
+              onEdit={() => {
+                setProduct({ item, mode: "editar" });
+                setSheet("produto");
+              }}
               onRestock={() => {
-                setDraftProduct(item.name);
+                setProduct({ item, mode: "repor" });
                 setSheet("produto");
               }}
             />
@@ -459,7 +596,8 @@ function GestaoPage() {
       />
       <ProductDrawer
         open={sheet === "produto"}
-        name={draftProduct}
+        item={product.item}
+        mode={product.mode}
         onClose={() => setSheet(null)}
         onSaved={(text) => (setSheet(null), setToast(text))}
       />
@@ -496,9 +634,12 @@ function MovementDrawer({
   const [method, setMethod] = useState(METHODS[0] ?? "Pix");
   const [date, setDate] = useState(todayISO());
   const [tried, setTried] = useState(false);
+  const clients = useClinicClients();
+  const [owner, setOwner] = useState("");
 
   useEffect(() => {
     if (open) {
+      setOwner("");
       setKind("entradas");
       setLabel("");
       setValue("");
@@ -527,6 +668,7 @@ function MovementDrawer({
       method,
       value: amount,
       ...(kind === "receber" ? { due: date } : {}),
+      ...(owner ? { clientId: owner } : {}),
     });
     onSaved(
       `${kind === "entradas" ? "Entrada" : kind === "saidas" ? "Saída" : "Cobrança"} de ${brl(amount)} lançada`,
@@ -580,6 +722,29 @@ function MovementDrawer({
           value={method}
           onChange={(event) => setMethod(event.target.value)}
         />
+        {kind === "receber" ? (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12.5px] text-[var(--text-secondary)]">
+              Cliente (ela vê a cobrança e pode informar o pagamento)
+            </span>
+            <select
+              value={owner}
+              onChange={(event) => {
+                setOwner(event.target.value);
+                const picked = clients.find((item) => item.id === event.target.value);
+                if (picked && !label.trim()) setLabel(picked.name);
+              }}
+              className="min-h-11 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-field)] px-3 text-[14.5px] text-foreground"
+            >
+              <option value="">Sem cliente vinculada</option>
+              {clients.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
     </Drawer>
   );
@@ -664,85 +829,144 @@ function BillDrawer({
   );
 }
 
+const CATEGORIES = ["Ativo", "Máscara", "Cosmético", "Descartável", "Equipamento", "Outro"];
+const UNITS = ["un", "fr", "pt", "pc", "cx", "ml", "g", "kg"];
+
 function ProductDrawer({
   open,
-  name: preset,
+  item,
+  mode,
   onClose,
   onSaved,
 }: {
   open: boolean;
-  name: string;
+  item: StockRec | null;
+  mode: "novo" | "editar" | "repor";
   onClose: () => void;
   onSaved: (text: string) => void;
 }) {
   const [name, setName] = useState("");
+  const [category, setCategory] = useState(CATEGORIES[0] ?? "");
   const [quantity, setQuantity] = useState("1");
   const [unit, setUnit] = useState("un");
   const [min, setMin] = useState("2");
   const [expiry, setExpiry] = useState("");
   const [batch, setBatch] = useState("");
   const [cost, setCost] = useState("");
+  const [supplier, setSupplier] = useState("");
   const [tried, setTried] = useState(false);
+  const restocking = mode === "repor";
 
   useEffect(() => {
-    if (open) {
-      setName(preset);
-      setQuantity("1");
-      setUnit("un");
-      setMin("2");
-      setExpiry("");
-      setBatch("");
-      setCost("");
-      setTried(false);
-    }
-  }, [open, preset]);
+    if (!open) return;
+    setName(item?.name ?? "");
+    setCategory(item?.category ?? CATEGORIES[0] ?? "");
+    setQuantity(item ? (restocking ? "1" : String(item.quantity)) : "1");
+    setUnit(item?.unit ?? "un");
+    setMin(String(item?.min ?? 2));
+    setExpiry(item?.expiry ?? "");
+    setBatch(item?.batch ?? "");
+    setCost(item ? String(item.cost).replace(".", ",") : "");
+    setSupplier(item?.supplier ?? "");
+    setTried(false);
+  }, [open, item, restocking]);
 
   const nameError = name.trim() ? undefined : "Informe o produto.";
-  const qtyError = Number(quantity) > 0 ? undefined : "Informe a quantidade.";
+  const qtyError =
+    Number(quantity.replace(",", ".")) > 0 || (mode === "editar" && Number(quantity) >= 0)
+      ? undefined
+      : "Informe a quantidade.";
 
   function submit() {
     setTried(true);
     if (nameError || qtyError) return;
-    addStockItem({
-      name: name.trim(),
-      quantity: Number(quantity),
-      unit,
-      min: Number(min) || 0,
-      expiry: expiry || "—",
-      batch: batch || "—",
-      cost: cost ? `R$ ${cost}` : "—",
-    });
-    onSaved(`${name.trim()}: ${quantity} ${unit} no estoque`);
+    const saved = saveStock(
+      {
+        ...(item ? { id: item.id } : {}),
+        name: name.trim(),
+        category,
+        quantity: Number(quantity.replace(",", ".")),
+        unit,
+        min: Number(min) || 0,
+        expiry,
+        batch: batch.trim(),
+        cost: parseMoney(cost) || 0,
+        supplier: supplier.trim(),
+      },
+      restocking,
+    );
+    onSaved(
+      restocking
+        ? `${saved.name}: agora ${saved.quantity} ${saved.unit} no estoque`
+        : `${saved.name} salvo no estoque`,
+    );
   }
 
   return (
     <Drawer
       open={open}
       onClose={onClose}
-      title={preset ? "Repor produto" : "Adicionar produto"}
-      subtitle="Se o produto já existe, a quantidade é somada"
-      footer={drawerFooter(onClose, submit, preset ? "Registrar reposição" : "Adicionar produto")}
+      title={
+        restocking ? "Repor produto" : mode === "editar" ? "Editar produto" : "Adicionar produto"
+      }
+      subtitle={
+        restocking
+          ? "A quantidade informada é somada ao que já tem"
+          : "Validade e mínimo geram avisos para você"
+      }
+      footer={
+        <>
+          {mode === "editar" && item ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                removeStock(item.id);
+                onSaved(`${item.name} removido do estoque`);
+              }}
+            >
+              <Icon name="Trash2" size={16} /> Excluir
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancelar
+            </Button>
+          )}
+          <Button type="button" variant="tech" className="flex-1" onClick={submit}>
+            <Icon name="Check" size={18} /> {restocking ? "Registrar reposição" : "Salvar produto"}
+          </Button>
+        </>
+      }
     >
       <div className="flex flex-col gap-3.5">
         <Input
           label="Produto"
           placeholder="Ácido mandélico 5%"
           value={name}
+          disabled={restocking}
           error={tried ? nameError : undefined}
           onChange={(event) => setName(event.target.value)}
         />
+        <Select
+          label="Tipo"
+          options={CATEGORIES}
+          value={category}
+          disabled={restocking}
+          onChange={(event) => setCategory(event.target.value)}
+        />
         <div className="grid grid-cols-3 gap-2.5">
           <Input
-            label="Quantidade"
-            inputMode="numeric"
+            label={restocking ? "Entrada" : "Quantidade"}
+            inputMode="decimal"
             value={quantity}
             error={tried ? qtyError : undefined}
             onChange={(event) => setQuantity(event.target.value)}
           />
           <Select
             label="Unidade"
-            options={["un", "fr", "pt", "pc"]}
+            options={UNITS}
             value={unit}
+            disabled={restocking}
             onChange={(event) => setUnit(event.target.value)}
           />
           <Input
@@ -755,7 +979,7 @@ function ProductDrawer({
         <div className="grid grid-cols-2 gap-2.5">
           <Input
             label="Validade"
-            placeholder="03/2027"
+            type="date"
             value={expiry}
             onChange={(event) => setExpiry(event.target.value)}
           />
@@ -766,13 +990,22 @@ function ProductDrawer({
             onChange={(event) => setBatch(event.target.value)}
           />
         </div>
-        <Input
-          label="Custo"
-          trailing="R$"
-          inputMode="decimal"
-          value={cost}
-          onChange={(event) => setCost(event.target.value)}
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <Input
+            label="Custo por unidade"
+            trailing="R$"
+            inputMode="decimal"
+            value={cost}
+            onChange={(event) => setCost(event.target.value)}
+            hint="Usado no cálculo de custo de cada atendimento."
+          />
+          <Input
+            label="Fornecedor"
+            placeholder="Dermaline"
+            value={supplier}
+            onChange={(event) => setSupplier(event.target.value)}
+          />
+        </div>
       </div>
     </Drawer>
   );

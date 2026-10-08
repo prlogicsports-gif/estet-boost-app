@@ -9,6 +9,11 @@ export type VaultPhoto = {
   inseridaEm: string;
   autorizada: boolean;
   origem: "profissional" | "cliente";
+  /** "antes" e "depois" formam o par de um atendimento; as demais são fotos soltas de evolução. */
+  tipo?: "antes" | "depois" | undefined;
+  /** Atendimento a que o par pertence. */
+  sessaoId?: string | undefined;
+  procedimento?: string | undefined;
 };
 
 const DB = "estetboost-fotos";
@@ -118,3 +123,49 @@ export const timeOf = (iso: string) => {
     return "";
   }
 };
+
+/** Guarda uma foto na ficha da cliente (usado pelo atendimento: antes e depois). Retorna o id. */
+export async function addPhoto(
+  clientId: string,
+  file: File,
+  meta: {
+    tipo?: "antes" | "depois";
+    sessaoId?: string;
+    procedimento?: string;
+    autorizada?: boolean;
+  } = {},
+): Promise<string> {
+  const blob = await shrinkImage(file);
+  const id = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  await savePhotoBlob(id, blob);
+  const photo: VaultPhoto = {
+    id,
+    tiradaEm: takenAt(file),
+    inseridaEm: new Date().toISOString(),
+    autorizada: meta.autorizada ?? false,
+    origem: "profissional",
+    ...(meta.tipo ? { tipo: meta.tipo } : {}),
+    ...(meta.sessaoId ? { sessaoId: meta.sessaoId } : {}),
+    ...(meta.procedimento ? { procedimento: meta.procedimento } : {}),
+  };
+  writePhotoList(clientId, [...readPhotoList(clientId), photo]);
+  window.dispatchEvent(new Event("eb-photos-changed"));
+  return id;
+}
+
+/** Remove uma foto da ficha (e o arquivo). */
+export function removePhoto(clientId: string, id: string) {
+  deletePhotoBlob(id).catch(() => {});
+  writePhotoList(
+    clientId,
+    readPhotoList(clientId).filter((photo) => photo.id !== id),
+  );
+  window.dispatchEvent(new Event("eb-photos-changed"));
+}
+
+/** Endereço temporário para exibir a foto. Quem chama devolve com `URL.revokeObjectURL`. */
+export async function photoUrl(id: string | undefined): Promise<string | null> {
+  if (!id) return null;
+  const blob = await readPhotoBlob(id).catch(() => undefined);
+  return blob ? URL.createObjectURL(blob) : null;
+}

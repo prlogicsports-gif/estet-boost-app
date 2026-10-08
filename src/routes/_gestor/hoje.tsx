@@ -12,6 +12,7 @@ import { usePro } from "@/lib/use-pro";
 import { daysBetween, formatLong, nowHM, todayISO } from "@/lib/dates";
 import { brl, byDateTime, toCard } from "@/lib/view";
 import { notify } from "@/services/notify";
+import { useClinicAppointments, useClinicClients } from "@/lib/use-clinic";
 
 export const Route = createFileRoute("/_gestor/hoje")({
   head: () => ({
@@ -39,8 +40,8 @@ function HojePage() {
   const navigate = useNavigate();
   const { openNotifications, unread } = useShell();
   const today = todayISO();
-  const all = appointmentsDb.use();
-  const clients = clientsDb.use();
+  const all = useClinicAppointments();
+  const clients = useClinicClients();
   const stock = stockDb.use();
   const bills = billsDb.use();
 

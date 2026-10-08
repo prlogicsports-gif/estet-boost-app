@@ -15,5 +15,7 @@ export type Session = {
   name: string;
   email: string;
   /** Cliente: qual cliente da carteira ela é. */ clientId?: string | undefined;
+  /** Clínica da esteticista, ou a clínica à qual a cliente está filiada. */
+  clinicId?: string | undefined;
 };
 export type AuthResult = { ok: true; session: Session } | { ok: false; message: string };

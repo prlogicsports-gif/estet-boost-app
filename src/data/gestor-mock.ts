@@ -3,7 +3,6 @@ import type { CalendarEvents } from "@/components/eb/calendar";
 import type { Client } from "@/components/eb/client-card";
 import type { TimelineEntry } from "@/components/eb/client-timeline";
 import type { NotificationItem } from "@/components/eb/notification-center";
-import type { StockEntry } from "@/components/eb/stock-item";
 import type { StatusTone } from "@/components/eb/status-badge";
 
 /** Dados de exemplo do app da esteticista, atrás da camada de serviço. */
@@ -224,45 +223,6 @@ export const notifications: NotificationItem[] = [
   },
 ];
 
-export const stock: StockEntry[] = [
-  {
-    name: "Ácido mandélico 5%",
-    quantity: 2,
-    unit: "fr",
-    min: 3,
-    expiry: "03/2027",
-    batch: "A-2291",
-    cost: "R$ 78",
-  },
-  {
-    name: "Argila verde",
-    quantity: 6,
-    unit: "pt",
-    min: 2,
-    expiry: "11/2026",
-    batch: "AG-118",
-    cost: "R$ 24",
-  },
-  {
-    name: "Máscara calmante",
-    quantity: 1,
-    unit: "un",
-    min: 4,
-    expiry: "07/2027",
-    batch: "MC-902",
-    cost: "R$ 39",
-  },
-  {
-    name: "Gaze estéril",
-    quantity: 14,
-    unit: "pc",
-    min: 5,
-    expiry: "—",
-    batch: "GZ-441",
-    cost: "R$ 12",
-  },
-];
-
 export type Bill = {
   name: string;
   value: string;
@@ -308,6 +268,10 @@ export type LedgerEntry = {
   method: string;
   value: number;
   due?: string;
+  /** Cliente a quem a cobrança pertence. */
+  clientId?: string;
+  /** A cliente avisou que pagou; a esteticista ainda precisa confirmar o recebimento. */
+  reported?: { at: string; method: string };
 };
 export const ledger: LedgerEntry[] = [
   {

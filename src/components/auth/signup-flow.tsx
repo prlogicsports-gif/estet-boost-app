@@ -38,7 +38,8 @@ export function SignupFlow({
   const [size, setSize] = useState<StudioSize>("autonoma");
   const [terms, setTerms] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [account, setAccount] = useState({ name: "", email: "" });
+  const [account, setAccount] = useState({ name: "", email: "", phone: "" });
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <form
@@ -47,14 +48,28 @@ export function SignupFlow({
         event.preventDefault();
         const data = new FormData(event.currentTarget);
         if (step === 1) {
-          setAccount({ name: String(data.get("nome")), email: String(data.get("email")) });
+          setAccount({
+            name: String(data.get("nome")),
+            email: String(data.get("email")),
+            phone: String(data.get("celular") ?? ""),
+          });
           setStep(2);
           return;
         }
         setLoading(true);
-        const result = await authService.signUp(account);
+        const result = await authService.signUp({
+          ...account,
+          studio: String(data.get("estudio") ?? ""),
+          city: String(data.get("cidade") ?? ""),
+          document: String(data.get("documento") ?? ""),
+          size,
+        });
         setLoading(false);
         if (result.ok) onSuccess(result.session);
+        else {
+          setError(result.message);
+          setStep(1);
+        }
       }}
     >
       <span className="text-[11px] font-medium uppercase leading-none tracking-[0.14em] text-muted-foreground">
@@ -76,6 +91,12 @@ export function SignupFlow({
           )}
         />
       </div>
+
+      {error ? (
+        <p role="alert" className="mt-3 text-[13px] text-[var(--eb-coral-500)]">
+          {error}
+        </p>
+      ) : null}
 
       {step === 1 ? (
         <>
@@ -106,6 +127,7 @@ export function SignupFlow({
               autoComplete="tel"
               placeholder="(11) 90000-0000"
               icon={<Phone aria-hidden />}
+              defaultValue={account.phone}
               required
             />
             <Field

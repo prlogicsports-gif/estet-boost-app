@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 
 import { Icon } from "@/components/eb/icon";
+import { PhotoComparator } from "@/components/eb/photo-comparator";
 import { StatusBadge } from "@/components/eb/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,8 +39,17 @@ export function PhotoVault({
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const [mode, setMode] = useState<"slider" | "side">("slider");
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+
+  // Outras telas (o atendimento) guardam fotos na ficha: recarrega quando avisarem.
+  useEffect(() => {
+    const bump = () => setVersion((value) => value + 1);
+    window.addEventListener("eb-photos-changed", bump);
+    return () => window.removeEventListener("eb-photos-changed", bump);
+  }, []);
 
   useEffect(() => {
     const stored = readPhotoList(clientId);
@@ -69,7 +79,7 @@ export function PhotoVault({
       alive = false;
       created.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [clientId]);
+  }, [clientId, version]);
 
   function insert(files: FileList | null) {
     const images = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
@@ -134,6 +144,22 @@ export function PhotoVault({
     }
     byDay[day].push(photo);
   }
+
+  // Pares de um mesmo atendimento: o antes e o depois lado a lado, com a data e o procedimento.
+  const pairs = Object.values(
+    visible.reduce<Record<string, { before?: VaultPhoto; after?: VaultPhoto }>>((acc, photo) => {
+      if (!photo.sessaoId || !photo.tipo) return acc;
+      const entry = acc[photo.sessaoId] ?? {};
+      if (photo.tipo === "antes") entry.before = photo;
+      else entry.after = photo;
+      acc[photo.sessaoId] = entry;
+      return acc;
+    }, {}),
+  )
+    .filter((pair): pair is { before: VaultPhoto; after: VaultPhoto } =>
+      Boolean(pair.before && pair.after),
+    )
+    .sort((a, b) => b.after.tiradaEm.localeCompare(a.after.tiradaEm));
 
   const drop = (event: DragEvent) => {
     event.preventDefault();
@@ -220,6 +246,36 @@ export function PhotoVault({
         </p>
       ) : null}
 
+      {pairs.length ? (
+        <div className="flex flex-col gap-3.5">
+          <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+            Antes e depois
+          </span>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
+            {pairs.map((pair) => {
+              const before = urls[pair.before.id];
+              const after = urls[pair.after.id];
+              if (!before || !after) return null;
+              return (
+                <PhotoComparator
+                  key={pair.after.id}
+                  before={{ src: before, label: "Antes" }}
+                  after={{ src: after, label: "Depois" }}
+                  mode={mode}
+                  onModeChange={setMode}
+                  meta={[
+                    { icon: "CalendarDays", label: takenLabel(dayOf(pair.after.tiradaEm), false) },
+                    ...(pair.after.procedimento
+                      ? [{ icon: "Sparkles", label: pair.after.procedimento }]
+                      : []),
+                  ]}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {days.length === 0 ? (
         <p className="py-1 text-center text-[13px] text-muted-foreground">
           {canUpload
@@ -283,6 +339,7 @@ export function PhotoVault({
                     </div>
                   )}
                   <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded-full bg-[rgba(36,28,32,.7)] px-[7px] py-0.5 font-mono text-[10.5px]">
+                    {photo.tipo ? `${photo.tipo === "antes" ? "Antes" : "Depois"} · ` : ""}
                     {timeOf(photo.tiradaEm)}
                   </span>
                   {canEdit || photo.origem === "cliente" ? (

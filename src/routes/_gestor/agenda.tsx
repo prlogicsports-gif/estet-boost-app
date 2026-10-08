@@ -22,6 +22,7 @@ import {
   declineRequest,
   declineReschedule,
 } from "@/services/appointments.service";
+import { useClinicAppointments } from "@/lib/use-clinic";
 
 export const Route = createFileRoute("/_gestor/agenda")({
   head: () => ({
@@ -61,7 +62,7 @@ function AgendaPage() {
   }));
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; detail?: string } | null>(null);
-  const all = appointmentsDb.use();
+  const all = useClinicAppointments();
 
   useEffect(() => {
     if (!toast) return;

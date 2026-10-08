@@ -3,8 +3,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { NewAppointmentDrawer } from "@/components/agenda/new-appointment-drawer";
 import { AlertCard } from "@/components/eb/alert-card";
-import { AnamnesisStepper } from "@/components/eb/anamnesis-stepper";
-import { ClientTimeline } from "@/components/eb/client-timeline";
+import { AnamnesisEditor } from "@/components/clients/anamnesis-editor";
+import { ClientForm, valuesOf } from "@/components/clients/client-form";
+import { Drawer } from "@/components/eb/overlays";
+import { ClientTimeline, type TimelineEntry } from "@/components/eb/client-timeline";
 import { EmptyState } from "@/components/eb/empty-state";
 import { Icon } from "@/components/eb/icon";
 import { IconButton } from "@/components/eb/icon-button";
@@ -14,11 +16,20 @@ import { StatusBadge } from "@/components/eb/status-badge";
 import { ToastHost } from "@/components/eb/toast";
 import { FaceMapPanel } from "@/components/facemap/face-map-panel";
 import { Button } from "@/components/ui/button";
-import { appointmentsDb, clientsDb, ledgerDb } from "@/data/db";
+import {
+  anamnesisDb,
+  appointmentsDb,
+  clientsDb,
+  ledgerDb,
+  sessionsDb,
+  settingsDb,
+} from "@/data/db";
 import { faceSeed } from "@/data/face-seed";
 import { timeline } from "@/data/gestor-mock";
-import { formatWeekday, todayISO } from "@/lib/dates";
+import { exportRecord } from "@/lib/export-record";
+import { formatShort, formatWeekday, todayISO } from "@/lib/dates";
 import { brl, byDateTime } from "@/lib/view";
+import { updateClient } from "@/services/clients.service";
 import { receivePayment } from "@/services/finance.service";
 
 export const Route = createFileRoute("/_gestor/clientes/$clientId")({
@@ -49,12 +60,19 @@ function ClientePage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("resumo");
   const [scheduling, setScheduling] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [anamnesing, setAnamnesing] = useState(false);
+  const { questions } = settingsDb.use();
+  const anamnese = anamnesisDb.use().find((item) => item.clientId === clientId);
+  const sessions = sessionsDb
+    .use()
+    .filter((item) => item.clientId === clientId && item.status === "done");
   const [toast, setToast] = useState<string | null>(null);
   const client = clientsDb.use().find((item) => item.id === clientId);
   const appointments = appointmentsDb.use().filter((item) => item.clientId === clientId);
   const ledger = ledgerDb
     .use()
-    .filter((entry) => entry.label === client?.name && entry.kind !== "saidas");
+    .filter((entry) => entry.clientId === clientId && entry.kind !== "saidas");
 
   if (!client) {
     return (
@@ -77,7 +95,23 @@ function ClientePage() {
     .sort(byDateTime);
   const nextOne = upcoming[0];
   const open = ledger.filter((entry) => entry.kind === "receber");
-  const history = timeline.filter(() => client.id === "c1");
+  const done: TimelineEntry[] = [...sessions]
+    .sort((a, b) => (b.finishedAt ?? b.startedAt).localeCompare(a.finishedAt ?? a.startedAt))
+    .map((item) => ({
+      id: item.id,
+      date: formatShort((item.finishedAt ?? item.startedAt).slice(0, 10)),
+      procedure: item.procedure,
+      ...(item.products.length
+        ? { product: item.products.map((p) => `${p.name} ×${p.qty}`).join(", ") }
+        : {}),
+      ...(item.notes["avaliacao"] || item.notes["intercorrencias"]
+        ? { note: item.notes["intercorrencias"] || item.notes["avaliacao"] || "" }
+        : {}),
+      photos: Number(Boolean(item.beforePhotoId)) + Number(Boolean(item.afterPhotoId)),
+      payment: `${item.paidNow ? item.payment : "A receber"} · ${brl(item.procedures.reduce((sum, p) => sum + p.price, 0))}`,
+    }));
+  const history = [...done, ...(client.id === "c1" ? timeline : [])];
+  const digits = client.phone.replace(/\D/g, "");
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -101,8 +135,31 @@ function ClientePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <IconButton icon="MessageCircle" label="Enviar WhatsApp" tone="outline" />
-          <IconButton icon="Phone" label="Ligar" tone="outline" />
+          <IconButton
+            icon="MessageCircle"
+            label="Enviar WhatsApp"
+            tone="outline"
+            onClick={() =>
+              digits &&
+              window.open(
+                `https://wa.me/${digits.length <= 11 ? `55${digits}` : digits}`,
+                "_blank",
+                "noopener",
+              )
+            }
+          />
+          <IconButton
+            icon="Phone"
+            label="Ligar"
+            tone="outline"
+            onClick={() => digits && (window.location.href = `tel:${digits}`)}
+          />
+          <IconButton
+            icon="PencilLine"
+            label="Editar cadastro"
+            tone="outline"
+            onClick={() => setEditing(true)}
+          />
           <Button type="button" variant="secondary" onClick={() => setScheduling(true)}>
             <Icon name="CalendarPlus" size={18} /> Agendar
           </Button>
@@ -112,7 +169,7 @@ function ClientePage() {
               navigate({
                 to: "/atendimento/$sessionId",
                 params: { sessionId: "livre" },
-                search: { cliente: client.id, procedimento: "Limpeza de pele profunda" },
+                search: { cliente: client.id },
               })
             }
           >
@@ -137,6 +194,15 @@ function ClientePage() {
       {tab === "resumo" ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-4">
           <section className={panel}>
+            <InfoRow
+              label="Nascimento"
+              value={
+                client.birth
+                  ? new Date(`${client.birth}T12:00:00`).toLocaleDateString("pt-BR")
+                  : "—"
+              }
+            />
+            <InfoRow label="Endereço" value={client.address ?? "—"} />
             <InfoRow label="Objetivo" value={client.goal ?? "—"} />
             <InfoRow
               label="Alergias"
@@ -223,28 +289,24 @@ function ClientePage() {
 
       {tab === "anamnese" ? (
         <div className="flex flex-col gap-4">
-          <AnamnesisStepper
-            current={client.id === "c1" ? 5 : 0}
-            steps={[
-              { label: "Objetivo e queixa" },
-              { label: "Histórico de saúde" },
-              { label: "Alergias e medicamentos" },
-              { label: "Hábitos e rotina" },
-              { label: "Procedimentos anteriores" },
-              { label: "Avaliação e consentimentos" },
-            ]}
-          />
-          {client.id === "c1" ? (
+          {anamnese ? (
             <div className={panel}>
-              <InfoRow label="Queixa principal" value="Oleosidade e cravos na zona T" />
-              <InfoRow label="Saúde" value="Sem doenças crônicas relatadas" />
-              <InfoRow label="Medicamentos" value="Nenhum de uso contínuo" />
-              <InfoRow label="Alergias" value="Ácido salicílico" warn />
+              {questions.map((question) => (
+                <InfoRow
+                  key={question.id}
+                  label={question.label}
+                  value={anamnese.answers[question.id] || "—"}
+                  warn={question.id === "alergias" && Boolean(anamnese.answers[question.id])}
+                />
+              ))}
               <InfoRow
-                label="Rotina de cuidados"
-                value="Sabonete facial 2x/dia, protetor solar irregular"
+                label="Consentimento de imagem"
+                value={anamnese.consent ? "Autorizado para uso interno" : "Não autorizado"}
               />
-              <InfoRow label="Consentimento de imagem" value="Autorizado para uso interno" />
+              <InfoRow
+                label="Atualizada em"
+                value={new Date(anamnese.updatedAt).toLocaleDateString("pt-BR")}
+              />
             </div>
           ) : (
             <EmptyState
@@ -255,11 +317,15 @@ function ClientePage() {
             />
           )}
           <div className="flex flex-wrap gap-2.5">
-            <Button type="button" variant="secondary">
+            <Button type="button" variant="secondary" onClick={() => setAnamnesing(true)}>
               <Icon name="PencilLine" size={18} />{" "}
-              {client.id === "c1" ? "Atualizar anamnese" : "Criar anamnese"}
+              {anamnese ? "Atualizar anamnese" : "Criar anamnese"}
             </Button>
-            <Button type="button" variant="ghost">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => (exportRecord(client), setToast("Prontuário baixado"))}
+            >
               <Icon name="FileDown" size={18} /> Exportar prontuário
             </Button>
           </div>
@@ -326,6 +392,42 @@ function ClientePage() {
       ) : null}
 
       <ToastHost toast={toast ? { message: toast } : null} />
+      <AnamnesisEditor
+        clientId={client.id}
+        open={anamnesing}
+        onClose={() => setAnamnesing(false)}
+        onSaved={() => (setAnamnesing(false), setToast("Anamnese salva"))}
+      />
+      <Drawer
+        open={editing}
+        onClose={() => setEditing(false)}
+        title="Editar cadastro"
+        subtitle={client.name}
+      >
+        <ClientForm
+          key={`${client.id}-${editing}`}
+          initial={valuesOf(client)}
+          submitLabel="Salvar cadastro"
+          onSubmit={(values) => {
+            updateClient(client.id, {
+              name: values.name.trim(),
+              phone: values.phone.trim(),
+              email: values.email.trim().toLowerCase() || undefined,
+              birth: values.birth || undefined,
+              document: values.document.trim() || undefined,
+              address: values.address.trim() || undefined,
+              goal: values.goal.trim() || undefined,
+              allergies: values.allergies.trim() || undefined,
+              contra: values.contra.trim() || undefined,
+              note: values.note.trim() || undefined,
+              imageConsent: values.imageConsent,
+              ...(values.procedure !== "Definir depois" ? { mainProcedure: values.procedure } : {}),
+            });
+            setEditing(false);
+            setToast("Cadastro atualizado");
+          }}
+        />
+      </Drawer>
       <NewAppointmentDrawer
         open={scheduling}
         date={today}

@@ -11,12 +11,14 @@ import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { appointmentsDb, careDb } from "@/data/db";
+import { appointmentsDb, careDb, ledgerDb } from "@/data/db";
+import { Select } from "@/components/eb/select";
 import { proName } from "@/data/cliente-mock";
 import { addDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { useClient } from "@/lib/use-client";
-import { byDateTime } from "@/lib/view";
+import { brl, byDateTime } from "@/lib/view";
 import { confirmAppointment, requestReschedule } from "@/services/appointments.service";
+import { reportPayment } from "@/services/finance.service";
 
 export const Route = createFileRoute("/cliente/")({
   head: () => ({
@@ -55,6 +57,13 @@ function InicioPage() {
     .sort(byDateTime)
     .at(-1);
 
+  const dues = ledgerDb
+    .use()
+    .filter((entry) => entry.kind === "receber" && entry.clientId === clientId)
+    .sort((a, b) => (a.due ?? a.date).localeCompare(b.due ?? b.date));
+  const [paying, setPaying] = useState<string | null>(null);
+  const [method, setMethod] = useState("Pix");
+  const paid = dues.find((entry) => entry.id === paying);
   const [moving, setMoving] = useState(false);
   const [date, setDate] = useState(addDays(today, 1));
   const [time, setTime] = useState("14:00");
@@ -181,6 +190,42 @@ function InicioPage() {
         />
       </div>
 
+      {dues.length ? (
+        <section className="flex flex-col gap-2.5">
+          <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+            Pagamentos
+          </span>
+          {dues.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
+            >
+              <div className="min-w-[150px] flex-1">
+                <div className="text-sm font-medium">{entry.origin}</div>
+                <div className="font-mono text-[11.5px] text-muted-foreground">
+                  Vence {formatShort(entry.due ?? entry.date)}
+                </div>
+              </div>
+              <span className="font-mono text-sm font-medium">{brl(entry.value)}</span>
+              {entry.reported ? (
+                <StatusBadge tone="pending" icon="Hourglass" size="sm">
+                  Aguardando confirmação
+                </StatusBadge>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => (setMethod(entry.method || "Pix"), setPaying(entry.id))}
+                >
+                  <Icon name="Wallet" size={15} /> Já paguei
+                </Button>
+              )}
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <section className="flex flex-col gap-2.5">
         <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
           Recomendações recentes
@@ -215,6 +260,34 @@ function InicioPage() {
       <Button type="button" className="w-full" onClick={() => navigate({ to: "/cliente/agenda" })}>
         <Icon name="CalendarPlus" size={18} /> Solicitar novo horário
       </Button>
+
+      <BottomSheet
+        open={Boolean(paid)}
+        onClose={() => setPaying(null)}
+        title="Informar pagamento"
+        subtitle={paid ? `${paid.origin} · ${brl(paid.value)}. ${proName} confere e confirma.` : ""}
+        footer={
+          <Button
+            type="button"
+            variant="tech"
+            className="w-full"
+            onClick={() => {
+              if (paid) reportPayment(paid.id, method);
+              setPaying(null);
+              setToast("Pagamento informado");
+            }}
+          >
+            <Icon name="Check" size={18} /> Informar que paguei
+          </Button>
+        }
+      >
+        <Select
+          label="Como você pagou?"
+          options={["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"]}
+          value={method}
+          onChange={(event) => setMethod(event.target.value)}
+        />
+      </BottomSheet>
 
       <BottomSheet
         open={moving}

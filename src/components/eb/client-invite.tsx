@@ -3,6 +3,14 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/eb/icon";
 import { StatusBadge, type StatusTone } from "@/components/eb/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  readInvites,
+  stateOf,
+  writeInvites,
+  type InviteRec as Invite,
+  type InviteState,
+} from "@/lib/invites-store";
+import type { ClinicRec } from "@/lib/models";
 import { cn } from "@/lib/utils";
 
 /**
@@ -12,36 +20,7 @@ import { cn } from "@/lib/utils";
  * 2. Credencial individual: código de uso único (EB-XXXX-XXXX), válido por 7 dias.
  * A lista fica no aparelho enquanto não há backend.
  */
-type Invite = {
-  codigo: string;
-  nome: string;
-  celular: string;
-  criadaEm: string;
-  expiraEm: string;
-  link: string;
-  usadaEm?: string;
-  revogada?: boolean;
-};
-
 const VALID_DAYS = 7;
-const storageKey = (id: string) => `estetboost:convites:${id}`;
-
-function readInvites(id: string): Invite[] {
-  try {
-    const list = JSON.parse(window.localStorage.getItem(storageKey(id)) ?? "null");
-    return Array.isArray(list) ? (list as Invite[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeInvites(id: string, list: Invite[]) {
-  try {
-    window.localStorage.setItem(storageKey(id), JSON.stringify(list));
-  } catch {
-    /* sem armazenamento */
-  }
-}
 
 // Sem 0/O e 1/I/L: o código é lido em voz alta e digitado.
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -52,25 +31,6 @@ function makeCode() {
   const text = Array.from(bytes, (n) => ALPHABET[n % ALPHABET.length]).join("");
   return `EB-${text.slice(0, 4)}-${text.slice(4)}`;
 }
-
-export const slugOf = (name: string) =>
-  name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-type InviteState = "pendente" | "usada" | "expirada" | "revogada";
-
-const stateOf = (invite: Invite): InviteState =>
-  invite.usadaEm
-    ? "usada"
-    : invite.revogada
-      ? "revogada"
-      : Date.now() > new Date(invite.expiraEm).getTime()
-        ? "expirada"
-        : "pendente";
 
 const TONES: Record<InviteState, [StatusTone, string, string]> = {
   pendente: ["pending", "Aguardando cadastro", "Clock"],
@@ -123,14 +83,14 @@ function LinkRow({
 }
 
 export function ClientInvite({
-  professional,
+  clinic,
   compact,
 }: {
-  professional: { id?: string; name: string };
+  clinic: Pick<ClinicRec, "id" | "slug" | "name" | "owner">;
   compact?: boolean;
 }) {
-  const slug = slugOf(professional.name) || "profissional";
-  const id = professional.id ?? slug;
+  const slug = clinic.slug;
+  const id = clinic.id;
   const [origin, setOrigin] = useState("");
   const [list, setList] = useState<Invite[]>([]);
   const [form, setForm] = useState<{ nome: string; celular: string } | null>(null);
@@ -141,7 +101,7 @@ export function ClientInvite({
     setList(readInvites(id));
   }, [id]);
 
-  const fixedLink = `${origin}/?p=${encodeURIComponent(slug)}&nome=${encodeURIComponent(professional.name)}`;
+  const fixedLink = `${origin}/?p=${encodeURIComponent(slug)}&nome=${encodeURIComponent(clinic.name)}`;
   const fixedText = `Olá! Faça seu cadastro na EstetBoost para acompanhar seus atendimentos comigo: ${fixedLink}`;
 
   const mark = (key: string) => {
@@ -166,7 +126,7 @@ export function ClientInvite({
       celular: form.celular.trim(),
       criadaEm: new Date().toISOString(),
       expiraEm: new Date(Date.now() + VALID_DAYS * 86400000).toISOString(),
-      link: `${origin}/?convite=${codigo}&nome=${encodeURIComponent(professional.name)}`,
+      link: `${origin}/?convite=${codigo}&nome=${encodeURIComponent(clinic.name)}`,
     };
     const next = [invite, ...list];
     setList(next);
@@ -201,8 +161,8 @@ export function ClientInvite({
           <div className="min-w-0 flex-1">
             <div className="text-[17px] font-medium">Seu link de cadastro</div>
             <p className="mt-0.5 text-[12.5px] text-[var(--text-secondary)]">
-              Fixo no seu perfil. Toda cliente que se cadastrar por ele já entra na sua carteira,
-              com {professional.name.split(" ")[0]} como profissional.
+              Fixo no seu perfil. Toda cliente que se cadastrar por ele já entra na carteira de{" "}
+              {clinic.name}.
             </p>
           </div>
         </div>

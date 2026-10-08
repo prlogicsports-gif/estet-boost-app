@@ -41,38 +41,45 @@ Para evitar notificação duplicada, grave o documento com **id = ruleKey** usan
 
 ## 3. Quando avisar (as regras)
 
-Estas regras já estão implementadas em `src/services/reminders.ts`. As Cloud Functions devem reproduzi-las:
+O texto, o destino e o `ruleKey` de **cada** aviso estão num catálogo único: `src/services/notification-events.ts` (objeto `events`). As regras agendadas estão em `src/services/reminders.ts`. As Cloud Functions devem reproduzir os dois:
 
 ### Eventos (disparam na hora, por gatilho de escrita)
 
-| Evento                                          | Para    | Título                                   | Leva a               |
-| ----------------------------------------------- | ------- | ---------------------------------------- | -------------------- |
-| Esteticista agenda e marca "enviar confirmação" | cliente | Novo horário agendado                    | `/cliente/agenda`    |
-| Cliente solicita horário                        | gestor  | Nova solicitação de horário              | `/agenda`            |
-| Gestor aprova a solicitação                     | cliente | Horário confirmado                       | `/cliente/agenda`    |
-| Gestor recusa                                   | cliente | Horário não disponível                   | `/cliente/agenda`    |
-| Cliente confirma presença                       | gestor  | "{nome} confirmou presença"              | `/atendimentos/{id}` |
-| Cliente pede remarcação                         | gestor  | Pedido de remarcação                     | `/atendimentos/{id}` |
-| Cliente cancela (menos de 24 h)                 | gestor  | Pedido de cancelamento                   | `/atendimentos/{id}` |
-| Gestor remarca ou cancela                       | cliente | Horário alterado / Atendimento cancelado | `/cliente/agenda`    |
-| Atendimento concluído com cuidados              | cliente | Novos cuidados de Fernanda               | `/cliente/evolucao`  |
-| Retorno agendado ao fechar o atendimento        | cliente | Retorno sugerido                         | `/cliente/agenda`    |
-| Nova cliente se cadastra                        | gestor  | Nova cliente na carteira                 | `/clientes/{id}`     |
-| Estoque cai até o mínimo                        | gestor  | Estoque baixo                            | `/gestao`            |
+| Evento                                          | Para    | Título                                   | Leva a                |
+| ----------------------------------------------- | ------- | ---------------------------------------- | --------------------- |
+| Esteticista agenda e marca "enviar confirmação" | cliente | Novo horário agendado                    | `/cliente/agenda`     |
+| Cliente solicita horário                        | gestor  | Nova solicitação de horário              | `/agenda`             |
+| Gestor aprova a solicitação                     | cliente | Horário confirmado                       | `/cliente/agenda`     |
+| Gestor recusa                                   | cliente | Horário não disponível                   | `/cliente/agenda`     |
+| Cliente confirma presença                       | gestor  | "{nome} confirmou presença"              | `/atendimentos/{id}`  |
+| Cliente pede remarcação                         | gestor  | Pedido de remarcação                     | `/atendimentos/{id}`  |
+| Cliente cancela (menos de 24 h)                 | gestor  | Pedido de cancelamento                   | `/atendimentos/{id}`  |
+| Gestor remarca ou cancela                       | cliente | Horário alterado / Atendimento cancelado | `/cliente/agenda`     |
+| Atendimento concluído com cuidados              | cliente | Novos cuidados de Fernanda               | `/cliente/evolucao`   |
+| Retorno agendado ao fechar o atendimento        | cliente | Retorno sugerido                         | `/cliente/agenda`     |
+| Nova cliente se cadastra                        | gestor  | Nova cliente na carteira                 | `/clientes/{id}`      |
+| Estoque cai até o mínimo                        | gestor  | Estoque baixo                            | `/gestao?aba=estoque` |
+| **Cliente informa que pagou**                   | gestor  | "{nome} informou um pagamento"           | `/gestao?aba=receber` |
+| Gestor confirma o recebimento                   | cliente | Pagamento confirmado                     | `/cliente`            |
+| Gestor não localizou o pagamento                | cliente | Não localizamos o pagamento              | `/cliente`            |
+| Cliente se filia pelo link/credencial           | cliente | Você agora faz parte de {clínica}        | `/cliente`            |
+| Atendimento fechado: produtos > 35% do valor    | gestor  | Produtos pesaram no atendimento          | `/gestao`             |
 
 ### Agendadas (função com cron a cada 5 minutos)
 
-| Regra                         | Para                 | Quando                                                                    | ruleKey                                |
-| ----------------------------- | -------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| Atendimento amanhã            | cliente              | véspera                                                                   | `r24:{apptId}`                         |
-| Atendimento hoje              | cliente              | no dia                                                                    | `r0:{apptId}`                          |
-| Sem confirmação               | gestor               | no dia, enquanto `status = pending`                                       | `unconf:{apptId}:{dia}`                |
-| Próximo atendimento           | gestor               | 60 min antes                                                              | `soon:{apptId}`                        |
-| **Conta a pagar**             | gestor               | **todo dia, de 3 dias antes até o dia do vencimento**                     | `bill:{id}:{dia}`                      |
-| Conta atrasada                | gestor               | todo dia após o vencimento                                                | `bill-late:{id}:{dia}`                 |
-| **Cobrança a receber**        | gestor **e** cliente | **todo dia, de 3 dias antes até o vencimento**                            | `recv:{id}:{dia}` / `crecv:{id}:{dia}` |
-| **Produto/cuidado indicado**  | cliente              | **no horário `reminderTime` de cada recomendação, todo dia, até `until`** | `care:{id}:{dia}`                      |
-| Cliente no período de retorno | gestor               | uma vez por cliente parada                                                | `cold:{clientId}`                      |
+| Regra                            | Para                 | Quando                                                                    | ruleKey                                |
+| -------------------------------- | -------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
+| Atendimento amanhã               | cliente              | véspera                                                                   | `r24:{apptId}`                         |
+| Atendimento hoje                 | cliente              | no dia                                                                    | `r0:{apptId}`                          |
+| Sem confirmação                  | gestor               | no dia, enquanto `status = pending`                                       | `unconf:{apptId}:{dia}`                |
+| Próximo atendimento              | gestor               | 60 min antes                                                              | `soon:{apptId}`                        |
+| **Conta a pagar**                | gestor               | **todo dia, de 3 dias antes até o dia do vencimento**                     | `bill:{id}:{dia}`                      |
+| Conta atrasada                   | gestor               | todo dia após o vencimento                                                | `bill-late:{id}:{dia}`                 |
+| **Cobrança a receber**           | gestor **e** cliente | **todo dia, de 3 dias antes até o vencimento**                            | `recv:{id}:{dia}` / `crecv:{id}:{dia}` |
+| **Produto/cuidado indicado**     | cliente              | **no horário `reminderTime` de cada recomendação, todo dia, até `until`** | `care:{id}:{dia}`                      |
+| Cliente no período de retorno    | gestor               | uma vez por cliente parada                                                | `cold:{clientId}`                      |
+| **Produto vence em até 30 dias** | gestor               | todo dia (uma por data de validade)                                       | `expiring:{stockId}:{validade}`        |
+| Produto vencido                  | gestor               | uma vez por validade                                                      | `expired:{stockId}:{validade}`         |
 
 Textos de vencimento: "vence hoje", "vence amanhã", "vence em N dias" (ver `dueText`).
 

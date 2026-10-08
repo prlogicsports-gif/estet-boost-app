@@ -8,7 +8,8 @@ export type NotificationKind =
   | "bill"
   | "followup"
   | "reminder"
-  | "recommendation";
+  | "recommendation"
+  | "payment";
 export type NotificationItem = {
   id: string;
   kind: NotificationKind;
@@ -27,6 +28,7 @@ export const NOTIFICATION_KINDS: Record<NotificationKind, { icon: string; fg: st
   followup: { icon: "Sparkles", fg: "var(--eb-nude-500)" },
   reminder: { icon: "BellRing", fg: "var(--eb-nude-500)" },
   recommendation: { icon: "NotebookPen", fg: "var(--eb-nude-500)" },
+  payment: { icon: "Wallet", fg: "var(--eb-teal-500)" },
 };
 
 export function NotificationCenter({

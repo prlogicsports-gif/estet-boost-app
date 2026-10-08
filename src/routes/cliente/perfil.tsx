@@ -10,6 +10,8 @@ import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { clientsDb } from "@/data/db";
 import { useClient } from "@/lib/use-client";
+import { useClinic } from "@/lib/use-clinic";
+import { updateClient } from "@/services/clients.service";
 import { authService } from "@/services/auth.service";
 
 export const Route = createFileRoute("/cliente/perfil")({
@@ -27,14 +29,32 @@ function PerfilPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [birth, setBirth] = useState("");
+  const [address, setAddress] = useState("");
+  const [goal, setGoal] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const { clinic } = useClinic();
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     setName(client?.name ?? profile.name);
     setPhone(client?.phone ?? "");
     setEmail(client?.email ?? "");
+    setBirth(client?.birth ?? "");
+    setAddress(client?.address ?? "");
+    setGoal(client?.goal ?? "");
+    setAllergies(client?.allergies ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, client?.name, client?.phone, client?.email]);
+  }, [
+    clientId,
+    client?.name,
+    client?.phone,
+    client?.email,
+    client?.birth,
+    client?.address,
+    client?.goal,
+    client?.allergies,
+  ]);
 
   useEffect(() => {
     if (!toast) return;
@@ -46,29 +66,23 @@ function PerfilPage() {
   const dirty =
     name !== (client?.name ?? "") ||
     phone !== (client?.phone ?? "") ||
-    email !== (client?.email ?? "");
+    email !== (client?.email ?? "") ||
+    birth !== (client?.birth ?? "") ||
+    address !== (client?.address ?? "") ||
+    goal !== (client?.goal ?? "") ||
+    allergies !== (client?.allergies ?? "");
 
   function save() {
     if (!name.trim()) return;
-    clientsDb.set((list) =>
-      list.map((item) =>
-        item.id === clientId
-          ? {
-              ...item,
-              name: name.trim(),
-              initials: name
-                .trim()
-                .split(" ")
-                .map((part) => part[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase(),
-              phone: phone.trim(),
-              email: email.trim().toLowerCase() || undefined,
-            }
-          : item,
-      ),
-    );
+    updateClient(clientId, {
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase() || undefined,
+      birth: birth || undefined,
+      address: address.trim() || undefined,
+      goal: goal.trim() || undefined,
+      allergies: allergies.trim() || undefined,
+    });
     setToast("Dados salvos");
   }
 
@@ -106,6 +120,29 @@ function PerfilPage() {
         />
         <Input label="Telefone" value={phone} onChange={(event) => setPhone(event.target.value)} />
         <Input label="E-mail" value={email} onChange={(event) => setEmail(event.target.value)} />
+        <Input
+          label="Nascimento"
+          type="date"
+          value={birth}
+          onChange={(event) => setBirth(event.target.value)}
+        />
+        <Input
+          label="Endereço"
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+        />
+        <Input
+          label="Objetivo"
+          placeholder="O que você quer melhorar?"
+          value={goal}
+          onChange={(event) => setGoal(event.target.value)}
+        />
+        <Input
+          label="Alergias"
+          placeholder="Algum ativo ou produto que te faz mal?"
+          value={allergies}
+          onChange={(event) => setAllergies(event.target.value)}
+        />
       </div>
       <Button
         type="button"
@@ -116,6 +153,18 @@ function PerfilPage() {
       >
         <Icon name="Check" size={18} /> Salvar dados
       </Button>
+
+      {clinic ? (
+        <>
+          <span className={label}>Sua clínica</span>
+          <div className="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-4 py-3.5">
+            <div className="text-[15px] font-medium">{clinic.name}</div>
+            <div className="text-[12.5px] text-[var(--text-secondary)]">
+              {[clinic.owner, clinic.city, clinic.phone].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+        </>
+      ) : null}
 
       <span className={label}>Preferências de notificação</span>
       <NotificationPrefsEditor audience="cliente" />
@@ -132,13 +181,7 @@ function PerfilPage() {
           type="checkbox"
           checked={consent}
           aria-label="Autorização de imagem"
-          onChange={() =>
-            clientsDb.set((list) =>
-              list.map((item) =>
-                item.id === clientId ? { ...item, imageConsent: !consent } : item,
-              ),
-            )
-          }
+          onChange={() => updateClient(clientId, { imageConsent: !consent })}
           className="size-5 accent-[var(--teal)]"
         />
       </label>

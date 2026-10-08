@@ -1,20 +1,25 @@
 import type { Client } from "@/components/eb/client-card";
-import type { StockEntry } from "@/components/eb/stock-item";
 import {
   appointments as mockAppointments,
   clients as mockClients,
   ledger as mockLedger,
-  stock as mockStock,
   type LedgerEntry,
 } from "@/data/gestor-mock";
 import { addDays, instantOf, shiftSeedDate, todayISO } from "@/lib/dates";
 import { createStore } from "@/lib/db";
 import type {
+  AnamnesisRec,
   AppointmentRec,
   BillRec,
+  BlockRec,
   CareRec,
+  ClinicRec,
+  HoursRec,
   NotificationPrefs,
   NotificationRec,
+  ProcedureRec,
+  SessionRec,
+  StockRec,
 } from "@/lib/models";
 
 /**
@@ -24,8 +29,18 @@ import type {
 export type ClientRec = Client & {
   email?: string | undefined;
   createdAt: string;
-  /** Autorização de uso interno das fotografias. */ imageConsent?: boolean | undefined;
+  /** Clínica a que a cliente está filiada. Sem valor, é a clínica de demonstração. */
+  clinicId?: string | undefined;
+  /** Nascimento ISO; a idade é calculada a partir dele. */
+  birth?: string | undefined;
+  document?: string | undefined;
+  address?: string | undefined;
+  /** Autorização de uso interno das fotografias. */
+  imageConsent?: boolean | undefined;
 };
+
+/** Clínica de demonstração (a da Fernanda) e dados que não têm clínica própria pertencem a ela. */
+export const DEMO_CLINIC = "clinica-fernanda";
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60000).toISOString();
 const daysFromToday = (days: number) => addDays(todayISO(), days);
@@ -33,6 +48,7 @@ const daysFromToday = (days: number) => addDays(todayISO(), days);
 function seedClients(): ClientRec[] {
   const base: ClientRec[] = mockClients.map((client) => ({
     ...client,
+    clinicId: DEMO_CLINIC,
     createdAt: instantOf(daysFromToday(-90), "10:00"),
   }));
   base.push(
@@ -46,6 +62,7 @@ function seedClients(): ClientRec[] {
       status: "confirmed",
       age: 45,
       phone: "(11) 97711-3040",
+      clinicId: DEMO_CLINIC,
       createdAt: instantOf(daysFromToday(-60), "10:00"),
     },
     {
@@ -59,6 +76,7 @@ function seedClients(): ClientRec[] {
       alert: "Aguardando aprovação",
       age: 31,
       phone: "(11) 96600-2288",
+      clinicId: DEMO_CLINIC,
       createdAt: instantOf(daysFromToday(-1), "10:00"),
     },
   );
@@ -282,6 +300,177 @@ export const defaultPrefs: NotificationPrefs = {
   whatsapp: false,
 };
 
+const slugOfName = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+function seedClinics(): ClinicRec[] {
+  return [
+    {
+      id: DEMO_CLINIC,
+      slug: "fernanda-costa",
+      name: "Estúdio Fernanda Costa",
+      owner: "Fernanda Costa",
+      email: "fernanda@estudio.com.br",
+      phone: "(11) 98800-1234",
+      city: "São Paulo, SP",
+      size: "autonoma",
+      createdAt: instantOf(daysFromToday(-200), "10:00"),
+    },
+  ];
+}
+
+function seedStock(): StockRec[] {
+  const item = (
+    id: string,
+    name: string,
+    category: string,
+    quantity: number,
+    unit: string,
+    min: number,
+    expiryDays: number,
+    batch: string,
+    cost: number,
+    supplier: string,
+  ): StockRec => ({
+    id,
+    name,
+    category,
+    quantity,
+    unit,
+    min,
+    expiry: daysFromToday(expiryDays),
+    batch,
+    cost,
+    supplier,
+  });
+  return [
+    item(
+      "s-acido-mandelico",
+      "Ácido mandélico 5%",
+      "Ativo",
+      2,
+      "fr",
+      3,
+      150,
+      "A-2291",
+      78,
+      "Dermaline",
+    ),
+    item("s-argila-verde", "Argila verde", "Máscara", 6, "pt", 2, 48, "AG-118", 24, "Dermaline"),
+    item(
+      "s-serum-vitamina-c",
+      "Sérum vitamina C",
+      "Ativo",
+      4,
+      "fr",
+      2,
+      210,
+      "VC-077",
+      92,
+      "Dermaline",
+    ),
+    item(
+      "s-protetor-fps50",
+      "Protetor solar FPS 50",
+      "Cosmético",
+      8,
+      "un",
+      3,
+      330,
+      "PS-310",
+      38,
+      "Cosmed",
+    ),
+    item("s-gaze", "Gaze estéril", "Descartável", 120, "un", 50, 600, "GZ-904", 0.4, "MedPharma"),
+    item(
+      "s-peeling-lactico",
+      "Peeling ácido lático",
+      "Ativo",
+      1,
+      "fr",
+      2,
+      9,
+      "PL-042",
+      110,
+      "Dermaline",
+    ),
+  ];
+}
+
+function seedProcedures(): ProcedureRec[] {
+  return [
+    { id: "p1", name: "Limpeza de pele profunda", price: 180, duration: 60, returnDays: 14 },
+    { id: "p2", name: "Peeling suave", price: 160, duration: 60, returnDays: 21 },
+    { id: "p3", name: "Hidratação facial", price: 150, duration: 60, returnDays: 14 },
+    { id: "p4", name: "Drenagem facial", price: 180, duration: 60, returnDays: 7 },
+    { id: "p5", name: "Avaliação inicial", price: 120, duration: 45, returnDays: 7 },
+    { id: "p6", name: "Microagulhamento", price: 260, duration: 75, returnDays: 30 },
+  ];
+}
+
+/** Perguntas da anamnese: a clínica pode editar o modelo em Configurações. */
+export const DEFAULT_QUESTIONS = [
+  { id: "queixa", label: "Queixa principal" },
+  { id: "objetivo", label: "Objetivo com o tratamento" },
+  { id: "saude", label: "Saúde e doenças crônicas" },
+  { id: "medicamentos", label: "Medicamentos em uso" },
+  { id: "alergias", label: "Alergias" },
+  { id: "rotina", label: "Rotina de cuidados em casa" },
+  { id: "anteriores", label: "Procedimentos anteriores" },
+];
+
+export type Settings = {
+  questions: { id: string; label: string }[];
+  consentText: string;
+};
+
+export const DEFAULT_SETTINGS: Settings = {
+  questions: DEFAULT_QUESTIONS,
+  consentText:
+    "Autorizo o registro e o uso interno de fotografias do meu rosto para acompanhar a evolução do tratamento. Posso revogar esta autorização a qualquer momento.",
+};
+
+function seedAnamnesis(): AnamnesisRec[] {
+  return [
+    {
+      clientId: "c1",
+      consent: true,
+      updatedAt: instantOf(daysFromToday(-98), "10:00"),
+      answers: {
+        queixa: "Oleosidade e cravos na zona T",
+        objetivo: "Reduzir oleosidade e cravos na zona T",
+        saude: "Sem doenças crônicas relatadas",
+        medicamentos: "Nenhum de uso contínuo",
+        alergias: "Ácido salicílico",
+        rotina: "Sabonete facial 2x/dia, protetor solar irregular",
+        anteriores: "Nenhum",
+      },
+    },
+  ];
+}
+
+function seedHours(): HoursRec {
+  const weekday = { open: true, start: "09:00", end: "19:00" };
+  return {
+    slot: 30,
+    days: {
+      "0": { open: false, start: "09:00", end: "13:00" },
+      "1": weekday,
+      "2": weekday,
+      "3": weekday,
+      "4": weekday,
+      "5": weekday,
+      "6": { open: true, start: "09:00", end: "13:00" },
+    },
+  };
+}
+
+export const clinicsDb = createStore<ClinicRec[]>("eb:v1:clinicas", seedClinics);
 export const clientsDb = createStore<ClientRec[]>("eb:v1:clientes", seedClients);
 export const appointmentsDb = createStore<AppointmentRec[]>("eb:v1:atendimentos", seedAppointments);
 export const notificationsDb = createStore<NotificationRec[]>(
@@ -290,16 +479,26 @@ export const notificationsDb = createStore<NotificationRec[]>(
 );
 export const billsDb = createStore<BillRec[]>("eb:v1:contas", seedBills);
 export const ledgerDb = createStore<LedgerEntry[]>("eb:v1:caixa", () =>
-  mockLedger.map((entry) => ({
-    ...entry,
-    date: shiftSeedDate(entry.date),
-    ...(entry.due ? { due: shiftSeedDate(entry.due) } : {}),
-  })),
+  mockLedger.map((entry) => {
+    const owner = mockClients.find((client) => client.name === entry.label);
+    return {
+      ...entry,
+      date: shiftSeedDate(entry.date),
+      ...(entry.due ? { due: shiftSeedDate(entry.due) } : {}),
+      ...(owner && entry.kind === "receber" ? { clientId: owner.id } : {}),
+    };
+  }),
 );
-export const stockDb = createStore<StockEntry[]>("eb:v1:estoque", () =>
-  mockStock.map((item) => ({ ...item })),
-);
+export const stockDb = createStore<StockRec[]>("eb:v1:estoque-v2", seedStock);
 export const careDb = createStore<CareRec[]>("eb:v1:cuidados", seedCare);
+export const proceduresDb = createStore<ProcedureRec[]>("eb:v1:procedimentos", seedProcedures);
+export const anamnesisDb = createStore<AnamnesisRec[]>("eb:v1:anamneses", seedAnamnesis);
+export const sessionsDb = createStore<SessionRec[]>("eb:v1:sessoes", () => []);
+export const blocksDb = createStore<BlockRec[]>("eb:v1:bloqueios", () => [
+  { id: "bl1", date: daysFromToday(3), start: "10:30", end: "12:00", reason: "Bloqueio pessoal" },
+]);
+export const hoursDb = createStore<HoursRec>("eb:v1:horarios", seedHours);
+export const settingsDb = createStore<Settings>("eb:v1:configuracoes", () => DEFAULT_SETTINGS);
 export const prefsDb = createStore<Record<string, NotificationPrefs>>("eb:v1:preferencias", () => ({
   gestor: { ...defaultPrefs },
   cliente: { ...defaultPrefs },
@@ -307,7 +506,21 @@ export const prefsDb = createStore<Record<string, NotificationPrefs>>("eb:v1:pre
 
 /** Volta todos os dados ao exemplo inicial. */
 export function resetDemoData() {
-  [clientsDb, appointmentsDb, notificationsDb, billsDb, ledgerDb, stockDb, careDb, prefsDb].forEach(
-    (store) => store.reset(),
-  );
+  [
+    clinicsDb,
+    clientsDb,
+    appointmentsDb,
+    notificationsDb,
+    billsDb,
+    ledgerDb,
+    stockDb,
+    careDb,
+    proceduresDb,
+    anamnesisDb,
+    sessionsDb,
+    blocksDb,
+    hoursDb,
+    settingsDb,
+    prefsDb,
+  ].forEach((store) => store.reset());
 }
