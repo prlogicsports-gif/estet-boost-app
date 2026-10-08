@@ -18,14 +18,17 @@ const SPLASH_KEY = "eb-splash-seen";
 // A splash aparece só na abertura do app (uma vez por sessão do navegador).
 // Entrar, sair da conta ou navegar entre telas nunca a repete.
 function useSplashOnce() {
-  const [show, setShow] = useState(() => {
-    if (typeof window === "undefined") return false;
+  // Servidor e primeiro render do navegador concordam (splash ligada), senão o React
+  // refaz a árvore. Quem já viu a splash nesta sessão a desliga logo após hidratar.
+  const [show, setShow] = useState(true);
+
+  useEffect(() => {
     try {
-      return !window.sessionStorage.getItem(SPLASH_KEY);
+      if (window.sessionStorage.getItem(SPLASH_KEY)) setShow(false);
     } catch {
-      return true;
+      // sem storage disponível: a splash segue o fluxo normal
     }
-  });
+  }, []);
 
   const done = () => {
     try {
