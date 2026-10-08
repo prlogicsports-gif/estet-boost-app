@@ -72,6 +72,18 @@ export function LoginForm({
         {loading ? "Entrando..." : "Entrar"}
       </Button>
 
+      <Button
+        type="button"
+        variant="ghost"
+        size="lg"
+        className="mt-2 w-full"
+        onClick={() =>
+          onSuccess({ role: "gestor", name: "Fernanda", email: "fernanda@estudio.com.br" })
+        }
+      >
+        Explorar sem cadastro
+      </Button>
+
       <p className="mt-[18px] text-center text-[13.5px] leading-normal text-[var(--text-secondary)]">
         Primeira vez por aqui?{" "}
         <button type="button" onClick={onCreate} className={authLink}>
