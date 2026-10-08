@@ -7,7 +7,6 @@ import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { LoginForm } from "@/components/auth/login-form";
 import { SignupFlow } from "@/components/auth/signup-flow";
 import { BrandMark } from "@/components/brand/brand-mark";
-import { SplashScreen } from "@/components/splash/splash-screen";
 import { readInvite } from "@/lib/invite";
 import { homeFor, useSession } from "@/lib/session";
 import type { Session } from "@/lib/auth.types";

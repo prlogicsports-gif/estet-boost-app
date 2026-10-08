@@ -7,10 +7,37 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { SplashScreen } from "../components/splash/splash-screen";
+
+const SPLASH_KEY = "eb-splash-seen";
+
+// A splash aparece só na abertura do app (uma vez por sessão do navegador).
+// Entrar, sair da conta ou navegar entre telas nunca a repete.
+function useSplashOnce() {
+  const [show, setShow] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return !window.sessionStorage.getItem(SPLASH_KEY);
+    } catch {
+      return true;
+    }
+  });
+
+  const done = () => {
+    try {
+      window.sessionStorage.setItem(SPLASH_KEY, "1");
+    } catch {
+      // sem storage disponível: a splash simplesmente não é memorizada
+    }
+    setShow(false);
+  };
+
+  return { show, done };
+}
 
 function NotFoundComponent() {
   return (
@@ -115,9 +142,11 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const splash = useSplashOnce();
 
   return (
     <QueryClientProvider client={queryClient}>
+      {splash.show ? <SplashScreen onDone={splash.done} /> : null}
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>
