@@ -44,20 +44,17 @@ function AuthPage() {
   const searchStr = useRouterState({ select: (state) => state.location.searchStr });
   const invite = readInvite(searchStr ?? "");
   const session = useSession();
-  const [splash, setSplash] = useState(true);
   const [mode, setMode] = useState<Mode>("entrar");
 
   const goHome = (next: Session) => navigate({ to: homeFor(next.role) });
 
   // Quem já tem sessão vai direto para a área do próprio perfil.
   useEffect(() => {
-    if (session && !splash) navigate({ to: homeFor(session.role) });
-  }, [session, splash, navigate]);
+    if (session) navigate({ to: homeFor(session.role) });
+  }, [session, navigate]);
 
   return (
     <div className="min-h-screen bg-background">
-      {splash ? <SplashScreen onDone={() => setSplash(false)} /> : null}
-
       <div className="grid min-h-screen grid-cols-1 min-[901px]:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         <AuthCarousel />
 
