@@ -207,7 +207,7 @@ export function PhotoVault({
           <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
             Antes e depois
           </span>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(260px,100%),380px))] gap-4">
             {pairs.map((pair) => {
               const before = urls[pair.before.id];
               const after = urls[pair.after.id];
