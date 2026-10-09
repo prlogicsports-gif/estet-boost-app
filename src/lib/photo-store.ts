@@ -1,10 +1,17 @@
+import { createRemoteStore } from "@/lib/remote-store";
+import { supabase } from "@/lib/supabase";
+import { newId } from "@/lib/uuid";
+
 /**
- * Fotografias de evolução por cliente. As imagens ficam em IndexedDB
- * (localStorage não comporta imagem) e a lista em localStorage, sob a chave
- * da cliente. Trocar por backend não muda a tela.
+ * Fotografias de evolução por cliente. O arquivo fica no Supabase Storage (bucket privado, caminho
+ * `{clínica}/{cliente}/{foto}`) e os dados da foto na tabela `photos`. Para exibir, o app pede um
+ * endereço assinado de vida curta; quem pode ver o quê é decidido pelo banco (RLS).
  */
 export type VaultPhoto = {
   id: string;
+  clientId: string;
+  /** Caminho do arquivo no Storage. */
+  path: string;
   tiradaEm: string;
   inseridaEm: string;
   autorizada: boolean;
@@ -16,55 +23,104 @@ export type VaultPhoto = {
   procedimento?: string | undefined;
 };
 
-const DB = "estetboost-fotos";
-const STORE = "fotos";
+const BUCKET = "photos";
 
-function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") return reject(new Error("sem IndexedDB"));
-    const request = indexedDB.open(DB, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+async function insertRow(rec: VaultPhoto, clinicId: string) {
+  const { error } = await supabase.from("photos").insert({
+    id: rec.id,
+    clinic_id: clinicId,
+    client_id: rec.clientId,
+    session_id: rec.sessaoId ?? null,
+    tipo: rec.tipo ?? null,
+    procedure: rec.procedimento ?? null,
+    taken_at: rec.tiradaEm,
+    authorized: rec.autorizada,
+    storage_path: rec.path,
+    origem: rec.origem,
   });
+  if (error) throw error;
 }
 
-async function run<T>(
-  mode: IDBTransactionMode,
-  action: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await open();
-  return new Promise<T>((resolve, reject) => {
-    const transaction = db.transaction(STORE, mode);
-    const request = action(transaction.objectStore(STORE));
-    transaction.oncomplete = () => resolve(request.result);
-    transaction.onerror = () => reject(transaction.error);
+export const photosDb = createRemoteStore<VaultPhoto>({
+  key: "photos",
+  table: "photos",
+  order: { column: "taken_at", ascending: false },
+  fromRow: (r) => ({
+    id: r.id,
+    clientId: r.client_id,
+    path: r.storage_path,
+    tiradaEm: r.taken_at,
+    inseridaEm: r.created_at,
+    autorizada: r.authorized,
+    origem: r.origem,
+    tipo: r.tipo ?? undefined,
+    sessaoId: r.session_id ?? undefined,
+    procedimento: r.procedure ?? undefined,
+  }),
+  save: async (rec, prev, ctx) => {
+    if (!prev) return insertRow(rec, ctx.session.clinicId);
+    const { error } = await supabase
+      .from("photos")
+      .update({ authorized: rec.autorizada, tipo: rec.tipo ?? null })
+      .eq("id", rec.id);
+    if (error) throw error;
+  },
+  remove: async (rec) => {
+    const { error } = await supabase.from("photos").delete().eq("id", rec.id);
+    if (error) throw error;
+    void supabase.storage.from(BUCKET).remove([rec.path]);
+  },
+});
+
+/** Fotos de uma cliente. */
+export const readPhotoList = (clientId: string): VaultPhoto[] =>
+  photosDb.get().filter((photo) => photo.clientId === clientId);
+
+/** Envia o arquivo ao Storage. Retorna o caminho. */
+export async function uploadPhotoBlob(
+  clinicId: string,
+  clientId: string,
+  id: string,
+  blob: Blob,
+): Promise<string> {
+  const path = `${clinicId}/${clientId}/${id}.jpg`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+const signed = new Map<string, { url: string; until: number }>();
+
+/** Endereços temporários (10 min) para exibir as fotos; reaproveita os que ainda valem. */
+export async function photoUrls(
+  photos: Pick<VaultPhoto, "id" | "path">[],
+): Promise<Record<string, string>> {
+  const now = Date.now();
+  const out: Record<string, string> = {};
+  const missing = photos.filter((photo) => {
+    const hit = signed.get(photo.id);
+    if (hit && hit.until > now) {
+      out[photo.id] = hit.url;
+      return false;
+    }
+    return true;
   });
-}
-
-export const savePhotoBlob = (id: string, blob: Blob) =>
-  run("readwrite", (store) => store.put(blob, id));
-export const readPhotoBlob = (id: string) =>
-  run<Blob | undefined>("readonly", (store) => store.get(id));
-export const deletePhotoBlob = (id: string) => run("readwrite", (store) => store.delete(id));
-
-const listKey = (clientId: string) => `estetboost:fotos-v2:${clientId}`;
-
-export function readPhotoList(clientId: string): VaultPhoto[] {
-  try {
-    const list = JSON.parse(window.localStorage.getItem(listKey(clientId)) ?? "null");
-    return Array.isArray(list) ? (list as VaultPhoto[]) : [];
-  } catch {
-    return [];
+  if (missing.length) {
+    const { data } = await supabase.storage.from(BUCKET).createSignedUrls(
+      missing.map((photo) => photo.path),
+      600,
+    );
+    for (const entry of (data ?? []) as { path: string | null; signedUrl: string }[]) {
+      const photo = missing.find((item) => item.path === entry.path);
+      if (photo && entry.signedUrl) {
+        signed.set(photo.id, { url: entry.signedUrl, until: now + 540000 });
+        out[photo.id] = entry.signedUrl;
+      }
+    }
   }
-}
-
-export function writePhotoList(clientId: string, list: VaultPhoto[]) {
-  try {
-    window.localStorage.setItem(listKey(clientId), JSON.stringify(list));
-  } catch {
-    /* sem armazenamento */
-  }
+  return out;
 }
 
 /** Reduz para no máximo 1600px antes de guardar: foto de celular tem de 4 a 8 MB. */
@@ -133,39 +189,38 @@ export async function addPhoto(
     sessaoId?: string;
     procedimento?: string;
     autorizada?: boolean;
-  } = {},
+    clinicId: string;
+    origem?: "profissional" | "cliente";
+  },
 ): Promise<string> {
   const blob = await shrinkImage(file);
-  const id = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  await savePhotoBlob(id, blob);
+  const id = newId();
+  const path = await uploadPhotoBlob(meta.clinicId, clientId, id, blob);
   const photo: VaultPhoto = {
     id,
+    clientId,
+    path,
     tiradaEm: takenAt(file),
     inseridaEm: new Date().toISOString(),
     autorizada: meta.autorizada ?? false,
-    origem: "profissional",
+    origem: meta.origem ?? "profissional",
     ...(meta.tipo ? { tipo: meta.tipo } : {}),
     ...(meta.sessaoId ? { sessaoId: meta.sessaoId } : {}),
     ...(meta.procedimento ? { procedimento: meta.procedimento } : {}),
   };
-  writePhotoList(clientId, [...readPhotoList(clientId), photo]);
-  window.dispatchEvent(new Event("eb-photos-changed"));
+  photosDb.set((list) => [photo, ...list]);
   return id;
 }
 
 /** Remove uma foto da ficha (e o arquivo). */
-export function removePhoto(clientId: string, id: string) {
-  deletePhotoBlob(id).catch(() => {});
-  writePhotoList(
-    clientId,
-    readPhotoList(clientId).filter((photo) => photo.id !== id),
-  );
-  window.dispatchEvent(new Event("eb-photos-changed"));
+export function removePhoto(_clientId: string, id: string) {
+  photosDb.set((list) => list.filter((photo) => photo.id !== id));
 }
 
-/** Endereço temporário para exibir a foto. Quem chama devolve com `URL.revokeObjectURL`. */
+/** Endereço temporário para exibir a foto (10 min). */
 export async function photoUrl(id: string | undefined): Promise<string | null> {
   if (!id) return null;
-  const blob = await readPhotoBlob(id).catch(() => undefined);
-  return blob ? URL.createObjectURL(blob) : null;
+  const photo = photosDb.get().find((item) => item.id === id);
+  if (!photo) return null;
+  return (await photoUrls([photo]))[id] ?? null;
 }

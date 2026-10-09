@@ -10,8 +10,10 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:db": "bun supabase/tests/rls.test.mjs",
-    "db:bundle": "cat supabase/migrations/*.sql > supabase/bundle.sql"
+    "test:db": "bun supabase/tests/rls.test.mjs && bun supabase/tests/data.test.mjs",
+    "db:bundle": "cat supabase/migrations/*.sql > supabase/bundle.sql",
+    "test:sync": "bun test tests/sync.test.ts",
+    "test": "bun run test:db && bun run test:sync"
   },
   "overrides": {
     "rolldown": "1.2.1"

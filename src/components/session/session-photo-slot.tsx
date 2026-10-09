@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/eb/icon";
 import { Button } from "@/components/ui/button";
 import { addPhoto, photoUrl, removePhoto } from "@/lib/photo-store";
+import { useSession } from "@/lib/session";
 
 /** Foto do atendimento (antes ou depois): tirada na hora ou anexada. Fica salva na ficha da cliente. */
 export function SessionPhotoSlot({
@@ -24,6 +25,7 @@ export function SessionPhotoSlot({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const me = useSession();
   const camera = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
 
@@ -48,6 +50,7 @@ export function SessionPhotoSlot({
       if (photoId) removePhoto(clientId, photoId);
       onChange(
         await addPhoto(clientId, file, {
+          clinicId: me?.clinicId ?? "",
           tipo,
           sessaoId: sessionId,
           procedimento: procedure,

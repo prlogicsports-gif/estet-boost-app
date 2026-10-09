@@ -1,25 +1,13 @@
-import {
-  appointmentsDb,
-  careDb,
-  clientsDb,
-  ledgerDb,
-  proceduresDb,
-  sessionsDb,
-  stockDb,
-} from "@/data/db";
-import { logActivity } from "@/services/activity.service";
+import { appointmentsDb, clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
 import { addDays, todayISO } from "@/lib/dates";
 import type { ProcedureRec, SessionRec } from "@/lib/models";
-import { suggestReturn } from "@/services/appointments.service";
-import { updateClient } from "@/services/clients.service";
-import { addLedgerEntry, consumeStock } from "@/services/finance.service";
-import { events } from "@/services/notification-events";
-import { notify } from "@/services/notify";
+import { flushAll, reloadAll } from "@/lib/remote-store";
+import { supabase } from "@/lib/supabase";
+import { newId } from "@/lib/uuid";
 
 /** Se os produtos passam desta fatia do valor cobrado, a esteticista é avisada. */
 export const MARGIN_ALERT = 0.35;
 
-const newId = () => `se-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const find = (id: string) => sessionsDb.get().find((item) => item.id === id);
 
 export const sessionTotals = (session: Pick<SessionRec, "procedures" | "products">) => {
@@ -38,7 +26,7 @@ export function saveProcedure(input: Omit<ProcedureRec, "id"> & { id?: string })
   const rec: ProcedureRec = {
     ...input,
     name: input.name.trim(),
-    id: existing?.id ?? input.id ?? `p-${Date.now()}`,
+    id: existing?.id ?? input.id ?? newId(),
   };
   proceduresDb.set((list) =>
     existing ? list.map((item) => (item.id === existing.id ? rec : item)) : [...list, rec],
@@ -128,135 +116,58 @@ export function cancelSession(id: string) {
   sessionsDb.set((list) => list.filter((item) => item.id !== id));
 }
 
+export type SessionResult = { ok: true } | { ok: false; message: string };
+
+const REASONS: Record<string, string> = {
+  sem_permissao: "Você não tem permissão para isso.",
+  nao_encontrado: "Atendimento não encontrado.",
+};
+const failure = (reason?: string): SessionResult => ({
+  ok: false,
+  message: REASONS[reason ?? ""] ?? "Não foi possível concluir. Tente de novo.",
+});
+
+async function callSession(name: string, args: Record<string, unknown>): Promise<SessionResult> {
+  await flushAll(); // o rascunho precisa estar salvo antes de o servidor usá-lo
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) return failure();
+  await reloadAll();
+  const result = data as { ok: boolean; reason?: string };
+  return result?.ok ? { ok: true } : failure(result?.reason);
+}
+
 /**
- * Fecha o atendimento: caixa (pago agora ou a receber), baixa de estoque, custo de produto,
- * cuidados para a cliente, retorno aguardando confirmação e ficha atualizada.
+ * Fecha o atendimento no servidor, de uma vez só: caixa (pago agora ou a receber), baixa de estoque,
+ * custo de produto, cuidados e retorno para a cliente, ficha atualizada e avisos. Quem não tem a
+ * permissão financeira fecha com os preços da tabela e o valor fica a receber para a gestora conferir.
  */
 export function completeSession(
   id: string,
   closing: { cuidados: string[]; retorno: { data: string; hora: string } | null },
-) {
-  const session = find(id);
-  if (!session || session.status === "done") return;
-  const { price, share } = sessionTotals(session);
-  const today = todayISO();
-  const nowTime = new Date().toTimeString().slice(0, 5);
-  const label = session.procedure || "Atendimento";
-
-  sessionsDb.set((list) =>
-    list.map((item) =>
-      item.id === id ? { ...item, status: "done", finishedAt: new Date().toISOString() } : item,
-    ),
-  );
-
-  const appt = session.apptId
-    ? appointmentsDb.get().find((item) => item.id === session.apptId)
-    : undefined;
-  if (appt) {
-    appointmentsDb.set((list) =>
-      list.map((item) =>
-        item.id === appt.id
-          ? {
-              ...item,
-              done: true,
-              status: "confirmed",
-              price,
-              payment: session.payment,
-              procedure: label,
-            }
-          : item,
-      ),
-    );
-  } else {
-    appointmentsDb.set((list) => [
-      ...list,
-      {
-        id: `ap-${session.id}`,
-        clientId: session.clientId,
-        client: session.client,
-        initials: session.initials,
-        procedure: label,
-        date: today,
-        time: nowTime,
-        duration: 60,
-        price,
-        payment: session.payment,
-        status: "confirmed",
-        kind: "retorno",
-        origin: "gestor",
-        done: true,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-  }
-
-  if (price > 0) {
-    addLedgerEntry(
-      session.paidNow
-        ? {
-            kind: "entradas",
-            date: today,
-            label: session.client,
-            origin: label,
-            method: session.payment,
-            value: price,
-            clientId: session.clientId,
-            refId: session.id,
-          }
-        : {
-            kind: "receber",
-            date: today,
-            due: session.dueDate,
-            label: session.client,
-            origin: label,
-            method: session.payment,
-            value: price,
-            clientId: session.clientId,
-            refId: session.id,
-          },
-    );
-  }
-  if (session.products.length) consumeStock(session.products);
-  if (price > 0 && share > MARGIN_ALERT)
-    notify(events.marginAlert(session.client, label, share, session.id));
-
-  if (closing.cuidados.length) {
-    const createdAt = new Date().toISOString();
-    careDb.set((list) => [
-      ...closing.cuidados.map((text, index) => ({
-        id: `care-${Date.now()}-${index}`,
-        clientId: session.clientId,
-        text,
-        createdAt,
-        ...(/manh|protetor/i.test(text)
-          ? { reminderTime: "08:00", until: addDays(today, 30) }
-          : /noite|dormir/i.test(text)
-            ? { reminderTime: "21:00", until: addDays(today, 30) }
-            : {}),
-      })),
-      ...list,
-    ]);
-    notify(events.careNew(session.clientId, closing.cuidados.length, "sua esteticista"));
-  }
-
-  if (closing.retorno)
-    suggestReturn(
-      {
-        clientId: session.clientId,
-        client: session.client,
-        initials: session.initials,
-        procedure: label,
-        price,
-        payment: session.payment,
-      },
-      closing.retorno.data,
-      closing.retorno.hora,
-    );
-
-  updateClient(session.clientId, {
-    lastVisit: "hoje",
-    mainProcedure: session.procedures[0]?.name ?? label,
+): Promise<SessionResult> {
+  return callSession("complete_session", {
+    p_session_id: id,
+    p_cuidados: closing.cuidados,
+    p_retorno: closing.retorno,
   });
+}
+
+/** Corrige um atendimento já finalizado. O caixa e a agenda acompanham (valores só com permissão financeira). */
+export function editFinishedSession(
+  id: string,
+  patch: Pick<SessionRec, "procedures" | "notes" | "payment">,
+): Promise<SessionResult> {
+  return callSession("edit_finished_session", {
+    p_session_id: id,
+    p_procedures: patch.procedures,
+    p_notes: patch.notes,
+    p_payment: patch.payment,
+  });
+}
+
+/** Apaga um atendimento lançado por engano: sai do caixa, volta o estoque e a agenda (só gestora). */
+export function deleteFinishedSession(id: string): Promise<SessionResult> {
+  return callSession("delete_finished_session", { p_session_id: id });
 }
 
 /** Produtos em falta para o que o atendimento pede (usado para avisar antes de finalizar). */
@@ -265,65 +176,3 @@ export const shortOnStock = (session: Pick<SessionRec, "products">) =>
     const item = stockDb.get().find((entry) => entry.id === used.stockId);
     return item ? used.qty > item.quantity : false;
   });
-
-/** Corrige um atendimento já finalizado: procedimentos, valores, forma de pagamento e anotações. O caixa e a agenda acompanham. */
-export function editFinishedSession(
-  id: string,
-  patch: Pick<SessionRec, "procedures" | "notes" | "payment">,
-) {
-  const session = find(id);
-  if (!session || session.status !== "done") return;
-  const procedure = patch.procedures.map((item) => item.name).join(" + ") || session.procedure;
-  const price = patch.procedures.reduce((sum, item) => sum + item.price, 0);
-  sessionsDb.set((list) =>
-    list.map((item) => (item.id === id ? { ...item, ...patch, procedure } : item)),
-  );
-  const apptId = session.apptId ?? `ap-${id}`;
-  appointmentsDb.set((list) =>
-    list.map((item) =>
-      item.id === apptId ? { ...item, procedure, price, payment: patch.payment } : item,
-    ),
-  );
-  ledgerDb.set((list) =>
-    list.map((item) =>
-      item.refId === id
-        ? { ...item, origin: procedure, value: price, method: patch.payment }
-        : item,
-    ),
-  );
-  logActivity({
-    by: "gestor",
-    kind: "atendimento",
-    clientId: session.clientId,
-    client: session.client,
-    text: `Corrigiu o atendimento: ${procedure}`,
-  });
-}
-
-/** Apaga um atendimento lançado por engano: sai do caixa, volta o estoque e a agenda. */
-export function deleteFinishedSession(id: string) {
-  const session = find(id);
-  if (!session || session.status !== "done") return;
-  sessionsDb.set((list) => list.filter((item) => item.id !== id));
-  ledgerDb.set((list) => list.filter((item) => item.refId !== id));
-  stockDb.set((list) =>
-    list.map((item) => {
-      const used = session.products.find((entry) => entry.stockId === item.id);
-      return used
-        ? { ...item, quantity: Math.round((item.quantity + used.qty) * 100) / 100 }
-        : item;
-    }),
-  );
-  if (session.apptId)
-    appointmentsDb.set((list) =>
-      list.map((item) => (item.id === session.apptId ? { ...item, done: false } : item)),
-    );
-  else appointmentsDb.set((list) => list.filter((item) => item.id !== `ap-${id}`));
-  logActivity({
-    by: "gestor",
-    kind: "atendimento",
-    clientId: session.clientId,
-    client: session.client,
-    text: `Apagou o atendimento: ${session.procedure}`,
-  });
-}

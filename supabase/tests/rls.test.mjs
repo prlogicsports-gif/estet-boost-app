@@ -169,9 +169,15 @@ check(
 );
 
 // --- credencial de equipe
-const si = await rpc(db, gX, "select public.create_staff_invite('Fer','f1@x.com',$1::jsonb) r", [JSON.stringify({ clientes: true, agenda: true, atendimentos: true, estoque: true, historico: true })]).then(
-  (x) => x.r,
-);
+const si = await rpc(db, gX, "select public.create_staff_invite('Fer','f1@x.com',$1::jsonb) r", [
+  JSON.stringify({
+    clientes: true,
+    agenda: true,
+    atendimentos: true,
+    estoque: true,
+    historico: true,
+  }),
+]).then((x) => x.r);
 check(
   "credencial de equipe vale 48 h",
   si.ok && Math.abs(new Date(si.expires_at) - Date.now() - 48 * 3600e3) < 60e3,
@@ -349,8 +355,8 @@ check(
     as(db, c1, () =>
       q(
         db,
-        "insert into public.appointments (clinic_id, client_id, procedure, date, time, status, origin, request) values ($1,$2,'x', current_date+5,'11:00','pending','cliente',true) returning id",
-        [cx.clinic_id, cl1.replace(/.$/, "0")],
+        "insert into public.appointments (clinic_id, client_id, procedure, date, time, status, origin, request) values ($1,gen_random_uuid(),'x', current_date+5,'11:00','pending','cliente',true) returning id",
+        [cx.clinic_id],
       ),
     ),
   ),
@@ -384,39 +390,151 @@ check(
   JSON.stringify(rc),
 );
 
-
 // --- permissões escolhidas pela gestora
-const f3 = await addUser(db, "f3@x.com"), f4 = await addUser(db, "f4@x.com"), f5 = await addUser(db, "f5@x.com");
+const f3 = await addUser(db, "f3@x.com"),
+  f4 = await addUser(db, "f4@x.com"),
+  f5 = await addUser(db, "f5@x.com");
 const mkStaff = async (uid, email, perms) => {
-  const i = await rpc(db, gX, "select public.create_staff_invite('Equipe', $1, $2::jsonb) r", [email, JSON.stringify(perms)]).then((x) => x.r);
-  return rpc(db, uid, "select public.accept_staff_invite($1,'Equipe') r", [i.code]).then((x) => x.r);
+  const i = await rpc(db, gX, "select public.create_staff_invite('Equipe', $1, $2::jsonb) r", [
+    email,
+    JSON.stringify(perms),
+  ]).then((x) => x.r);
+  return rpc(db, uid, "select public.accept_staff_invite($1,'Equipe') r", [i.code]).then(
+    (x) => x.r,
+  );
 };
-check("funcionária só com agenda entra", (await mkStaff(f3, "f3@x.com", { agenda: true })).ok === true);
-check("funcionária com financeiro entra", (await mkStaff(f4, "f4@x.com", { financeiro: true })).ok === true);
-check("credencial sem permissões entra sem acesso a nada", (await mkStaff(f5, "f5@x.com", { god: true, financeiro: "talvez" })).ok === true);
-check("permissões desconhecidas são ignoradas", (() => { return true; })() && await (async () => { const perms = (await q(db, "select permissions from public.profiles where id=$1", [f5]))[0].permissions; return Object.keys(perms).sort().join() === "agenda,atendimentos,clientes,estoque,financeiro,historico" && Object.values(perms).every((v) => v === false); })());
-check("agenda lê horários", (await as(db, f3, () => q(db, "select * from public.appointments"))).length >= 1);
-check("agenda lê nomes de clientes (só leitura)", (await as(db, f3, () => q(db, "select * from public.clients"))).length === 2);
-check("agenda NÃO cadastra clientes", await denied(() => as(db, f3, () => q(db, "insert into public.clients (clinic_id, name) values ($1,'Intrusa') returning id", [cx.clinic_id]))));
-check("agenda NÃO lê estoque", await denied(() => as(db, f3, () => q(db, "select * from public.stock"))));
-check("agenda NÃO lê atendimentos", await denied(() => as(db, f3, () => q(db, "select * from public.sessions"))));
-check("agenda NÃO lê histórico", await denied(() => as(db, f3, () => q(db, "select * from public.activity"))));
-check("com permissão financeiro lê o caixa", (await as(db, f4, () => q(db, "select * from public.ledger"))).length === 2);
-check("com permissão financeiro lê contas e custos", (await as(db, f4, () => q(db, "select * from public.bills"))).length === 1 && (await as(db, f4, () => q(db, "select * from public.stock_costs"))).length === 1);
-check("financeiro sozinho NÃO lê clientes", await denied(() => as(db, f4, () => q(db, "select * from public.clients"))));
-await db.query("insert into public.ledger (clinic_id, kind, date, due, label, origin, value, client_id) values ($1,'receber',current_date,current_date,'Ana','Retorno',90,$2)", [cx.clinic_id, cl1]);
+check(
+  "funcionária só com agenda entra",
+  (await mkStaff(f3, "f3@x.com", { agenda: true })).ok === true,
+);
+check(
+  "funcionária com financeiro entra",
+  (await mkStaff(f4, "f4@x.com", { financeiro: true })).ok === true,
+);
+check(
+  "credencial sem permissões entra sem acesso a nada",
+  (await mkStaff(f5, "f5@x.com", { god: true, financeiro: "talvez" })).ok === true,
+);
+check(
+  "permissões desconhecidas são ignoradas",
+  (() => {
+    return true;
+  })() &&
+    (await (async () => {
+      const perms = (await q(db, "select permissions from public.profiles where id=$1", [f5]))[0]
+        .permissions;
+      return (
+        Object.keys(perms).sort().join() ===
+          "agenda,atendimentos,clientes,estoque,financeiro,historico" &&
+        Object.values(perms).every((v) => v === false)
+      );
+    })()),
+);
+check(
+  "agenda lê horários",
+  (await as(db, f3, () => q(db, "select * from public.appointments"))).length >= 1,
+);
+check(
+  "agenda lê nomes de clientes (só leitura)",
+  (await as(db, f3, () => q(db, "select * from public.clients"))).length === 2,
+);
+check(
+  "agenda NÃO cadastra clientes",
+  await denied(() =>
+    as(db, f3, () =>
+      q(db, "insert into public.clients (clinic_id, name) values ($1,'Intrusa') returning id", [
+        cx.clinic_id,
+      ]),
+    ),
+  ),
+);
+check(
+  "agenda NÃO lê estoque",
+  await denied(() => as(db, f3, () => q(db, "select * from public.stock"))),
+);
+check(
+  "agenda NÃO lê atendimentos",
+  await denied(() => as(db, f3, () => q(db, "select * from public.sessions"))),
+);
+check(
+  "agenda NÃO lê histórico",
+  await denied(() => as(db, f3, () => q(db, "select * from public.activity"))),
+);
+check(
+  "com permissão financeiro lê o caixa",
+  (await as(db, f4, () => q(db, "select * from public.ledger"))).length === 2,
+);
+check(
+  "com permissão financeiro lê contas e custos",
+  (await as(db, f4, () => q(db, "select * from public.bills"))).length === 1 &&
+    (await as(db, f4, () => q(db, "select * from public.stock_costs"))).length === 1,
+);
+check(
+  "financeiro sozinho NÃO lê clientes",
+  await denied(() => as(db, f4, () => q(db, "select * from public.clients"))),
+);
+await db.query(
+  "insert into public.ledger (clinic_id, kind, date, due, label, origin, value, client_id) values ($1,'receber',current_date,current_date,'Ana','Retorno',90,$2)",
+  [cx.clinic_id, cl1],
+);
 const entry2 = (await q(db, "select id from public.ledger where origin='Retorno'"))[0].id;
 await rpc(db, c1, "select public.report_payment($1,'Pix') r", [entry2]);
-check("com financeiro recebe aviso de pagamento novo", (await as(db, f4, () => q(db, "select * from public.notifications where kind='payment'"))).length === 1);
-check("sem financeiro não recebe aviso de pagamento", (await as(db, f3, () => q(db, "select * from public.notifications where kind='payment'"))).length === 0);
-check("sem permissões não lê nada", await denied(() => as(db, f5, () => q(db, "select * from public.clients"))) && await denied(() => as(db, f5, () => q(db, "select * from public.appointments"))));
-check("funcionária não altera permissões", (await rpc(db, f3, "select public.set_staff_permissions($1,'{\"financeiro\":true}') r", [f3]).then((x) => x.r)).reason === "sem_permissao");
-check("gestora concede permissão e vale na hora", (await rpc(db, gX, "select public.set_staff_permissions($1,'{\"agenda\":true,\"estoque\":true}') r", [f3]).then((x) => x.r)).ok === true
-  && (await as(db, f3, () => q(db, "select * from public.stock"))).length === 1);
-check("gestora retira permissão e vale na hora", (await rpc(db, gX, "select public.set_staff_permissions($1,'{\"agenda\":true}') r", [f3]).then((x) => x.r)).ok === true
-  && await denied(() => as(db, f3, () => q(db, "select * from public.stock"))));
-check("gestora Y não altera permissões da equipe de X", (await rpc(db, gY, "select public.set_staff_permissions($1,'{\"financeiro\":true}') r", [f3]).then((x) => x.r)).ok === false);
-check("lista de credenciais mostra permissões, nunca o código", (await as(db, gX, () => q(db, "select * from public.list_invites()"))).every((r) => r.permissions !== undefined && !("code_hash" in r)));
+check(
+  "com financeiro recebe aviso de pagamento novo",
+  (await as(db, f4, () => q(db, "select * from public.notifications where kind='payment'")))
+    .length === 1,
+);
+check(
+  "sem financeiro não recebe aviso de pagamento",
+  (await as(db, f3, () => q(db, "select * from public.notifications where kind='payment'")))
+    .length === 0,
+);
+check(
+  "sem permissões não lê nada",
+  (await denied(() => as(db, f5, () => q(db, "select * from public.clients")))) &&
+    (await denied(() => as(db, f5, () => q(db, "select * from public.appointments")))),
+);
+check(
+  "funcionária não altera permissões",
+  (
+    await rpc(db, f3, "select public.set_staff_permissions($1,'{\"financeiro\":true}') r", [
+      f3,
+    ]).then((x) => x.r)
+  ).reason === "sem_permissao",
+);
+check(
+  "gestora concede permissão e vale na hora",
+  (
+    await rpc(
+      db,
+      gX,
+      'select public.set_staff_permissions($1,\'{"agenda":true,"estoque":true}\') r',
+      [f3],
+    ).then((x) => x.r)
+  ).ok === true && (await as(db, f3, () => q(db, "select * from public.stock"))).length === 1,
+);
+check(
+  "gestora retira permissão e vale na hora",
+  (
+    await rpc(db, gX, "select public.set_staff_permissions($1,'{\"agenda\":true}') r", [f3]).then(
+      (x) => x.r,
+    )
+  ).ok === true && (await denied(() => as(db, f3, () => q(db, "select * from public.stock")))),
+);
+check(
+  "gestora Y não altera permissões da equipe de X",
+  (
+    await rpc(db, gY, "select public.set_staff_permissions($1,'{\"financeiro\":true}') r", [
+      f3,
+    ]).then((x) => x.r)
+  ).ok === false,
+);
+check(
+  "lista de credenciais mostra permissões, nunca o código",
+  (await as(db, gX, () => q(db, "select * from public.list_invites()"))).every(
+    (r) => r.permissions !== undefined && !("code_hash" in r),
+  ),
+);
 
 // --- desativar funcionária
 const sd = await rpc(db, gX, "select public.set_staff_active($1,false) r", [f1]).then((x) => x.r);

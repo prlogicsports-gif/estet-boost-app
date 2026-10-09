@@ -996,6 +996,7 @@ function ProductDrawer({
   onClose: () => void;
   onSaved: (text: string) => void;
 }) {
+  const money = can(useSession(), "financeiro");
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0] ?? "");
   const [quantity, setQuantity] = useState("1");
@@ -1141,22 +1142,24 @@ function ProductDrawer({
             onChange={(event) => setBatch(event.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Input
-            label="Custo por unidade"
-            trailing="R$"
-            inputMode="decimal"
-            value={cost}
-            onChange={(event) => setCost(event.target.value)}
-            hint="Usado no cálculo de custo de cada atendimento."
-          />
-          <Input
-            label="Fornecedor"
-            placeholder="Dermaline"
-            value={supplier}
-            onChange={(event) => setSupplier(event.target.value)}
-          />
-        </div>
+        {money ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <Input
+              label="Custo por unidade"
+              trailing="R$"
+              inputMode="decimal"
+              value={cost}
+              onChange={(event) => setCost(event.target.value)}
+              hint="Usado no cálculo de custo de cada atendimento."
+            />
+            <Input
+              label="Fornecedor"
+              placeholder="Dermaline"
+              value={supplier}
+              onChange={(event) => setSupplier(event.target.value)}
+            />
+          </div>
+        ) : null}
       </div>
     </Drawer>
   );

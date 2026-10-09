@@ -1,26 +1,48 @@
 import { notificationsDb, prefsDb } from "@/data/db";
 import type { Audience, NotificationRec } from "@/lib/models";
-import { showPush } from "@/services/push.service";
+import { supabase } from "@/lib/supabase";
 
 export type NotificationDraft = Omit<NotificationRec, "id" | "createdAt" | "read"> & {
   createdAt?: string;
 };
 type Draft = NotificationDraft;
 
-/** Cria uma notificação. Com `ruleKey`, não repete a mesma (as regras automáticas rodam o tempo todo). */
-export function notify(draft: Draft): NotificationRec | null {
-  const current = notificationsDb.get();
-  if (draft.ruleKey && current.some((item) => item.ruleKey === draft.ruleKey)) return null;
-  const rec: NotificationRec = {
-    ...draft,
-    id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    createdAt: draft.createdAt ?? new Date().toISOString(),
-    read: false,
-  };
-  notificationsDb.set([rec, ...current]);
-  const prefs = prefsDb.get()[draft.audience];
-  if (prefs?.push !== false) showPush(rec);
-  return rec;
+/** Qual permissão da equipe recebe cada tipo de aviso (a gestora recebe todos). */
+const PERMISSION_OF_KIND: Record<string, string> = {
+  request: "agenda",
+  reschedule: "agenda",
+  confirmed: "agenda",
+  reminder: "agenda",
+  followup: "clientes",
+  recommendation: "clientes",
+  stock: "estoque",
+  bill: "financeiro",
+  payment: "financeiro",
+};
+
+const sent = new Set<string>();
+
+/**
+ * Pede ao servidor para criar o aviso: cada destinatário recebe o seu (a equipe conforme as permissões, ou a cliente).
+ * Com `ruleKey`, o servidor não repete o mesmo aviso (as regras automáticas rodam o tempo todo).
+ */
+export function notify(draft: Draft): void {
+  if (draft.ruleKey) {
+    if (sent.has(draft.ruleKey)) return;
+    sent.add(draft.ruleKey);
+  }
+  void supabase
+    .rpc("push_notification", {
+      p_audience: draft.audience === "gestor" ? "equipe" : "cliente",
+      p_client_id: draft.clientId ?? null,
+      p_kind: draft.kind,
+      p_title: draft.title,
+      p_body: draft.body,
+      p_href: draft.href ?? null,
+      p_rule: draft.ruleKey ?? null,
+      p_perm: draft.audience === "gestor" ? (PERMISSION_OF_KIND[draft.kind] ?? "agenda") : null,
+    })
+    .then(() => {});
 }
 
 const mine = (item: NotificationRec, audience: Audience, clientId?: string) =>

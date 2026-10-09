@@ -2,6 +2,9 @@ import { logActivity } from "@/services/activity.service";
 import { clientsDb, type ClientRec } from "@/data/db";
 import { initialsOf } from "@/lib/initials";
 import { events } from "@/services/notification-events";
+import { currentRole } from "@/lib/session";
+import { supabase } from "@/lib/supabase";
+import { newId } from "@/lib/uuid";
 import { notify } from "@/services/notify";
 
 export type NewClient = {
@@ -50,7 +53,7 @@ export function createClient(input: NewClient): ClientRec {
     );
   if (existing) return existing;
   const rec: ClientRec = {
-    id: `c${Date.now()}`,
+    id: newId(),
     name: input.name.trim(),
     initials: initialsOf(input.name),
     mainProcedure: input.procedure?.trim() || "Sem procedimento definido",
@@ -88,6 +91,19 @@ export function createClient(input: NewClient): ClientRec {
 
 /** Atualiza os dados de uma cliente (a esteticista pelo prontuário, ou a própria cliente pelo perfil). */
 export function updateClient(id: string, patch: Partial<Omit<ClientRec, "id" | "createdAt">>) {
+  if (currentRole() === "cliente") {
+    // a cliente só altera os próprios dados pessoais, por função do banco
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body["name"] = patch.name;
+    if ("phone" in patch) body["phone"] = patch.phone ?? "";
+    if ("birth" in patch) body["birth"] = patch.birth ?? "";
+    if ("address" in patch) body["address"] = patch.address ?? "";
+    if ("goal" in patch) body["goal"] = patch.goal ?? "";
+    if ("allergies" in patch) body["allergies"] = patch.allergies ?? "";
+    if ("imageConsent" in patch) body["image_consent"] = Boolean(patch.imageConsent);
+    void supabase.rpc("update_my_profile", { p_patch: body }).then(() => clientsDb.reload());
+    return;
+  }
   clientsDb.set((list) =>
     list.map((item) => {
       if (item.id !== id) return item;

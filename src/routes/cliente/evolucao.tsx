@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AlertCard } from "@/components/eb/alert-card";
@@ -15,7 +15,7 @@ import { appointmentsDb, careDb } from "@/data/db";
 import { formatShort } from "@/lib/dates";
 import { useClient } from "@/lib/use-client";
 import type { TimelineEntry } from "@/components/eb/client-timeline";
-import { historyForZone, readFaceMap, type FaceMark } from "@/lib/face-map-store";
+import { faceMapsDb, historyForZone, type FaceMark } from "@/lib/face-map-store";
 
 export const Route = createFileRoute("/cliente/evolucao")({
   head: () => ({ meta: [{ title: "Minha evolução — EstetBoost." }] }),
@@ -26,7 +26,6 @@ type Tab = "mapa" | "fotos" | "linha" | "recom";
 
 /** O mapa e as fotos são os mesmos que a esteticista registra no perfil desta cliente, só para leitura. */
 const withoutInternal = (mark: FaceMark): FaceMark => ({ ...mark, observacao: "" });
-const load = (clientId: string) => (readFaceMap(clientId) ?? []).map(withoutInternal);
 
 function EvolucaoPage() {
   const { openNotifications, unread } = useShell();
@@ -46,15 +45,12 @@ function EvolucaoPage() {
       })),
   ];
   const [tab, setTab] = useState<Tab>("mapa");
-  const [marks, setMarks] = useState<FaceMark[]>([]);
+  const maps = faceMapsDb.use();
+  const marks = useMemo(
+    () => (maps.find((map) => map.clientId === clientId)?.marks ?? []).map(withoutInternal),
+    [maps, clientId],
+  );
   const [selected, setSelected] = useState<string | null>(null);
-
-  useEffect(() => {
-    setMarks(load(clientId));
-    const refresh = () => setMarks(load(clientId));
-    window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
-  }, [clientId]);
 
   const layout = useFaceLayout();
   const zone = selected ? layout.zoneById(selected) : null;

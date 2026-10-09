@@ -16,7 +16,9 @@ import { useClinic } from "@/lib/use-clinic";
 import { addDays, formatShort, formatWeekday, todayISO } from "@/lib/dates";
 import { slotsFor } from "@/lib/availability";
 import { useClient } from "@/lib/use-client";
+import { supabase } from "@/lib/supabase";
 import { useClinicAppointments } from "@/lib/use-clinic";
+import { useRemote } from "@/lib/use-remote";
 import type { AppointmentRec } from "@/lib/models";
 import { byDateTime } from "@/lib/view";
 import {
@@ -74,14 +76,20 @@ function AgendaClientePage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Horários ocupados na clínica inteira (o servidor não diz quem marcou), mais os da própria cliente.
+  const busy = useRemote(async () => {
+    const { data } = await supabase.rpc("busy_times", { p_from: date, p_to: date });
+    return ((data ?? []) as { day: string; slot: string }[]).map((row) => row.slot.slice(0, 5));
+  }, [date]);
   const taken = useMemo(
     () =>
-      new Set(
-        all
+      new Set([
+        ...(busy.data ?? []),
+        ...all
           .filter((item) => item.date === date && item.status !== "cancelled" && !item.done)
           .map((item) => item.time),
-      ),
-    [all, date],
+      ]),
+    [all, date, busy.data],
   );
   const past = date < today;
   const TIMES = slotsFor(date, hours, blocks);

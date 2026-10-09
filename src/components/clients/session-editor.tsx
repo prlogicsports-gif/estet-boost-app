@@ -7,6 +7,8 @@ import { Drawer } from "@/components/eb/overlays";
 import { Select } from "@/components/eb/select";
 import { Button } from "@/components/ui/button";
 import type { SessionRec } from "@/lib/models";
+import { can } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { deleteFinishedSession, editFinishedSession } from "@/services/sessions.service";
 
 const NOTES: [string, string][] = [
@@ -29,6 +31,9 @@ export function SessionEditor({
   const [procedures, setProcedures] = useState(session?.procedures ?? []);
   const [notes, setNotes] = useState(session?.notes ?? {});
   const [payment, setPayment] = useState(session?.payment ?? "Pix");
+  const me = useSession();
+  const fin = can(me, "financeiro");
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!session) return;
     setProcedures(session.procedures);
@@ -48,15 +53,17 @@ export function SessionEditor({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => {
+            disabled={!fin}
+            onClick={async () => {
               if (
                 session &&
                 window.confirm(
                   "Apagar este atendimento? Ele sai do caixa, do histórico e o estoque volta.",
                 )
               ) {
-                deleteFinishedSession(session.id);
-                onDone("Atendimento apagado");
+                const outcome = await deleteFinishedSession(session.id);
+                if (outcome.ok) onDone("Atendimento apagado");
+                else setError(outcome.message);
               }
             }}
           >
@@ -66,14 +73,15 @@ export function SessionEditor({
             type="button"
             variant="tech"
             className="flex-1"
-            onClick={() => {
+            onClick={async () => {
               if (!session) return;
-              editFinishedSession(session.id, {
+              const outcome = await editFinishedSession(session.id, {
                 procedures: procedures.filter((item) => item.name.trim()),
                 notes,
                 payment,
               });
-              onDone("Atendimento corrigido");
+              if (outcome.ok) onDone("Atendimento corrigido");
+              else setError(outcome.message);
             }}
           >
             <Icon name="Check" size={18} /> Salvar correção
@@ -94,22 +102,24 @@ export function SessionEditor({
                 )
               }
             />
-            <Input
-              label={index === 0 ? "Valor" : undefined}
-              className="w-28"
-              trailing="R$"
-              inputMode="decimal"
-              value={String(item.price)}
-              onChange={(event) =>
-                setProcedures((list) =>
-                  list.map((p, i) =>
-                    i === index
-                      ? { ...p, price: Number(event.target.value.replace(",", ".")) || 0 }
-                      : p,
-                  ),
-                )
-              }
-            />
+            {fin ? (
+              <Input
+                label={index === 0 ? "Valor" : undefined}
+                className="w-28"
+                trailing="R$"
+                inputMode="decimal"
+                value={String(item.price)}
+                onChange={(event) =>
+                  setProcedures((list) =>
+                    list.map((p, i) =>
+                      i === index
+                        ? { ...p, price: Number(event.target.value.replace(",", ".")) || 0 }
+                        : p,
+                    ),
+                  )
+                }
+              />
+            ) : null}
             <IconButton
               icon="Trash2"
               label="Remover procedimento"
@@ -126,12 +136,15 @@ export function SessionEditor({
         >
           <Icon name="Plus" size={15} /> Procedimento
         </Button>
-        <Select
-          label="Forma de pagamento"
-          options={["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"]}
-          value={payment}
-          onChange={(event) => setPayment(event.target.value)}
-        />
+        {fin ? (
+          <Select
+            label="Forma de pagamento"
+            options={["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"]}
+            value={payment}
+            onChange={(event) => setPayment(event.target.value)}
+          />
+        ) : null}
+        {error ? <p className="text-[13px] text-[var(--eb-coral-500)]">{error}</p> : null}
         {NOTES.map(([key, label]) => (
           <Input
             key={key}

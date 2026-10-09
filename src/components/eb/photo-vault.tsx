@@ -1,20 +1,18 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
 import { Icon } from "@/components/eb/icon";
 import { PhotoComparator } from "@/components/eb/photo-comparator";
 import { StatusBadge } from "@/components/eb/status-badge";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/lib/session";
 import {
+  addPhoto,
   dayOf,
-  deletePhotoBlob,
-  readPhotoBlob,
-  readPhotoList,
-  savePhotoBlob,
-  shrinkImage,
-  takenAt,
+  photosDb,
+  photoUrls,
+  removePhoto,
   takenLabel,
   timeOf,
-  writePhotoList,
   type VaultPhoto,
 } from "@/lib/photo-store";
 import { cn } from "@/lib/utils";
@@ -33,100 +31,58 @@ export function PhotoVault({
   canEdit?: boolean;
   canUpload?: boolean;
 }) {
-  const [list, setList] = useState<VaultPhoto[]>([]);
+  const session = useSession();
+  const all = photosDb.use();
+  const list = useMemo(() => all.filter((photo) => photo.clientId === clientId), [all, clientId]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [opened, setOpened] = useState<VaultPhoto | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
   const [mode, setMode] = useState<"slider" | "side">("slider");
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  // Outras telas (o atendimento) guardam fotos na ficha: recarrega quando avisarem.
+  // Endereços assinados de vida curta para exibir as fotos (renovados quando a lista muda).
   useEffect(() => {
-    const bump = () => setVersion((value) => value + 1);
-    window.addEventListener("eb-photos-changed", bump);
-    return () => window.removeEventListener("eb-photos-changed", bump);
-  }, []);
-
-  useEffect(() => {
-    const stored = readPhotoList(clientId);
-    setList(stored);
-    setOpened(null);
     let alive = true;
-    const created: string[] = [];
-    Promise.all(
-      stored.map((photo) =>
-        readPhotoBlob(photo.id)
-          .then((blob) => [photo.id, blob] as const)
-          .catch(() => [photo.id, undefined] as const),
-      ),
-    ).then((pairs) => {
-      if (!alive) return;
-      const map: Record<string, string> = {};
-      for (const [id, blob] of pairs) {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          created.push(url);
-          map[id] = url;
-        }
-      }
-      setUrls(map);
+    void photoUrls(list).then((map) => {
+      if (alive) setUrls(map);
     });
     return () => {
       alive = false;
-      created.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [clientId, version]);
+  }, [list]);
 
   function insert(files: FileList | null) {
     const images = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
-    if (!images.length) return;
+    if (!images.length || !session) return;
     setError(null);
     setSending((count) => count + images.length);
     images.forEach((file) => {
-      const taken = takenAt(file);
-      shrinkImage(file)
-        .then(async (blob) => {
-          const id = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-          await savePhotoBlob(id, blob);
-          setUrls((current) => ({ ...current, [id]: URL.createObjectURL(blob) }));
-          setList((current) => {
-            const next: VaultPhoto[] = [
-              ...current,
-              {
-                id,
-                tiradaEm: taken,
-                inseridaEm: new Date().toISOString(),
-                autorizada: !canEdit,
-                origem: canEdit ? "profissional" : "cliente",
-              },
-            ];
-            writePhotoList(clientId, next);
-            return next;
-          });
-        })
-        .catch(() => setError("Não foi possível guardar uma das fotos neste aparelho."))
+      addPhoto(clientId, file, {
+        clinicId: session.clinicId,
+        autorizada: !canEdit,
+        origem: canEdit ? "profissional" : "cliente",
+      })
+        .catch(() => setError("Não foi possível enviar uma das fotos. Tente de novo."))
         .finally(() => setSending((count) => Math.max(0, count - 1)));
     });
   }
 
   function remove(photo: VaultPhoto) {
-    deletePhotoBlob(photo.id).catch(() => {});
-    const next = list.filter((item) => item.id !== photo.id);
-    setList(next);
-    writePhotoList(clientId, next);
+    removePhoto(clientId, photo.id);
     if (opened?.id === photo.id) setOpened(null);
   }
 
   function authorizeDay(day: string, value: boolean) {
-    const next = list.map((item) =>
-      dayOf(item.tiradaEm) === day ? { ...item, autorizada: value } : item,
+    photosDb.set((current) =>
+      current.map((item) =>
+        item.clientId === clientId && dayOf(item.tiradaEm) === day
+          ? { ...item, autorizada: value }
+          : item,
+      ),
     );
-    setList(next);
-    writePhotoList(clientId, next);
   }
 
   // A cliente vê as autorizadas e as que ela mesma enviou.

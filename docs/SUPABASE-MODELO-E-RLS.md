@@ -218,4 +218,17 @@ Usuários de teste: gestora X, funcionária X, gestora Y, cliente A (clínica X)
 
 ## 8. Estado da implementação
 
-Já escrito e testado (`bun run test:db`, 62 verificações): `supabase/migrations/20260101000001_schema.sql` (tabelas), `…02_rls.sql` (funções auxiliares e políticas) e `…03_identity_rpcs.sql` (`create_clinic`, credenciais de cliente e de equipe, `accept_invite`, `accept_staff_invite`, `set_staff_active`, `report_payment`, `request_cancel`, `request_reschedule`, `update_my_profile`). Pendentes: `complete_session`, `confirm_payment`/`reject_payment`/`reopen_receivable`, correção e exclusão de atendimento, bucket e políticas de Storage, envio de push e agendador (pg_cron).
+Migrações em `supabase/migrations`, todas testadas com `bun run test` (91 verificações de banco no Postgres de teste + 10 do sincronizador do app):
+
+| Arquivo                 | O que faz                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…01_schema.sql`        | Tabelas                                                                                                                                                                                                              |
+| `…02_rls.sql`           | Funções auxiliares e políticas RLS                                                                                                                                                                                   |
+| `…03_identity_rpcs.sql` | Criar clínica, credenciais, aceitar credencial, ações da cliente                                                                                                                                                     |
+| `…04_permissions.sql`   | Permissões da equipe e `update_my_name`                                                                                                                                                                              |
+| `…05_data_sync.sql`     | Colunas de apoio; `push_notification`, `log_activity`, `complete_session`, `edit_finished_session`, `delete_finished_session`, `confirm_my_appointment`, `busy_times`, `my_face_map`; tabela `face_maps`; tempo real |
+| `…06_storage.sql`       | Bucket privado de fotos e suas políticas                                                                                                                                                                             |
+
+No app, `src/lib/remote-store.ts` liga cada coleção à sua tabela (leitura, tempo real, gravação agrupada e na ordem certa) e `src/data/db.ts` define como cada registro vira linha e volta.
+
+Pendentes: lembretes agendados no servidor (pg_cron) e envio de push (Edge Function + FCM).

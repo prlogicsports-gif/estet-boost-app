@@ -60,6 +60,8 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 ## 7. Estado atual (entrega de identidade e produção)
 
 - **Pronto e em uso:** login real (Supabase Auth, e-mail confirmado), criar clínica, credenciais de cliente e de funcionária (com permissões), sair da conta, equipe e permissões, recuperação de senha. Sem acesso livre, sem contas de demonstração e **sem nenhum dado de exemplo**.
-- **Ainda local (por aparelho):** clientes, agenda, atendimentos, caixa, estoque, fotos e avisos. Eles começam vazios e vivem no aparelho de quem cadastra, e **não aparecem para outras pessoas** (cliente, funcionária ou outro aparelho) até serem migrados para o Supabase, uma área por vez (clientes → agenda → atendimento/caixa/estoque → avisos → fotos).
-- **Migração do banco:** aplicar `supabase/migrations/20260101000004_permissions.sql` no SQL Editor (as 3 primeiras já foram aplicadas).
+- **Dados compartilhados (Supabase):** clientes, agenda, atendimentos (rascunho no banco, fechamento por função), caixa, contas, estoque, procedimentos, anamnese, cuidados, bloqueios, horários, configurações, avisos, histórico de eventos, mapa facial e fotos (Storage privado). Cada pessoa vê só o que o RLS permite. A tela muda na hora e grava em seguida; se o banco recusar, a tela volta ao que está no servidor e avisa.
+- **Ainda local:** só preferências de tela deste aparelho (formas e padrões do editor do mapa facial, cuidados que o app "aprende").
+- **Ainda não existe:** lembretes agendados no servidor (hoje rodam no app aberto de quem está logado: gestora ou cliente) e push com o app fechado.
+- **Migrações do banco, na ordem, uma por vez no SQL Editor:** `…04_permissions.sql` (se ainda não aplicou), `…05_data_sync.sql` e `…06_storage.sql`. As três primeiras já foram aplicadas.
 - **Configuração do Supabase para o login funcionar:** em _Authentication → URL Configuration_, definir **Site URL** (o endereço do app) e adicionar em **Redirect URLs** o endereço do app, a prévia do Lovable e `http://localhost:8080`. Configurar **SMTP próprio**: o e-mail padrão do Supabase tem limite muito baixo de envios por hora.

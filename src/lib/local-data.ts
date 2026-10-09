@@ -21,16 +21,13 @@ export function wipeLocalData() {
   }
 }
 
-/** Garante que os dados locais pertencem a `uid`; se eram de outra pessoa, apaga e recarrega. */
+/** Se este aparelho guardava dados locais de outra pessoa (versões antigas do app), apaga-os em silêncio. */
 export function ensureOwner(uid: string) {
   try {
     const owner = window.localStorage.getItem(OWNER_KEY);
     if (owner === uid) return;
     window.localStorage.setItem(OWNER_KEY, uid);
-    if (owner) {
-      wipeLocalData();
-      window.location.reload();
-    }
+    if (owner) wipeLocalData();
   } catch {
     /* sem armazenamento */
   }

@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import type { Permissions, Role, Session } from "@/lib/auth.types";
 import { PERMISSION_KEYS } from "@/lib/auth.types";
 import { ensureOwner } from "@/lib/local-data";
+import { startSync, stopSync } from "@/lib/remote-store";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -82,18 +83,17 @@ async function load(uid: string, email: string) {
             PERMISSION_KEYS.map((key) => [key, row.permissions?.[key] === true]),
           ) as Permissions)
         : none;
-  set({
-    status: "in",
-    session: {
-      uid,
-      role: row.role,
-      name: row.name,
-      email: row.email ?? email,
-      clinicId: row.clinic_id,
-      ...(row.client_id ? { clientId: row.client_id } : {}),
-      permissions,
-    },
-  });
+  const session: Session = {
+    uid,
+    role: row.role,
+    name: row.name,
+    email: row.email ?? email,
+    clinicId: row.clinic_id,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
+    permissions,
+  };
+  set({ status: "in", session });
+  startSync(session);
 }
 
 function start() {
@@ -103,6 +103,7 @@ function start() {
     // Não chamar o Supabase dentro do callback (trava o cliente): adia para o próximo ciclo.
     if (!authSession) {
       sequence += 1;
+      stopSync();
       set({ status: "out" });
       return;
     }
@@ -116,6 +117,7 @@ export const sessionStore = {
   async refresh() {
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
+      stopSync();
       set({ status: "out" });
       return;
     }
@@ -140,6 +142,9 @@ export function useAuthState(): AuthState {
     () => serverState,
   );
 }
+
+/** Papel de quem está logado (ou `null`). */
+export const currentRole = () => (state.status === "in" ? state.session.role : null);
 
 export function homeFor(role: Role) {
   return role === "cliente" ? ("/cliente" as const) : ("/hoje" as const);

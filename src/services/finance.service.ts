@@ -1,17 +1,16 @@
 import { billsDb, ledgerDb, stockDb } from "@/data/db";
 import type { LedgerEntry } from "@/lib/models";
 import { todayISO } from "@/lib/dates";
-import type { BillRec, SessionProduct, StockRec } from "@/lib/models";
+import type { BillRec, StockRec } from "@/lib/models";
 import { events } from "@/services/notification-events";
 import { logActivity } from "@/services/activity.service";
 import { notify } from "@/services/notify";
+import { supabase } from "@/lib/supabase";
+import { newId } from "@/lib/uuid";
 import { brl } from "@/lib/view";
 
-const newId = (prefix: string) =>
-  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-
 export function addLedgerEntry(entry: Omit<LedgerEntry, "id">) {
-  ledgerDb.set((list) => [{ ...entry, id: newId("l") }, ...list]);
+  ledgerDb.set((list) => [{ ...entry, id: newId() }, ...list]);
 }
 
 export function addBill(input: {
@@ -20,7 +19,7 @@ export function addBill(input: {
   due: string;
   recurrence: BillRec["recurrence"];
 }) {
-  billsDb.set((list) => [...list, { id: newId("b"), paid: false, ...input }]);
+  billsDb.set((list) => [...list, { id: newId(), paid: false, ...input }]);
 }
 
 /** Paga a conta: ela sai do "a pagar" e vira uma saída no caixa. */
@@ -49,7 +48,7 @@ export function saveStock(
     .find((item) => item.id === input.id || item.name.toLowerCase() === input.name.toLowerCase());
   const rec: StockRec = {
     ...input,
-    id: existing?.id ?? input.id ?? newId("s"),
+    id: existing?.id ?? input.id ?? newId(),
     quantity: addQuantity && existing ? existing.quantity + input.quantity : input.quantity,
   };
   stockDb.set((list) =>
@@ -63,42 +62,11 @@ export function removeStock(id: string) {
   stockDb.set((list) => list.filter((item) => item.id !== id));
 }
 
-/** Dá baixa nos produtos usados e avisa se algum ficou no mínimo. */
-export function consumeStock(used: Pick<SessionProduct, "stockId" | "qty">[]) {
-  const before = stockDb.get();
-  stockDb.set((list) =>
-    list.map((item) => {
-      const hit = used.find((entry) => entry.stockId === item.id);
-      return hit
-        ? { ...item, quantity: Math.max(0, Math.round((item.quantity - hit.qty) * 100) / 100) }
-        : item;
-    }),
-  );
-  for (const item of stockDb.get()) {
-    const old = before.find((entry) => entry.id === item.id);
-    if (old && old.quantity > old.min && item.quantity <= item.min) notify(events.stockLow(item));
-  }
-}
-
-/** A cliente avisa que pagou: a esteticista ainda precisa confirmar o recebimento. */
+/** A cliente avisa que pagou: o servidor registra, avisa a gestora e ela ainda precisa confirmar o recebimento. */
 export function reportPayment(entryId: string, method: string) {
-  const entry = ledgerDb.get().find((item) => item.id === entryId);
-  if (!entry || entry.reported) return;
-  ledgerDb.set((list) =>
-    list.map((item) =>
-      item.id === entryId
-        ? { ...item, method, reported: { at: new Date().toISOString(), method } }
-        : item,
-    ),
-  );
-  notify(events.paymentReported(entry, method));
-  logActivity({
-    by: "cliente",
-    kind: "pagamento",
-    clientId: entry.clientId,
-    client: entry.label,
-    text: `Informou pagamento de ${brl(entry.value)} (${method})`,
-  });
+  void supabase
+    .rpc("report_payment", { p_entry_id: entryId, p_method: method })
+    .then(() => ledgerDb.reload());
 }
 
 /** A esteticista confirma o recebimento: a cobrança vira entrada no caixa. */

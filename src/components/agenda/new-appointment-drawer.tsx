@@ -10,6 +10,8 @@ import { unavailableReason } from "@/lib/availability";
 import { formatWeekday } from "@/lib/dates";
 import { scheduleAppointment } from "@/services/appointments.service";
 import type { AppointmentRec, ProcedureRec } from "@/lib/models";
+import { can } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { useClinicAppointments, useClinicClients } from "@/lib/use-clinic";
 
 const PAYMENTS = ["Pix", "Cartão de crédito", "Cartão de débito", "Dinheiro", "Transferência"];
@@ -61,6 +63,7 @@ export function NewAppointmentDrawer({
   const clients = useClinicClients();
   const appointments = useClinicAppointments();
   const procedures = proceduresDb.use();
+  const money = can(useSession(), "financeiro");
   const hours = hoursDb.use();
   const blocks = blocksDb.use();
   const preset = clients.find((client) => client.id === clientId);
@@ -219,20 +222,24 @@ export function NewAppointmentDrawer({
             value={form.duration}
             onChange={(event) => set("duration", event.target.value)}
           />
-          <Input
-            label="Valor"
-            trailing="R$"
-            inputMode="decimal"
-            value={form.price}
-            onChange={(event) => set("price", event.target.value)}
-          />
+          {money ? (
+            <Input
+              label="Valor"
+              trailing="R$"
+              inputMode="decimal"
+              value={form.price}
+              onChange={(event) => set("price", event.target.value)}
+            />
+          ) : null}
         </div>
-        <Select
-          label="Forma de pagamento prevista"
-          options={PAYMENTS}
-          value={form.payment}
-          onChange={(event) => set("payment", event.target.value)}
-        />
+        {money ? (
+          <Select
+            label="Forma de pagamento prevista"
+            options={PAYMENTS}
+            value={form.payment}
+            onChange={(event) => set("payment", event.target.value)}
+          />
+        ) : null}
         <Input
           label="Observação"
           multiline

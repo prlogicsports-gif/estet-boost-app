@@ -30,14 +30,12 @@ const label =
  */
 export function FaceMapPanel({
   clientId,
-  seed,
   showGeneralActions = true,
 }: {
   clientId: string;
-  seed?: FaceMark[] | undefined;
   showGeneralActions?: boolean;
 }) {
-  const { marks, add, remove, removeZone } = useFaceMap(clientId, seed);
+  const { marks, add, remove, removeZone } = useFaceMap(clientId);
   const { actions, update } = useGeneralActions();
   const [selected, setSelected] = useState<string | null>(null);
   const [points, setPoints] = useState<Record<string, FacePoint[]>>({});

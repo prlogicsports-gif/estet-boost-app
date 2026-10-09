@@ -30,7 +30,8 @@ export function runReminders(now = new Date()): number {
   const cliente = { ...defaultPrefs, ...prefs["cliente"] };
   let created = 0;
   const push = (draft: Parameters<typeof notify>[0]) => {
-    if (notify(draft)) created += 1;
+    notify(draft);
+    created += 1;
   };
 
   const appointments = appointmentsDb

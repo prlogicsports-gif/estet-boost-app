@@ -18,7 +18,9 @@ import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { SessionPhotoSlot } from "@/components/session/session-photo-slot";
 import { Button } from "@/components/ui/button";
 import { clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
+import { can } from "@/lib/permissions";
 import { photoUrl } from "@/lib/photo-store";
+import { useSession } from "@/lib/session";
 import type { SessionRec } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
@@ -58,6 +60,10 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
   const catalog = proceduresDb.use();
   const [closing, setClosing] = useState(false);
   const [done, setDone] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const me = useSession();
+  const fin = can(me, "financeiro");
   const [summary, setSummary] = useState<WrapUpResult | null>(null);
   const [creating, setCreating] = useState(false);
   const [compare, setCompare] = useState<"slider" | "side">("slider");
@@ -130,12 +136,25 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
             rotina: "Protetor solar irregular",
           }}
           onBack={() => setClosing(false)}
-          onConfirm={(result) => {
+          onConfirm={async (result) => {
+            if (saving) return;
             setSummary(result);
-            completeSession(s.id, { cuidados: result.cuidados, retorno: result.retorno });
-            setDone(true);
+            setSaving(true);
+            setCloseError(null);
+            const outcome = await completeSession(s.id, {
+              cuidados: result.cuidados,
+              retorno: result.retorno,
+            });
+            setSaving(false);
+            if (outcome.ok) setDone(true);
+            else setCloseError(outcome.message);
           }}
         />
+        {closeError ? (
+          <p role="alert" className="mt-3 text-center text-[13px] text-[var(--eb-coral-500)]">
+            {closeError}
+          </p>
+        ) : null}
         <Modal
           open={done}
           onClose={() => setDone(false)}
@@ -283,19 +302,21 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
                       className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-2.5"
                     >
                       <span className="min-w-0 flex-1 text-[14.5px]">{item.name}</span>
-                      <Input
-                        aria-label={`Valor de ${item.name}`}
-                        className="w-32"
-                        trailing="R$"
-                        inputMode="decimal"
-                        value={String(item.price)}
-                        onChange={(event) =>
-                          setProcedurePrice(
-                            index,
-                            Number(event.target.value.replace(",", ".")) || 0,
-                          )
-                        }
-                      />
+                      {fin ? (
+                        <Input
+                          aria-label={`Valor de ${item.name}`}
+                          className="w-32"
+                          trailing="R$"
+                          inputMode="decimal"
+                          value={String(item.price)}
+                          onChange={(event) =>
+                            setProcedurePrice(
+                              index,
+                              Number(event.target.value.replace(",", ".")) || 0,
+                            )
+                          }
+                        />
+                      ) : null}
                       <IconButton
                         icon="Trash2"
                         label={`Remover ${item.name}`}
@@ -395,30 +416,41 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
                   );
                 })}
               </div>
-              <div className={card}>
-                <span className={label}>Custo do atendimento</span>
-                <Row k="Valor cobrado" v={money(totals.price)} />
-                <Row k="Produtos" v={money(totals.cost)} />
-                <Row k="Sobra" v={money(totals.profit)} strong />
-                {totals.price > 0 ? (
+              {fin ? (
+                <div className={card}>
+                  <span className={label}>Custo do atendimento</span>
+                  <Row k="Valor cobrado" v={money(totals.price)} />
+                  <Row k="Produtos" v={money(totals.cost)} />
+                  <Row k="Sobra" v={money(totals.profit)} strong />
+                  {totals.price > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Produtos: {Math.round(totals.share * 100)}% do valor cobrado.
+                    </p>
+                  ) : null}
+                  {marginHigh ? (
+                    <AlertCard
+                      tone="warn"
+                      icon="TrendingDown"
+                      title="Produtos pesaram neste atendimento"
+                      description={`Passou de ${Math.round(MARGIN_ALERT * 100)}% do valor cobrado. Reveja o preço ou a quantidade.`}
+                    />
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
-                    Produtos: {Math.round(totals.share * 100)}% do valor cobrado.
+                    {s.products.length
+                      ? "A baixa no estoque acontece ao finalizar."
+                      : "Nenhum produto marcado: o estoque não muda."}
                   </p>
-                ) : null}
-                {marginHigh ? (
-                  <AlertCard
-                    tone="warn"
-                    icon="TrendingDown"
-                    title="Produtos pesaram neste atendimento"
-                    description={`Passou de ${Math.round(MARGIN_ALERT * 100)}% do valor cobrado. Reveja o preço ou a quantidade.`}
-                  />
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {s.products.length
-                    ? "A baixa no estoque acontece ao finalizar."
-                    : "Nenhum produto marcado: o estoque não muda."}
-                </p>
-              </div>
+                </div>
+              ) : (
+                <div className={card}>
+                  <span className={label}>Estoque</span>
+                  <p className="text-xs text-muted-foreground">
+                    {s.products.length
+                      ? "A baixa no estoque acontece ao finalizar."
+                      : "Nenhum produto marcado: o estoque não muda."}
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -485,7 +517,17 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
             />
           ) : null}
 
-          {step === 8 ? (
+          {step === 8 && !fin ? (
+            <div className={card}>
+              <span className={label}>Pagamento</span>
+              <p className="text-[13.5px] text-[var(--text-secondary)]">
+                O valor deste atendimento segue a tabela de preços e fica a receber para a gestora
+                conferir e registrar o pagamento.
+              </p>
+            </div>
+          ) : null}
+
+          {step === 8 && fin ? (
             <div className="grid gap-5 xl:grid-cols-2">
               <div className={card}>
                 <span className={label}>Resumo</span>

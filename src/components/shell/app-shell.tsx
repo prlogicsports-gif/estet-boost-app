@@ -10,6 +10,8 @@ import type { NavConfig } from "@/components/shell/nav-items";
 import { ShellContext } from "@/components/shell/shell-context";
 import { useVisibleNav } from "@/components/shell/use-visible-nav";
 import { notificationsDb } from "@/data/db";
+import { ToastHost } from "@/components/eb/toast";
+import { useSyncReady } from "@/lib/remote-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useSession } from "@/lib/session";
 import { runReminders } from "@/services/reminders";
@@ -33,16 +35,29 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
     [all, nav.role, session?.clientId],
   );
   const unread = items.filter((item) => !item.read).length;
+  const ready = useSyncReady();
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Lembretes rodam depois que a tela já apareceu (nunca no meio da troca de tela).
+  // Avisos de gravação recusada (sem permissão, horário ocupado…) aparecem para a pessoa.
   useEffect(() => {
+    const onError = (event: Event) => {
+      setSyncError((event as CustomEvent<string>).detail);
+      window.setTimeout(() => setSyncError(null), 4000);
+    };
+    window.addEventListener("eb:sync-error", onError);
+    return () => window.removeEventListener("eb:sync-error", onError);
+  }, []);
+
+  // Lembretes rodam depois que os dados chegaram e a tela já apareceu (nunca no meio da troca de tela).
+  useEffect(() => {
+    if (!ready) return;
     const first = window.setTimeout(() => runReminders(), 1500);
     const timer = window.setInterval(() => runReminders(), 60000);
     return () => {
       window.clearTimeout(first);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [ready]);
 
   // Depois que a primeira tela aparece, baixa em segundo plano o código de TODAS as telas do perfil,
   // para nenhum clique (menu ou botão) precisar esperar download.
@@ -94,8 +109,13 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
 
   return (
     <RoleGate role={nav.role}>
+      {!ready ? (
+        <div className="grid min-h-screen place-items-center bg-background" aria-busy>
+          <span className="text-sm text-muted-foreground">Carregando seus dados…</span>
+        </div>
+      ) : null}
       <ShellContext.Provider value={{ openNotifications: () => setOpen(true), unread }}>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background" hidden={!ready}>
           <div
             className="mx-auto flex w-full gap-6 px-4 py-6 lg:px-8"
             style={{
@@ -140,6 +160,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
           </BottomSheet>
         )}
       </ShellContext.Provider>
+      <ToastHost toast={syncError ? { message: syncError } : null} />
     </RoleGate>
   );
 }

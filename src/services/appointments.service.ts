@@ -1,11 +1,13 @@
 import { logActivity } from "@/services/activity.service";
 import { appointmentsDb, clientsDb } from "@/data/db";
 import type { AppointmentRec, AppointmentStatus } from "@/lib/models";
+import { currentRole } from "@/lib/session";
+import { supabase } from "@/lib/supabase";
+import { newId } from "@/lib/uuid";
 import { createClient } from "@/services/clients.service";
 import { events } from "@/services/notification-events";
 import { notify } from "@/services/notify";
 
-const newId = () => `ap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const update = (id: string, patch: Partial<AppointmentRec>) =>
   appointmentsDb.set((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
 const find = (id: string) => appointmentsDb.get().find((item) => item.id === id);
@@ -122,7 +124,12 @@ export function declineRequest(id: string) {
 export function confirmAppointment(id: string, by: "gestor" | "cliente") {
   const a = find(id);
   if (!a) return;
-  update(id, { status: "confirmed", alert: undefined });
+  if (by === "cliente" && currentRole() === "cliente") {
+    // a cliente confirma o próprio horário por função do banco (ela não escreve na agenda)
+    void supabase
+      .rpc("confirm_my_appointment", { p_appt_id: id })
+      .then(() => appointmentsDb.reload());
+  } else update(id, { status: "confirmed", alert: undefined });
   notify(by === "cliente" ? events.confirmedByClient(a) : events.confirmedByStudio(a));
   logActivity({
     by,
@@ -139,6 +146,11 @@ export function confirmAppointment(id: string, by: "gestor" | "cliente") {
 export function cancelAppointment(id: string, by: "gestor" | "cliente") {
   const a = find(id);
   if (!a) return;
+  if (by === "cliente" && currentRole() === "cliente") {
+    // o servidor decide (mais de 24 h cancela direto; menos pede aprovação), avisa a equipe e registra no histórico
+    void supabase.rpc("request_cancel", { p_appt_id: id }).then(() => appointmentsDb.reload());
+    return;
+  }
   if (by === "cliente") {
     const hours = (new Date(`${a.date}T${a.time}:00`).getTime() - Date.now()) / 3600000;
     if (hours < 24) {
@@ -184,6 +196,12 @@ export function approveCancel(id: string) {
 export function requestReschedule(id: string, date: string, time: string) {
   const a = find(id);
   if (!a) return;
+  if (currentRole() === "cliente") {
+    void supabase
+      .rpc("request_reschedule", { p_appt_id: id, p_date: date, p_time: time })
+      .then(() => appointmentsDb.reload());
+    return;
+  }
   update(id, { reschedule: true, proposedDate: date, proposedTime: time });
   notify(events.rescheduleRequested(a, date, time));
   logActivity({
