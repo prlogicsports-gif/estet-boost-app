@@ -162,5 +162,22 @@ check(
   })(),
 );
 
+// aviso semanal para as clientes
+const weeklyN = (await q(db, "select app.weekly_nudge(true) n"))[0].n;
+const cw = (await titles(c)).filter((t) =>
+  /Sua semana de cuidado|cuidar de você|pele|autocuidado|próximo atendimento\?/i.test(t),
+);
+check(
+  "semanal: a cliente recebe 1 aviso, a gestora e a equipe não",
+  weeklyN === 1 &&
+    cw.length >= 1 &&
+    !(await titles(g)).some((t) => /Sua semana de cuidado|autocuidado/.test(t)),
+  JSON.stringify([weeklyN, cw]),
+);
+check(
+  "semanal: rodar de novo na mesma semana não repete",
+  (await q(db, "select app.weekly_nudge(true) n"))[0].n === 0,
+);
+
 console.log(`\n${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);
