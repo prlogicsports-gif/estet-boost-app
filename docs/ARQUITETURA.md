@@ -1,6 +1,7 @@
 # Arquitetura do EstetBoost. (system design)
 
-Documento de projeto. **Nada aqui está implementado ainda**: hoje o app roda sem banco (`localStorage` e IndexedDB). Esta é a arquitetura que vai substituir essa camada, sem mudar as telas.
+> **Equipe:** a clínica pode ter funcionárias (papel `funcionario`, sem financeiro). Ver [Equipe e permissões](./EQUIPE-E-PERMISSOES.md), que complementa §3 e §4.
+> Documento de projeto. **Nada aqui está implementado ainda**: hoje o app roda sem banco (`localStorage` e IndexedDB). Esta é a arquitetura que vai substituir essa camada, sem mudar as telas.
 
 Documentos irmãos: [Segurança e privacidade](./SEGURANCA-PRIVACIDADE.md) · [Modelo do Firestore e regras](./FIRESTORE-MODELO-E-REGRAS.md) · [Fluxos](./FLUXOS.md) · [Docker e deploy](./AMBIENTE-DOCKER-E-DEPLOY.md) · [Guia do console Firebase](./FIREBASE-CONSOLE-GUIA.md).
 

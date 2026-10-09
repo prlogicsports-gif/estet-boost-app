@@ -1,6 +1,7 @@
 # Mapa de fluxos do EstetBoost.
 
-Projeto. Cada fluxo mostra quem chama, o que valida o servidor, o que é atômico e o que acontece se falhar. Os nomes de função (`createClinic`, `acceptInvite`…) são as Cloud Functions callable previstas em [ARQUITETURA.md](./ARQUITETURA.md). As telas e serviços citados já existem no app.
+> **Equipe:** novo fluxo de credencial de funcionária (`createStaffInvite` e `acceptStaffInvite`). Ver [Equipe e permissões](./EQUIPE-E-PERMISSOES.md) §3.
+> Projeto. Cada fluxo mostra quem chama, o que valida o servidor, o que é atômico e o que acontece se falhar. Os nomes de função (`createClinic`, `acceptInvite`…) são as Cloud Functions callable previstas em [ARQUITETURA.md](./ARQUITETURA.md). As telas e serviços citados já existem no app.
 
 Regras gerais de robustez:
 

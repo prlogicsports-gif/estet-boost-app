@@ -1,6 +1,7 @@
 # Modelo do Firestore e regras de segurança
 
-Projeto. Mapeia os stores locais de `src/data/db.ts` e os tipos de `src/lib/models.ts` para Firestore. Valores de dinheiro em **centavos inteiros** no banco (hoje são `number` em reais; converter na camada de serviço). Datas como `Timestamp` ou ISO `YYYY-MM-DD` quando for só o dia.
+> **Equipe:** regras ganham `isPro(c)` (gestora ou funcionária) e o financeiro vai para caminhos só da gestora. Ver [Equipe e permissões](./EQUIPE-E-PERMISSOES.md) §4.
+> Projeto. Mapeia os stores locais de `src/data/db.ts` e os tipos de `src/lib/models.ts` para Firestore. Valores de dinheiro em **centavos inteiros** no banco (hoje são `number` em reais; converter na camada de serviço). Datas como `Timestamp` ou ISO `YYYY-MM-DD` quando for só o dia.
 
 ## 1. Árvore de coleções
 

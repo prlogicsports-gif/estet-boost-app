@@ -1,6 +1,7 @@
 # Segurança e privacidade
 
-Projeto de normas e checklist. **Ainda não implementado.** O estado atual do app é só para validar fluxos: não use com dados reais de clientes.
+> **Equipe:** a matriz de §4 ganha o papel `funcionario` (tudo menos financeiro e administração). Ver [Equipe e permissões](./EQUIPE-E-PERMISSOES.md).
+> Projeto de normas e checklist. **Ainda não implementado.** O estado atual do app é só para validar fluxos: não use com dados reais de clientes.
 
 ## 1. O que o "inspecionar" mostra (e o que não pode mostrar)
 
