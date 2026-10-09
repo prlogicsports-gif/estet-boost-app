@@ -8,7 +8,7 @@ import { defaultPrefs, prefsDb } from "@/data/db";
 import { relativeDay, timeAgo, toISO } from "@/lib/dates";
 import type { Audience, NotificationPrefs, NotificationRec } from "@/lib/models";
 import { markAllRead, markRead, setPrefs } from "@/services/notify";
-import { pushStatus, registerPush } from "@/services/push.service";
+import { pushStatus, registerPush, pushSupported, unregisterPush } from "@/services/push.service";
 import { cn } from "@/lib/utils";
 
 type Filter = "todas" | "novas";
@@ -91,14 +91,23 @@ export function NotificationPrefsEditor({ audience }: { audience: Audience }) {
         >
           <span className="min-w-0 flex-1">
             <span className="block text-sm">{row.title}</span>
-            <span className="block text-[11.5px] text-muted-foreground">{row.detail}</span>
+            <span className="block text-[11.5px] text-muted-foreground">
+              {row.key === "push" && !pushSupported()
+                ? "Neste aparelho, instale o app na tela inicial para receber avisos com o app fechado."
+                : row.key === "push" && pushStatus() === "denied"
+                  ? "Bloqueadas no navegador. Libere nas configurações do site para receber."
+                  : row.detail}
+            </span>
           </span>
           <Switch
             checked={prefs[row.key]}
             onChange={async () => {
               const next = !prefs[row.key];
               setPrefs(audience, { [row.key]: next });
-              if (row.key === "push" && next && pushStatus() === "default") await registerPush();
+              if (row.key === "push") {
+                if (next) await registerPush();
+                else await unregisterPush();
+              }
             }}
             label={row.title}
           />

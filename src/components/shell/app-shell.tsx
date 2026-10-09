@@ -14,7 +14,7 @@ import { ToastHost } from "@/components/eb/toast";
 import { useSyncReady } from "@/lib/remote-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useSession } from "@/lib/session";
-import { runReminders } from "@/services/reminders";
+import { syncPushToken } from "@/services/push.service";
 import { notificationsFor } from "@/services/notify";
 
 /**
@@ -48,15 +48,11 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
     return () => window.removeEventListener("eb:sync-error", onError);
   }, []);
 
-  // Lembretes rodam depois que os dados chegaram e a tela já apareceu (nunca no meio da troca de tela).
+  // Se a pessoa já liberou o push, mantém o token do aparelho em dia (depois que a tela já apareceu).
   useEffect(() => {
     if (!ready) return;
-    const first = window.setTimeout(() => runReminders(), 1500);
-    const timer = window.setInterval(() => runReminders(), 60000);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-    };
+    const handle = window.setTimeout(() => void syncPushToken(), 2500);
+    return () => window.clearTimeout(handle);
   }, [ready]);
 
   // Depois que a primeira tela aparece, baixa em segundo plano o código de TODAS as telas do perfil,
@@ -130,7 +126,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
               className="mx-auto min-w-0 flex-1 pb-32 lg:pb-6"
               style={{ maxWidth: nav.maxWidth }}
             >
-              <div key={pathname} style={{ animation: "page-in 180ms ease-out" }}>
+              <div key={pathname} style={{ animation: "page-in 320ms cubic-bezier(.22,1,.36,1)" }}>
                 {children}
               </div>
             </main>

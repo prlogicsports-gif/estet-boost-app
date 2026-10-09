@@ -137,7 +137,7 @@ begin
     update public.stock set quantity = new_qty where id = st.id;
     if st.quantity > st.min and new_qty <= st.min then
       perform app.notify_perm(me.clinic_id, 'estoque', 'stock', 'Estoque baixo',
-        st.name || ' · ' || new_qty || ' ' || st.unit || ' (mínimo ' || st.min || ')', '/gestao?aba=estoque', 'stock:' || st.id || ':' || new_qty);
+        st.name || ' · ' || new_qty || ' ' || st.unit || ' (mínimo ' || st.min || ')', '/gestao?aba=estoque', 'stock:' || st.id || ':' || trim_scale(new_qty));
     end if;
     clean_products := clean_products || jsonb_build_array(jsonb_build_object('stockId', st.id, 'name', st.name, 'qty', qty));
   end loop;

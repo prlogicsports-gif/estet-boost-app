@@ -260,18 +260,18 @@
 }
 @keyframes splash-out {
   0%,
-  85% {
+  78% {
     opacity: 1;
   }
   100% {
     opacity: 0;
   }
 }
-/* Troca de tela: nunca some o conteúdo (começa em 90% de opacidade) e só dura o suficiente para suavizar. */
+/* Troca de tela: nunca some o conteúdo (começa em 92% de opacidade); o movimento é curto e suave. */
 @keyframes page-in {
   from {
-    transform: translateY(6px);
-    opacity: 0.9;
+    transform: translateY(8px);
+    opacity: 0.92;
   }
   to {
     transform: translateY(0);
@@ -353,5 +353,13 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Troca de tela com transição do navegador (Chrome, Edge, Safari recente): a tela antiga some enquanto a nova aparece. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(root) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 }

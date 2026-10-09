@@ -11,6 +11,8 @@ export const getRouter = () => {
     scrollRestoration: true,
     // Baixa o código das telas antes do clique (links visíveis e toque/hover), para a troca ser instantânea.
     defaultPreload: "viewport",
+    // Troca de tela com a transição do próprio navegador (sem piscar).
+    defaultViewTransition: true,
     defaultPreloadStaleTime: 0,
   });
 

@@ -1,6 +1,7 @@
 import type { AuthResult, Invite, SignupData, StudioSize } from "@/lib/auth.types";
 import { sessionStore } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
+import { unregisterPush } from "@/services/push.service";
 
 /**
  * Login real (Supabase Auth). O cadastro tem duas partes: criar o acesso (e-mail e senha, confirmado por
@@ -186,6 +187,7 @@ export const authService = {
   },
 
   async signOut() {
+    await unregisterPush().catch(() => {});
     await supabase.auth.signOut();
   },
 };
