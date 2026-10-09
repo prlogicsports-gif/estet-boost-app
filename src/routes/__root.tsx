@@ -143,6 +143,21 @@ function RootComponent() {
     installGlobalErrorHandlers();
     // O service worker só roda no app publicado (em desenvolvimento atrapalharia as atualizações).
     if (import.meta.env.PROD) void registerServiceWorker();
+    // Ao voltar de outro app (WhatsApp, por exemplo) o iPhone pode ter descartado a página e deixado a tela
+    // vazia: se não há nada visível, recarrega.
+    const recover = () => {
+      if (document.visibilityState !== "visible") return;
+      window.setTimeout(() => {
+        if (!document.body.innerText.trim() && !document.querySelector("img,svg,canvas"))
+          window.location.reload();
+      }, 400);
+    };
+    document.addEventListener("visibilitychange", recover);
+    window.addEventListener("pageshow", recover);
+    return () => {
+      document.removeEventListener("visibilitychange", recover);
+      window.removeEventListener("pageshow", recover);
+    };
   }, []);
 
   return (

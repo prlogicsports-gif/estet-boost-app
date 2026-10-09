@@ -53,7 +53,7 @@ export function SyncStatusBar() {
               tone: "info",
               icon: "RefreshCw",
               text: `Enviando ${plural(status.pending, "alteração", "alterações")}…`,
-              action: "",
+              action: "Ver",
             }
           : null;
 
@@ -158,7 +158,12 @@ function PendingDrawer({ open, onClose }: { open: boolean; onClose: () => void }
                 key={item.seq}
                 className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3"
               >
-                <span className="min-w-0 flex-1 truncate text-[13.5px]">{item.label}</span>
+                <span className="min-w-0 flex-1 text-[13.5px]">
+                  <span className="block truncate">{item.label}</span>
+                  {item.last ? (
+                    <span className="block text-[11.5px] text-muted-foreground">{item.last}</span>
+                  ) : null}
+                </span>
                 <span className="font-mono text-[11.5px] text-muted-foreground">
                   {item.attempts ? `${item.attempts}ª tentativa` : "na fila"}
                 </span>

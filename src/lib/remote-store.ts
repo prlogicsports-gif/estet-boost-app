@@ -68,6 +68,8 @@ type Item = {
   attempts: number;
   nextAt: number;
   created: string;
+  /** Último motivo de falha (para a tela de pendências). */
+  last?: string;
 };
 export type FailedItem = { item: Item; kind: ErrorClass; message: string; at: string };
 
@@ -208,6 +210,20 @@ function enqueue(item: Omit<Item, "seq" | "attempts" | "nextAt" | "created">): I
 
 const hasPending = (store: string) => outbox.some((item) => item.store === store);
 
+/** Sem resposta em 25 s conta como falha de rede: uma conexão pendurada não pode travar a fila. */
+function performWithTimeout(item: Item): Promise<Outcome> {
+  return new Promise<Outcome>((resolve) => {
+    const timer = setTimeout(
+      () => resolve({ ok: false, kind: "rede", message: humanError("rede") }),
+      25000,
+    );
+    void perform(item).then((outcome) => {
+      clearTimeout(timer);
+      resolve(outcome);
+    });
+  });
+}
+
 async function perform(item: Item): Promise<Outcome> {
   const ctx = current;
   if (!ctx) return { ok: false, kind: "sessao", message: humanError("sessao") };
@@ -286,7 +302,7 @@ async function runDrain(): Promise<void> {
         break;
       }
       inflight.add(item.seq);
-      const result = await perform(item);
+      const result = await performWithTimeout(item);
       inflight.delete(item.seq);
       // o item pode ter sido trocado por uma versão mais nova enquanto enviava
       const live = outbox.find((other) => other.seq === item.seq);
@@ -302,6 +318,7 @@ async function runDrain(): Promise<void> {
         continue;
       }
       if (result.kind === "rede") {
+        (live ?? item).last = result.message;
         networkDown = true;
         scheduleRetry(backoff(1));
         break;
@@ -317,6 +334,7 @@ async function runDrain(): Promise<void> {
       if (isRetryable(result.kind)) {
         const target = live ?? item;
         target.attempts += 1;
+        target.last = result.message;
         if (target.attempts >= 5) {
           park(target, result);
           continue;
@@ -428,11 +446,16 @@ export function discardFailed(seqNumber: number) {
 
 export const pendingCount = () => outbox.filter((item) => !item.quiet).length;
 export const pendingItems = () =>
-  outbox.map((item) => ({ seq: item.seq, label: item.label, attempts: item.attempts }));
+  outbox.map((item) => ({
+    seq: item.seq,
+    label: item.label,
+    attempts: item.attempts,
+    last: item.last ?? "",
+  }));
 export const failedItems = () => failed;
 
 let listSnapshot = {
-  pending: [] as { seq: number; label: string; attempts: number }[],
+  pending: [] as { seq: number; label: string; attempts: number; last: string }[],
   failed: [] as FailedItem[],
 };
 function refreshList() {

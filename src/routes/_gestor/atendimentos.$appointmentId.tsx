@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { AlertCard } from "@/components/eb/alert-card";
 import { EmptyState } from "@/components/eb/empty-state";
-import { Icon } from "@/components/eb/icon";
+import { Icon, WhatsAppIcon } from "@/components/eb/icon";
 import { IconButton } from "@/components/eb/icon-button";
 import { Input } from "@/components/eb/input";
 import { Drawer, Modal } from "@/components/eb/overlays";
@@ -15,6 +15,7 @@ import { formatWeekday, todayISO } from "@/lib/dates";
 import { can } from "@/lib/permissions";
 import { useSession } from "@/lib/session";
 import { brl } from "@/lib/view";
+import { confirmationText, openWhatsApp } from "@/lib/whatsapp";
 import {
   approveCancel,
   approveRequest,
@@ -295,6 +296,15 @@ function AtendimentoPage() {
               </Button>
             ) : null}
           </>
+        ) : null}
+        {!cancelled && !appointment.done && client?.phone ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => openWhatsApp(client.phone, confirmationText(appointment))}
+          >
+            <WhatsAppIcon size={18} /> Confirmar pelo WhatsApp
+          </Button>
         ) : null}
         <Button
           type="button"

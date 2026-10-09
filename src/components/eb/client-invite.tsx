@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { Icon } from "@/components/eb/icon";
+import { Icon, WhatsAppIcon } from "@/components/eb/icon";
+import { openWhatsApp } from "@/lib/whatsapp";
 import { StatusBadge, type StatusTone } from "@/components/eb/status-badge";
 import { Button } from "@/components/ui/button";
 import type { Clinic } from "@/lib/use-clinic";
@@ -37,11 +38,6 @@ async function copy(text: string) {
   } catch {
     /* sem permissão da área de transferência */
   }
-}
-
-function whatsapp(phone: string, text: string) {
-  const digits = phone.replace(/\D/g, "");
-  return `https://wa.me/${digits ? (digits.length <= 11 ? `55${digits}` : digits) : ""}?text=${encodeURIComponent(text)}`;
 }
 
 const field =
@@ -102,7 +98,7 @@ export function ClientInvite({
   const share = (text: string, url: string, phone?: string) => {
     if (typeof navigator.share === "function" && !phone)
       navigator.share({ title: "Cadastro EstetBoost", text, url }).catch(() => {});
-    else window.open(whatsapp(phone ?? "", text), "_blank", "noopener");
+    else openWhatsApp(phone ?? "", text);
   };
 
   const generate = async () => {
@@ -157,9 +153,9 @@ export function ClientInvite({
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => window.open(whatsapp("", fixedText), "_blank", "noopener")}
+            onClick={() => openWhatsApp("", fixedText)}
           >
-            <Icon name="MessageCircle" size={15} /> WhatsApp
+            <WhatsAppIcon size={16} /> WhatsApp
           </Button>
         </div>
       </section>
@@ -189,7 +185,8 @@ export function ClientInvite({
                 size="sm"
                 onClick={() => share(freshText(fresh), fresh.link, fresh.celular || undefined)}
               >
-                <Icon name="Send" size={15} /> {fresh.celular ? "Enviar no WhatsApp" : "Enviar"}
+                {fresh.celular ? <WhatsAppIcon size={16} /> : <Icon name="Send" size={15} />}{" "}
+                {fresh.celular ? "Enviar no WhatsApp" : "Enviar"}
               </Button>
               <Button
                 type="button"

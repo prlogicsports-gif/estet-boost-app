@@ -11,6 +11,8 @@ import { Drawer } from "@/components/eb/overlays";
 import { ClientTimeline, type TimelineEntry } from "@/components/eb/client-timeline";
 import { EmptyState } from "@/components/eb/empty-state";
 import { Icon } from "@/components/eb/icon";
+import { WhatsAppIcon } from "@/components/eb/icon";
+import { openWhatsApp } from "@/lib/whatsapp";
 import { IconButton } from "@/components/eb/icon-button";
 import { PhotoVault } from "@/components/eb/photo-vault";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
@@ -137,19 +139,14 @@ function ClientePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <IconButton
-            icon="MessageCircle"
-            label="Enviar WhatsApp"
-            tone="outline"
-            onClick={() =>
-              digits &&
-              window.open(
-                `https://wa.me/${digits.length <= 11 ? `55${digits}` : digits}`,
-                "_blank",
-                "noopener",
-              )
-            }
-          />
+          <button
+            type="button"
+            aria-label="Enviar WhatsApp"
+            onClick={() => digits && openWhatsApp(digits, "")}
+            className="grid size-11 place-items-center rounded-full border border-[var(--border-card)] bg-[var(--eb-ivory-a06)]"
+          >
+            <WhatsAppIcon size={22} />
+          </button>
           <IconButton
             icon="Phone"
             label="Ligar"

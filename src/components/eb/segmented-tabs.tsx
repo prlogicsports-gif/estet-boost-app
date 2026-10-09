@@ -34,9 +34,11 @@ export function SegmentedTabs<T extends string>({
             aria-selected={on}
             onClick={() => onSelect(tab.id)}
             className={cn(
-              "whitespace-nowrap rounded-full px-3.5 transition-colors",
-              scroll ? "flex-none" : "flex-1",
-              size === "sm" ? "min-h-8 text-[12.5px]" : "min-h-[38px] text-[13.5px]",
+              "min-w-0 whitespace-nowrap rounded-full px-1.5 transition-colors sm:px-3.5",
+              scroll ? "flex-none !px-3.5" : "flex-1",
+              size === "sm"
+                ? "min-h-8 text-[12.5px]"
+                : "min-h-[38px] text-[12.5px] sm:text-[13.5px]",
               on
                 ? "bg-[var(--surface-card-hover)] font-medium text-foreground"
                 : "text-[var(--text-secondary)]",

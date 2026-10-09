@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { Icon } from "@/components/eb/icon";
+import { Icon, WhatsAppIcon } from "@/components/eb/icon";
+import { openWhatsApp } from "@/lib/whatsapp";
 import { Input } from "@/components/eb/input";
 import { Drawer } from "@/components/eb/overlays";
 import { StatusBadge } from "@/components/eb/status-badge";
@@ -267,18 +268,8 @@ function InviteDrawer({ open, onClose }: { open: boolean; onClose: () => void })
               <Icon name={copied ? "Check" : "Copy"} size={16} />{" "}
               {copied ? "Copiado" : "Copiar mensagem"}
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() =>
-                window.open(
-                  `https://wa.me/?text=${encodeURIComponent(message)}`,
-                  "_blank",
-                  "noopener",
-                )
-              }
-            >
-              <Icon name="MessageCircle" size={16} /> WhatsApp
+            <Button type="button" variant="secondary" onClick={() => openWhatsApp("", message)}>
+              <WhatsAppIcon size={17} /> WhatsApp
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
