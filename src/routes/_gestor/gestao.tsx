@@ -18,8 +18,10 @@ import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { activityDb, billsDb, ledgerDb, stockDb } from "@/data/db";
-import type { LedgerEntry } from "@/data/gestor-mock";
+import type { LedgerEntry } from "@/lib/models";
 import { useClinicClients } from "@/lib/use-clinic";
+import { can } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { usePro } from "@/lib/use-pro";
 import { addDays, daysBetween, formatShort, monthName, relativeDay, todayISO } from "@/lib/dates";
 import { brl } from "@/lib/view";
@@ -269,7 +271,14 @@ function GestaoPage() {
   const bills = billsDb.use();
   const stock = stockDb.use();
   const { aba } = Route.useSearch();
-  const [tab, setTab] = useState<Tab>(aba ?? "caixa");
+  const session = useSession();
+  const allowed: Tab[] = [
+    ...(can(session, "financeiro") ? (["caixa", "receber", "contas"] as Tab[]) : []),
+    ...(can(session, "estoque") ? (["estoque"] as Tab[]) : []),
+    ...(can(session, "historico") ? (["historico"] as Tab[]) : []),
+  ];
+  const [chosen, setTab] = useState<Tab>(aba ?? "caixa");
+  const tab: Tab = allowed.includes(chosen) ? chosen : (allowed[0] ?? "caixa");
   useEffect(() => {
     if (aba) setTab(aba);
   }, [aba]);
@@ -353,13 +362,15 @@ function GestaoPage() {
       <SegmentedTabs<Tab>
         active={tab}
         onSelect={setTab}
-        tabs={[
-          { id: "caixa", label: "Caixa" },
-          { id: "receber", label: reportedCount ? `A receber · ${reportedCount}` : "A receber" },
-          { id: "contas", label: "Contas" },
-          { id: "estoque", label: "Estoque" },
-          { id: "historico", label: "Histórico" },
-        ]}
+        tabs={(
+          [
+            { id: "caixa", label: "Caixa" },
+            { id: "receber", label: reportedCount ? `A receber · ${reportedCount}` : "A receber" },
+            { id: "contas", label: "Contas" },
+            { id: "estoque", label: "Estoque" },
+            { id: "historico", label: "Histórico" },
+          ] as { id: Tab; label: string }[]
+        ).filter((item) => allowed.includes(item.id))}
       />
 
       {tab === "caixa" ? (
@@ -1167,7 +1178,10 @@ const ACTIVITY_ICON: Record<ActivityRec["kind"], string> = {
 
 /** Tudo o que as clientes (e você) fizeram, do mais recente ao mais antigo. */
 function ActivityList() {
-  const list = activityDb.use();
+  const session = useSession();
+  const list = activityDb
+    .use()
+    .filter((item) => item.kind !== "pagamento" || can(session, "financeiro"));
   const [filter, setFilter] = useState<"todos" | ActivityRec["kind"]>("todos");
   const [who, setWho] = useState<"todos" | ActivityRec["by"]>("todos");
   const shown = list.filter(

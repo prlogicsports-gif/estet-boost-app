@@ -1,5 +1,5 @@
 import { billsDb, ledgerDb, stockDb } from "@/data/db";
-import type { LedgerEntry } from "@/data/gestor-mock";
+import type { LedgerEntry } from "@/lib/models";
 import { todayISO } from "@/lib/dates";
 import type { BillRec, SessionProduct, StockRec } from "@/lib/models";
 import { events } from "@/services/notification-events";

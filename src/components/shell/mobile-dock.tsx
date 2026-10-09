@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { LogOut, MoreHorizontal } from "lucide-react";
+
+import { useSignOut } from "@/lib/use-sign-out";
 
 import type { NavConfig } from "@/components/shell/nav-items";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,7 @@ const itemActive = "bg-[var(--eb-ivory-a10)] text-[var(--eb-nude-300)]";
 export function MobileDock({ nav }: { nav: NavConfig }) {
   const { primary, secondary } = nav;
   const [open, setOpen] = useState(false);
+  const signOut = useSignOut();
   const bottom = "calc(env(safe-area-inset-bottom) + 16px)";
 
   return (
@@ -43,6 +46,17 @@ export function MobileDock({ nav }: { nav: NavConfig }) {
                 {entry.label}
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                void signOut();
+              }}
+              className="flex min-h-12 w-full items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-[var(--eb-coral-500)] hover:bg-[var(--accent)]"
+            >
+              <LogOut className="size-[18px]" aria-hidden />
+              Sair da conta
+            </button>
           </div>
         </div>
       ) : null}

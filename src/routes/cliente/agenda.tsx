@@ -12,7 +12,7 @@ import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { blocksDb, hoursDb, proceduresDb } from "@/data/db";
-import { proName } from "@/data/cliente-mock";
+import { useClinic } from "@/lib/use-clinic";
 import { addDays, formatShort, formatWeekday, todayISO } from "@/lib/dates";
 import { slotsFor } from "@/lib/availability";
 import { useClient } from "@/lib/use-client";
@@ -37,6 +37,8 @@ const STEPS = ["Escolher serviço", "Escolher data", "Escolher horário", "Confi
 function AgendaClientePage() {
   const { openNotifications, unread } = useShell();
   const { clientId, profile } = useClient();
+  const { clinic } = useClinic();
+  const proName = clinic?.name ?? "sua clínica";
   const all = useClinicAppointments();
   const hours = hoursDb.use();
   const blocks = blocksDb.use();
@@ -126,7 +128,7 @@ function AgendaClientePage() {
     <div className="flex flex-col gap-4">
       <TopBar
         title="Agenda"
-        context="Seus horários com Fernanda"
+        context={`Seus horários · ${proName}`}
         notifications={unread}
         user={profile}
         onNotifications={openNotifications}
@@ -211,7 +213,7 @@ function AgendaClientePage() {
         <EmptyState
           icon="CalendarPlus"
           title="Nenhum horário marcado"
-          description="Peça um horário e a Fernanda confirma por aqui."
+          description="Peça um horário e a clínica confirma por aqui."
           compact
           action={
             <Button type="button" onClick={() => open("novo")}>
@@ -341,7 +343,7 @@ function AgendaClientePage() {
               onChange={(event) => setNotes(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              A solicitação vai para Fernanda confirmar. Você recebe um aviso assim que ela
+              A solicitação vai para a clínica confirmar. Você recebe um aviso assim que ela
               responder.
             </p>
           </div>
@@ -356,8 +358,8 @@ function AgendaClientePage() {
         subtitle={
           cancel &&
           (new Date(`${cancel.date}T${cancel.time}:00`).getTime() - Date.now()) / 3600000 < 24
-            ? "Faltam menos de 24 horas: Fernanda precisa aprovar o cancelamento."
-            : "Fernanda é avisada e a sessão volta para o pacote."
+            ? "Faltam menos de 24 horas: a clínica precisa aprovar o cancelamento."
+            : "A clínica é avisada e a sessão volta para o pacote."
         }
         footer={
           <>

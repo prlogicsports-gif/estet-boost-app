@@ -56,3 +56,10 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 - Equipe: funcionária com acesso a tudo menos financeiro (suposições de `EQUIPE-E-PERMISSOES.md` §2 e §6 aprovadas: aviso para toda a equipe).
 - **Sem cobrança Pix automática.** Em vez disso, a gestora pode **cadastrar um link ou código de pagamento** (Pix copia e cola, link de cartão, etc.) em Configurações, e a cliente vê o botão **Copiar** na cobrança. A confirmação continua manual: a cliente informa que pagou e a gestora confirma. Dado guardado em `clinics/{id}/config/payment` (texto livre, só a gestora escreve; cliente lê só o da própria clínica).
 - **Banco: Supabase. Firebase: apenas Cloud Messaging (push).** O conector de Firebase do Lovable só cobre push; não é necessário para o banco.
+
+## 7. Estado atual (entrega de identidade e produção)
+
+- **Pronto e em uso:** login real (Supabase Auth, e-mail confirmado), criar clínica, credenciais de cliente e de funcionária (com permissões), sair da conta, equipe e permissões, recuperação de senha. Sem acesso livre, sem contas de demonstração e **sem nenhum dado de exemplo**.
+- **Ainda local (por aparelho):** clientes, agenda, atendimentos, caixa, estoque, fotos e avisos. Eles começam vazios e vivem no aparelho de quem cadastra, e **não aparecem para outras pessoas** (cliente, funcionária ou outro aparelho) até serem migrados para o Supabase, uma área por vez (clientes → agenda → atendimento/caixa/estoque → avisos → fotos).
+- **Migração do banco:** aplicar `supabase/migrations/20260101000004_permissions.sql` no SQL Editor (as 3 primeiras já foram aplicadas).
+- **Configuração do Supabase para o login funcionar:** em _Authentication → URL Configuration_, definir **Site URL** (o endereço do app) e adicionar em **Redirect URLs** o endereço do app, a prévia do Lovable e `http://localhost:8080`. Configurar **SMTP próprio**: o e-mail padrão do Supabase tem limite muito baixo de envios por hora.

@@ -1,24 +1,68 @@
-import { appointmentsDb, clientsDb, clinicsDb, DEMO_CLINIC } from "@/data/db";
-import { useSession } from "@/lib/session";
+import { useEffect, useSyncExternalStore } from "react";
 
-/** Clínica da esteticista logada (ou a clínica da cliente logada). Sem sessão, é a de demonstração. */
+import { appointmentsDb, clientsDb } from "@/data/db";
+import { useSession } from "@/lib/session";
+import { supabase } from "@/lib/supabase";
+
+export type Clinic = {
+  id: string;
+  slug: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  document: string | null;
+  size: "autonoma" | "clinica" | null;
+};
+
+type Cache = { id: string; clinic: Clinic | null } | null;
+let cache: Cache = null;
+let loading: string | null = null;
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((listener) => listener());
+
+export async function refreshClinic(id: string) {
+  loading = id;
+  const { data } = await supabase
+    .from("clinics")
+    .select("id, slug, name, email, phone, city, document, size")
+    .eq("id", id)
+    .maybeSingle();
+  loading = null;
+  cache = { id, clinic: (data as Clinic | null) ?? null };
+  emit();
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
+/** A clínica da pessoa logada (da esteticista, da equipe ou da cliente), lida do Supabase. */
 export function useClinic() {
   const session = useSession();
-  const clinics = clinicsDb.use();
-  const id = session?.clinicId ?? DEMO_CLINIC;
-  const clinic = clinics.find((item) => item.id === id) ?? clinics[0];
-  return { clinicId: clinic?.id ?? id, clinic };
+  const snap = useSyncExternalStore(
+    subscribe,
+    () => cache,
+    () => null,
+  );
+  const clinicId = session?.clinicId ?? "";
+  useEffect(() => {
+    if (clinicId && (!cache || cache.id !== clinicId) && loading !== clinicId)
+      void refreshClinic(clinicId);
+  }, [clinicId]);
+  const clinic = snap && snap.id === clinicId ? (snap.clinic ?? undefined) : undefined;
+  return { clinicId, clinic };
 }
 
-/** Só as clientes da clínica logada. */
+/** Clientes guardados neste aparelho (os dados locais são sempre de uma única conta; ver local-data.ts). */
 export function useClinicClients() {
-  const { clinicId } = useClinic();
-  return clientsDb.use().filter((item) => (item.clinicId ?? DEMO_CLINIC) === clinicId);
+  return clientsDb.use();
 }
 
-/** Só os atendimentos das clientes da clínica logada. */
+/** Atendimentos guardados neste aparelho. */
 export function useClinicAppointments() {
-  const clients = useClinicClients();
-  const ids = new Set(clients.map((item) => item.id));
-  return appointmentsDb.use().filter((item) => ids.has(item.clientId));
+  return appointmentsDb.use();
 }

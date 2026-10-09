@@ -4,7 +4,6 @@ import { Lock, Mail } from "lucide-react";
 import { AuthTitle, authLink } from "@/components/auth/terms-check";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/auth/field";
-import type { Session } from "@/lib/auth.types";
 import { authService } from "@/services/auth.service";
 
 export function LoginForm({
@@ -12,7 +11,7 @@ export function LoginForm({
   onForgot,
   onCreate,
 }: {
-  onSuccess: (session: Session) => void;
+  onSuccess: () => void;
   onForgot: () => void;
   onCreate: () => void;
 }) {
@@ -32,7 +31,7 @@ export function LoginForm({
           String(data.get("senha")),
         );
         setLoading(false);
-        if (result.ok) onSuccess(result.session);
+        if (result.ok) onSuccess();
         else setError(result.message);
       }}
     >
@@ -46,7 +45,7 @@ export function LoginForm({
           type="email"
           name="email"
           autoComplete="username"
-          placeholder="fernanda@estudio.com.br"
+          placeholder="voce@email.com"
           icon={<Mail aria-hidden />}
           error={error}
           required

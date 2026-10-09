@@ -21,7 +21,7 @@ export function NewClientDrawer({
   onClose: () => void;
   onCreated: (client: ClientRec) => void;
 }) {
-  const { clinic, clinicId } = useClinic();
+  const { clinic } = useClinic();
   const [mode, setMode] = useState<Mode>("agora");
   const clients = useClinicClients();
 
@@ -69,7 +69,6 @@ export function NewClientDrawer({
             }}
             onSubmit={(values) => {
               const client = createClient({
-                clinicId,
                 name: values.name,
                 phone: values.phone,
                 email: values.email,

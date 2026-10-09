@@ -86,19 +86,6 @@ export type NotificationPrefs = {
 };
 
 /** Clínica: cada esteticista tem a sua, com um link e credenciais próprios para filiar clientes. */
-export type ClinicRec = {
-  id: string;
-  /** Vai no link de cadastro: `/?p=slug`. */
-  slug: string;
-  name: string;
-  owner: string;
-  email: string;
-  phone?: string | undefined;
-  city?: string | undefined;
-  document?: string | undefined;
-  size?: "autonoma" | "clinica" | undefined;
-  createdAt: string;
-};
 
 export type StockRec = {
   id: string;
@@ -173,3 +160,22 @@ export type BlockRec = { id: string; date: string; start: string; end: string; r
 
 export type DayHours = { open: boolean; start: string; end: string };
 export type HoursRec = { days: Record<string, DayHours>; slot: number };
+
+/** Livro-caixa: de onde vem cada valor do resumo do mês. */
+export type LedgerKind = "entradas" | "saidas" | "receber";
+export type LedgerEntry = {
+  id: string;
+  kind: LedgerKind;
+  date: string;
+  label: string;
+  origin: string;
+  method: string;
+  value: number;
+  due?: string;
+  /** Cliente a quem a cobrança pertence. */
+  clientId?: string;
+  /** Quem gerou o lançamento (atendimento ou conta), para corrigir junto se algo for editado. */
+  refId?: string;
+  /** A cliente avisou que pagou; a esteticista ainda precisa confirmar o recebimento. */
+  reported?: { at: string; method: string };
+};

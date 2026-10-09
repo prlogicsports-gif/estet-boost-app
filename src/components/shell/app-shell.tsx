@@ -8,6 +8,7 @@ import { DesktopSidebar } from "@/components/shell/desktop-sidebar";
 import { MobileDock } from "@/components/shell/mobile-dock";
 import type { NavConfig } from "@/components/shell/nav-items";
 import { ShellContext } from "@/components/shell/shell-context";
+import { useVisibleNav } from "@/components/shell/use-visible-nav";
 import { notificationsDb } from "@/data/db";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useSession } from "@/lib/session";
@@ -19,7 +20,8 @@ import { notificationsFor } from "@/services/notify";
  * desktop, as mesmas rotas nos dois. Só deixa passar o perfil indicado e roda as
  * regras de lembrete enquanto o app está aberto.
  */
-export function AppShell({ nav, children }: { nav: NavConfig; children: ReactNode }) {
+export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children: ReactNode }) {
+  const nav = useVisibleNav(fullNav);
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const session = useSession();

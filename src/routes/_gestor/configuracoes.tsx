@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { ClientInvite } from "@/components/eb/client-invite";
 import { Icon } from "@/components/eb/icon";
@@ -11,13 +11,14 @@ import { NotificationPrefsEditor } from "@/components/eb/notifications-panel";
 import { ToastHost } from "@/components/eb/toast";
 import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { Button } from "@/components/ui/button";
-import { blocksDb, hoursDb, proceduresDb, resetDemoData, settingsDb } from "@/data/db";
+import { blocksDb, hoursDb, proceduresDb, settingsDb } from "@/data/db";
 import { formatShort, todayISO } from "@/lib/dates";
 import { sessionStore, useSession } from "@/lib/session";
-import { useClinic } from "@/lib/use-clinic";
+import { supabase } from "@/lib/supabase";
+import { refreshClinic, useClinic } from "@/lib/use-clinic";
 import { usePro } from "@/lib/use-pro";
-import { authService } from "@/services/auth.service";
-import { updateClinic } from "@/services/clinic.service";
+import { useSignOut } from "@/lib/use-sign-out";
+import { TeamPanel } from "@/components/team/team-panel";
 import { removeProcedure, saveProcedure } from "@/services/sessions.service";
 import { brl } from "@/lib/view";
 
@@ -55,7 +56,7 @@ type Sheet =
   | null;
 
 const ITEMS: [Sheet & string, string, string, string][] = [
-  ["perfil", "UserCog", "Perfil e clínica", "Seus dados, nome e contato da clínica"],
+  ["perfil", "User", "Perfil e clínica", "Seus dados, nome e contato da clínica"],
   ["link", "Link", "Link e credenciais de cadastro", "Como as clientes se filiam à sua clínica"],
   ["horarios", "Clock", "Horários de atendimento", "Dias e horários livres na agenda"],
   ["bloqueios", "CalendarX", "Bloqueios de agenda", "Folgas, férias e compromissos"],
@@ -83,7 +84,8 @@ function ConfiguracoesPage() {
   const pro = usePro();
   const session = useSession();
   const { clinic } = useClinic();
-  const navigate = useNavigate();
+  const signOut = useSignOut();
+  const isGestor = session?.role === "gestor";
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -109,7 +111,7 @@ function ConfiguracoesPage() {
         <div className="min-w-0 flex-1">
           <div className="text-xl font-medium">{pro.name}</div>
           <div className="truncate text-[13px] text-[var(--text-secondary)]">
-            {[clinic?.name, clinic?.city].filter(Boolean).join(" · ")}
+            {[session?.email, clinic?.name, clinic?.city].filter(Boolean).join(" · ")}
           </div>
         </div>
         <Button type="button" variant="secondary" size="sm" onClick={() => setSheet("perfil")}>
@@ -120,9 +122,11 @@ function ConfiguracoesPage() {
       <span className={heading}>Avisos</span>
       <NotificationPrefsEditor audience="gestor" />
 
-      <span className={`${heading} mt-2`}>Estúdio</span>
+      {isGestor ? <TeamPanel onToast={setToast} /> : null}
+
+      <span className={`${heading} mt-2`}>{isGestor ? "Estúdio" : "Conta"}</span>
       <div className="flex flex-col gap-2">
-        {ITEMS.map(([id, icon, title, detail]) => (
+        {(isGestor ? ITEMS : []).map(([id, icon, title, detail]) => (
           <button key={id} type="button" className={row} onClick={() => setSheet(id)}>
             <Icon name={icon} size={18} color="var(--eb-nude-300)" />
             <span className="min-w-0 flex-1">
@@ -134,31 +138,8 @@ function ConfiguracoesPage() {
         ))}
         <button
           type="button"
-          className={row}
-          onClick={() => {
-            if (
-              window.confirm(
-                "Voltar clientes, agenda, caixa e avisos aos dados de exemplo? O que você criou será apagado.",
-              )
-            )
-              resetDemoData();
-          }}
-        >
-          <Icon name="RotateCcw" size={18} color="var(--eb-nude-300)" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[14.5px]">Restaurar dados de exemplo</span>
-            <span className="block text-xs text-muted-foreground">
-              Enquanto o app não tem banco, tudo fica neste aparelho
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
           className={`${row} text-[var(--eb-coral-500)]`}
-          onClick={() => {
-            authService.signOut();
-            navigate({ to: "/" });
-          }}
+          onClick={() => void signOut()}
         >
           <Icon name="LogOut" size={18} color="var(--eb-coral-500)" />
           <span className="flex-1 text-[14.5px]">Sair da conta</span>
@@ -229,24 +210,29 @@ function ProfileDrawer({
   const set = (key: keyof typeof f) => (event: { target: { value: string } }) =>
     setF((c) => ({ ...c, [key]: event.target.value }));
 
-  const save = () => {
-    if (!f.name.trim() || !f.studio.trim()) return;
-    if (session)
-      sessionStore.set({
-        ...session,
-        name: f.name.trim(),
-        email: f.email.trim().toLowerCase() || session.email,
-      });
-    if (clinic)
-      updateClinic(clinic.id, {
-        name: f.studio.trim(),
-        owner: f.name.trim(),
-        email: f.email.trim().toLowerCase(),
-        phone: f.phone.trim() || undefined,
-        city: f.city.trim() || undefined,
-        document: f.document.trim() || undefined,
-      });
-    onClose("Perfil atualizado");
+  const isGestor = session?.role === "gestor";
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!f.name.trim() || (isGestor && !f.studio.trim())) return;
+    setSaving(true);
+    const named = await supabase.rpc("update_my_name", { p_name: f.name.trim() });
+    let failed = Boolean(named.error);
+    if (isGestor && clinic) {
+      const updated = await supabase
+        .from("clinics")
+        .update({
+          name: f.studio.trim(),
+          phone: f.phone.trim() || null,
+          city: f.city.trim() || null,
+          document: f.document.trim() || null,
+        })
+        .eq("id", clinic.id);
+      failed = failed || Boolean(updated.error);
+      await refreshClinic(clinic.id);
+    }
+    await sessionStore.refresh();
+    setSaving(false);
+    onClose(failed ? "Não foi possível salvar. Tente de novo." : "Perfil atualizado");
   };
 
   return (
@@ -255,7 +241,11 @@ function ProfileDrawer({
       onClose={() => onClose()}
       title="Perfil e clínica"
       subtitle="Aparece para as suas clientes"
-      footer={footer(() => onClose(), save, "Salvar perfil")}
+      footer={footer(
+        () => onClose(),
+        () => void save(),
+        saving ? "Salvando…" : "Salvar perfil",
+      )}
     >
       <div className="flex flex-col gap-3.5">
         <Input
@@ -265,27 +255,39 @@ function ProfileDrawer({
           error={f.name.trim() ? undefined : "Informe seu nome."}
           onChange={set("name")}
         />
-        <Input label="E-mail" icon="Mail" type="email" value={f.email} onChange={set("email")} />
         <Input
-          label="Nome da clínica"
-          icon="Sparkles"
-          value={f.studio}
-          error={f.studio.trim() ? undefined : "Informe o nome da clínica."}
-          onChange={set("studio")}
+          label="E-mail de acesso"
+          icon="Mail"
+          type="email"
+          value={f.email}
+          disabled
+          hint="Para trocar o e-mail, fale com o suporte."
         />
-        <div className="grid grid-cols-2 gap-2.5">
-          <Input label="Celular" type="tel" value={f.phone} onChange={set("phone")} />
-          <Input label="Cidade" value={f.city} onChange={set("city")} />
-        </div>
-        <Input
-          label="CNPJ ou CPF"
-          inputMode="numeric"
-          value={f.document}
-          onChange={set("document")}
-        />
-        <p className="text-xs text-muted-foreground">
-          Endereço do seu link de cadastro: <span className="font-mono">/?p={clinic?.slug}</span>
-        </p>
+        {isGestor ? (
+          <>
+            <Input
+              label="Nome da clínica"
+              icon="Sparkles"
+              value={f.studio}
+              error={f.studio.trim() ? undefined : "Informe o nome da clínica."}
+              onChange={set("studio")}
+            />
+            <div className="grid grid-cols-2 gap-2.5">
+              <Input label="Celular" type="tel" value={f.phone} onChange={set("phone")} />
+              <Input label="Cidade" value={f.city} onChange={set("city")} />
+            </div>
+            <Input
+              label="CNPJ ou CPF"
+              inputMode="numeric"
+              value={f.document}
+              onChange={set("document")}
+            />
+            <p className="text-xs text-muted-foreground">
+              Endereço do seu link de cadastro:{" "}
+              <span className="font-mono">/?p={clinic?.slug}</span>
+            </p>
+          </>
+        ) : null}
       </div>
     </Drawer>
   );

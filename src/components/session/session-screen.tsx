@@ -18,7 +18,6 @@ import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { SessionPhotoSlot } from "@/components/session/session-photo-slot";
 import { Button } from "@/components/ui/button";
 import { clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
-import { faceSeed } from "@/data/face-seed";
 import { photoUrl } from "@/lib/photo-store";
 import type { SessionRec } from "@/lib/models";
 import { cn } from "@/lib/utils";
@@ -271,7 +270,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
             </div>
           ) : null}
 
-          {step === 3 ? <FaceMapPanel clientId={s.clientId} seed={faceSeed[s.clientId]} /> : null}
+          {step === 3 ? <FaceMapPanel clientId={s.clientId} /> : null}
 
           {step === 4 ? (
             <div className="flex flex-col gap-4">

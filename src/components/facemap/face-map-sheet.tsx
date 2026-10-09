@@ -14,7 +14,7 @@ import type { FaceZone } from "@/components/facemap/face-data";
 import { useFaceLayout } from "@/lib/face-layout";
 import { FaceZonePhotos, type ZonePhotos } from "@/components/eb/face-zone-photos";
 import { Button } from "@/components/ui/button";
-import { PRODUTOS } from "@/data/estoque";
+import { stockDb } from "@/data/db";
 import { emptyRecord, type FaceMark, type FaceRecord } from "@/lib/face-map-store";
 import { cn } from "@/lib/utils";
 
@@ -263,7 +263,7 @@ export function FaceMapSheet({
           />
           {row === "produto" ? (
             <Options
-              items={PRODUTOS.map((p) => p.nome)}
+              items={stockDb.use().map((p) => p.name)}
               value={form.produto}
               onPick={(v) => set("produto", v)}
             />

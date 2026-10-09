@@ -12,11 +12,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { Role } from "@/lib/auth.types";
+import type { Area, PermissionKey } from "@/lib/auth.types";
 
-export type NavItem = { to: string; label: string; icon: LucideIcon };
+/** `needs`: a funcionária precisa de ao menos uma destas permissões. `adminOnly`: só a gestora. */
+export type NavItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  needs?: PermissionKey[];
+  adminOnly?: boolean;
+};
 export type NavConfig = {
-  role: Role;
+  role: Area;
   /** Itens do dock no celular. */
   primary: NavItem[];
   /** Itens que no celular ficam em "Mais". Vazio: sem menu "Mais". */
@@ -29,13 +36,18 @@ export const gestorNav: NavConfig = {
   role: "gestor",
   primary: [
     { to: "/hoje", label: "Hoje", icon: Sun },
-    { to: "/agenda", label: "Agenda", icon: CalendarDays },
-    { to: "/clientes", label: "Clientes", icon: Users },
-    { to: "/gestao", label: "Gestão", icon: Wallet },
+    { to: "/agenda", label: "Agenda", icon: CalendarDays, needs: ["agenda"] },
+    {
+      to: "/clientes",
+      label: "Clientes",
+      icon: Users,
+      needs: ["clientes"],
+    },
+    { to: "/gestao", label: "Gestão", icon: Wallet, needs: ["financeiro", "estoque", "historico"] },
   ],
   secondary: [
     { to: "/notificacoes", label: "Notificações", icon: Bell },
-    { to: "/credenciais", label: "Credenciais", icon: KeyRound },
+    { to: "/credenciais", label: "Credenciais", icon: KeyRound, adminOnly: true },
     { to: "/configuracoes", label: "Configurações", icon: Settings },
   ],
   maxWidth: "var(--content-max, 1120px)",

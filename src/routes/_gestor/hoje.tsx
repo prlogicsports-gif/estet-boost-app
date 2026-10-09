@@ -8,6 +8,8 @@ import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { appointmentsDb, billsDb, clientsDb, stockDb } from "@/data/db";
+import { can } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { usePro } from "@/lib/use-pro";
 import { daysBetween, formatLong, nowHM, todayISO } from "@/lib/dates";
 import { brl, byDateTime, toCard } from "@/lib/view";
@@ -37,6 +39,9 @@ const sectionLabel =
 
 function HojePage() {
   const pro = usePro();
+  const session = useSession();
+  const money = can(session, "financeiro");
+  const stockAccess = can(session, "estoque");
   const navigate = useNavigate();
   const { openNotifications, unread } = useShell();
   const today = todayISO();
@@ -99,13 +104,15 @@ function HojePage() {
           tone="warn"
           hint="enviar lembrete"
         />
-        <MetricCard
-          label="Previsto"
-          value={brl(expected)}
-          icon="Wallet"
-          tone="tech"
-          hint={`${day.length} atendimentos`}
-        />
+        {money ? (
+          <MetricCard
+            label="Previsto"
+            value={brl(expected)}
+            icon="Wallet"
+            tone="tech"
+            hint={`${day.length} atendimentos`}
+          />
+        ) : null}
       </div>
 
       {next ? (
@@ -113,7 +120,7 @@ function HojePage() {
           <span className={sectionLabel}>Próximo atendimento</span>
           <AppointmentCard
             variant="hero"
-            {...toCard(next)}
+            {...toCard(next, money)}
             onOpen={() => openAppointment(next.id)}
           />
         </section>
@@ -129,7 +136,7 @@ function HojePage() {
               onClick={() => openAppointment(item.id)}
               className="cursor-pointer text-left"
             >
-              <AppointmentCard {...toCard(item)} />
+              <AppointmentCard {...toCard(item, money)} />
             </button>
           ))
         ) : (
@@ -163,7 +170,7 @@ function HojePage() {
             onAction={remind}
           />
         ) : null}
-        {lowStock[0] ? (
+        {stockAccess && lowStock[0] ? (
           <AlertCard
             tone="warn"
             icon="PackageMinus"
@@ -173,7 +180,7 @@ function HojePage() {
             onAction={() => navigate({ to: "/gestao" })}
           />
         ) : null}
-        {nextBill ? (
+        {money && nextBill ? (
           <AlertCard
             tone={daysBetween(today, nextBill.due) <= 3 ? "danger" : "info"}
             icon="Receipt"

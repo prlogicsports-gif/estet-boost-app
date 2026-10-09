@@ -1,13 +1,13 @@
 import { clientsDb } from "@/data/db";
 import { useSession } from "@/lib/session";
 
-/** A cliente logada no app da cliente (a conta de demonstração é a Mariana, `c1`). */
+/** A cliente logada no app da cliente. */
 export function useClient() {
   const session = useSession();
   const clients = clientsDb.use();
-  const clientId = session?.clientId ?? "c1";
+  const clientId = session?.clientId ?? "";
   const client = clients.find((item) => item.id === clientId);
-  const name = client?.name ?? session?.name ?? "Cliente";
+  const name = session?.name ?? client?.name ?? "Cliente";
   return {
     clientId,
     client,

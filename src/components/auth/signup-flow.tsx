@@ -14,7 +14,8 @@ import {
 import { AuthTitle, TermsCheck, authLink } from "@/components/auth/terms-check";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/auth/field";
-import type { Session, StudioSize } from "@/lib/auth.types";
+import { CheckEmail } from "@/components/auth/check-email";
+import type { StudioSize } from "@/lib/auth.types";
 import { authService } from "@/services/auth.service";
 import { cn } from "@/lib/utils";
 
@@ -27,19 +28,16 @@ const sizes = [
   },
 ] as const;
 
-export function SignupFlow({
-  onSuccess,
-  onLogin,
-}: {
-  onSuccess: (session: Session) => void;
-  onLogin: () => void;
-}) {
+export function SignupFlow({ onSuccess, onLogin }: { onSuccess: () => void; onLogin: () => void }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [size, setSize] = useState<StudioSize>("autonoma");
   const [terms, setTerms] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [account, setAccount] = useState({ name: "", email: "", phone: "" });
+  const [account, setAccount] = useState({ name: "", email: "", phone: "", password: "" });
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  if (sentTo) return <CheckEmail email={sentTo} onBack={onLogin} />;
 
   return (
     <form
@@ -52,12 +50,13 @@ export function SignupFlow({
             name: String(data.get("nome")),
             email: String(data.get("email")),
             phone: String(data.get("celular") ?? ""),
+            password: String(data.get("senha") ?? ""),
           });
           setStep(2);
           return;
         }
         setLoading(true);
-        const result = await authService.signUp({
+        const result = await authService.signUpGestora({
           ...account,
           studio: String(data.get("estudio") ?? ""),
           city: String(data.get("cidade") ?? ""),
@@ -65,8 +64,10 @@ export function SignupFlow({
           size,
         });
         setLoading(false);
-        if (result.ok) onSuccess(result.session);
-        else {
+        if (result.ok) {
+          if (result.needsEmail) setSentTo(account.email);
+          else onSuccess();
+        } else {
           setError(result.message);
           setStep(1);
         }
@@ -115,7 +116,7 @@ export function SignupFlow({
               type="email"
               name="email"
               autoComplete="email"
-              placeholder="fernanda@estudio.com.br"
+              placeholder="voce@email.com"
               icon={<Mail aria-hidden />}
               defaultValue={account.email}
               required

@@ -1,42 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Icon } from "@/components/eb/icon";
 import { StatusBadge, type StatusTone } from "@/components/eb/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  readInvites,
-  stateOf,
-  writeInvites,
-  type InviteRec as Invite,
-  type InviteState,
-} from "@/lib/invites-store";
-import type { ClinicRec } from "@/lib/models";
+import type { Clinic } from "@/lib/use-clinic";
+import { useRemote } from "@/lib/use-remote";
 import { cn } from "@/lib/utils";
+import {
+  createClientInvite,
+  inviteState,
+  listInvites,
+  revokeInvite,
+  type InviteState,
+} from "@/services/team.service";
 
 /**
- * Cadastro de novas clientes pela profissional. Dois caminhos, os dois já
- * atrelam a cliente a quem convidou:
- * 1. Link fixo do perfil: o mesmo para sempre; toda cliente que se cadastrar por ele entra na carteira.
- * 2. Credencial individual: código de uso único (EB-XXXX-XXXX), válido por 7 dias.
- * A lista fica no aparelho enquanto não há backend.
+ * Cadastro de novas clientes pela gestora. Dois caminhos, os dois filiam a cliente à clínica:
+ * 1. Link fixo da clínica: toda cliente que se cadastrar por ele entra na carteira.
+ * 2. Credencial individual (EB-XXXX-XXXX): uso único, vale 7 dias. O código aparece só ao ser criado; no banco fica só o hash.
  */
 const VALID_DAYS = 7;
-
-// Sem 0/O e 1/I/L: o código é lido em voz alta e digitado.
-const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-function makeCode() {
-  const bytes = new Uint32Array(8);
-  window.crypto.getRandomValues(bytes);
-  const text = Array.from(bytes, (n) => ALPHABET[n % ALPHABET.length]).join("");
-  return `EB-${text.slice(0, 4)}-${text.slice(4)}`;
-}
 
 const TONES: Record<InviteState, [StatusTone, string, string]> = {
   pendente: ["pending", "Aguardando cadastro", "Clock"],
   usada: ["confirmed", "Cadastro feito", "Check"],
   expirada: ["neutral", "Expirada", "CalendarX"],
-  revogada: ["cancelled", "Cancelada", "X"],
+  cancelada: ["cancelled", "Cancelada", "X"],
 };
 
 const shortDate = (iso: string) =>
@@ -86,23 +75,24 @@ export function ClientInvite({
   clinic,
   compact,
 }: {
-  clinic: Pick<ClinicRec, "id" | "slug" | "name" | "owner">;
+  clinic: Pick<Clinic, "slug" | "name">;
   compact?: boolean;
 }) {
-  const slug = clinic.slug;
-  const id = clinic.id;
-  const [origin, setOrigin] = useState("");
-  const [list, setList] = useState<Invite[]>([]);
+  const invites = useRemote(listInvites);
   const [form, setForm] = useState<{ nome: string; celular: string } | null>(null);
+  const [fresh, setFresh] = useState<{
+    code: string;
+    link: string;
+    nome: string;
+    celular: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
-    setList(readInvites(id));
-  }, [id]);
-
-  const fixedLink = `${origin}/?p=${encodeURIComponent(slug)}&nome=${encodeURIComponent(clinic.name)}`;
-  const fixedText = `Olá! Faça seu cadastro na EstetBoost para acompanhar seus atendimentos comigo: ${fixedLink}`;
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const fixedLink = `${origin}/?p=${encodeURIComponent(clinic.slug)}&nome=${encodeURIComponent(clinic.name)}`;
+  const fixedText = `Olá! Faça seu cadastro na EstetBoost para acompanhar seus atendimentos em ${clinic.name}: ${fixedLink}`;
+  const list = (invites.data ?? []).filter((item) => item.role === "cliente");
 
   const mark = (key: string) => {
     setCopied(key);
@@ -110,41 +100,29 @@ export function ClientInvite({
   };
 
   const share = (text: string, url: string, phone?: string) => {
-    if (typeof navigator.share === "function" && !phone) {
+    if (typeof navigator.share === "function" && !phone)
       navigator.share({ title: "Cadastro EstetBoost", text, url }).catch(() => {});
-    } else {
-      window.open(whatsapp(phone ?? "", text), "_blank", "noopener");
-    }
+    else window.open(whatsapp(phone ?? "", text), "_blank", "noopener");
   };
 
-  const generate = () => {
+  const generate = async () => {
     if (!form) return;
-    const codigo = makeCode();
-    const invite: Invite = {
-      codigo,
+    setError(null);
+    const result = await createClientInvite(form.nome, form.celular);
+    if (!result.ok) return setError(result.message);
+    const code = result.code ?? "";
+    setFresh({
+      code,
+      link: `${origin}/?convite=${encodeURIComponent(code)}&nome=${encodeURIComponent(clinic.name)}`,
       nome: form.nome.trim(),
       celular: form.celular.trim(),
-      criadaEm: new Date().toISOString(),
-      expiraEm: new Date(Date.now() + VALID_DAYS * 86400000).toISOString(),
-      link: `${origin}/?convite=${codigo}&nome=${encodeURIComponent(clinic.name)}`,
-    };
-    const next = [invite, ...list];
-    setList(next);
-    writeInvites(id, next);
+    });
     setForm(null);
-    mark(`novo-${codigo}`);
+    void invites.reload();
   };
 
-  const revoke = (invite: Invite) => {
-    const next = list.map((item) =>
-      item.codigo === invite.codigo ? { ...item, revogada: true } : item,
-    );
-    setList(next);
-    writeInvites(id, next);
-  };
-
-  const inviteText = (invite: Invite) =>
-    `${invite.nome ? `Olá, ${invite.nome.split(" ")[0]}! ` : "Olá! "}Seu cadastro na EstetBoost já está pronto para você acompanhar seus atendimentos comigo. Use o link: ${invite.link} (ou o código ${invite.codigo}). Válido até ${shortDate(invite.expiraEm)}.`;
+  const freshText = (item: NonNullable<typeof fresh>) =>
+    `${item.nome ? `Olá, ${item.nome.split(" ")[0]}! ` : "Olá! "}Seu cadastro na EstetBoost já está pronto para você acompanhar seus atendimentos em ${clinic.name}. Use o link: ${item.link} (ou o código ${item.code}). Válido por ${VALID_DAYS} dias.`;
 
   const card = cn(
     "flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)]",
@@ -159,10 +137,9 @@ export function ClientInvite({
             <Icon name="Pin" size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[17px] font-medium">Seu link de cadastro</div>
+            <div className="text-[17px] font-medium">Link de cadastro da clínica</div>
             <p className="mt-0.5 text-[12.5px] text-[var(--text-secondary)]">
-              Fixo no seu perfil. Toda cliente que se cadastrar por ele já entra na carteira de{" "}
-              {clinic.name}.
+              Fixo. Toda cliente que se cadastrar por ele entra na carteira de {clinic.name}.
             </p>
           </div>
         </div>
@@ -184,11 +161,6 @@ export function ClientInvite({
           >
             <Icon name="MessageCircle" size={15} /> WhatsApp
           </Button>
-          <Button type="button" variant="ghost" size="sm" asChild>
-            <a href={fixedLink} target="_blank" rel="noreferrer">
-              <Icon name="ExternalLink" size={15} /> Ver como a cliente vê
-            </a>
-          </Button>
         </div>
       </section>
 
@@ -198,12 +170,45 @@ export function ClientInvite({
             <Icon name="KeyRound" size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[17px] font-medium">Credencial de cadastro</div>
+            <div className="text-[17px] font-medium">Credencial de cliente</div>
             <p className="mt-0.5 text-[12.5px] text-[var(--text-secondary)]">
-              Um código de uso único para uma cliente específica, válido por {VALID_DAYS} dias.
+              Código de uso único para uma cliente, válido por {VALID_DAYS} dias. Ele só aparece
+              quando é criado.
             </p>
           </div>
         </div>
+
+        {fresh ? (
+          <div className="flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] p-3">
+            <div className="text-center font-mono text-[20px] font-medium tracking-[0.08em]">
+              {fresh.code}
+            </div>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => share(freshText(fresh), fresh.link, fresh.celular || undefined)}
+              >
+                <Icon name="Send" size={15} /> {fresh.celular ? "Enviar no WhatsApp" : "Enviar"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => copy(freshText(fresh)).then(() => mark("fresh"))}
+              >
+                <Icon name={copied === "fresh" ? "Check" : "Copy"} size={15} />{" "}
+                {copied === "fresh" ? "Copiado" : "Copiar mensagem"}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFresh(null)}>
+                Fechar
+              </Button>
+            </div>
+            <p className="text-center text-[11.5px] text-muted-foreground">
+              Se perder o código, cancele e gere outro.
+            </p>
+          </div>
+        ) : null}
 
         {form ? (
           <div className="flex flex-col gap-2.5">
@@ -232,11 +237,12 @@ export function ClientInvite({
                 />
               </label>
             </div>
+            {error ? <p className="text-[13px] text-[var(--eb-coral-500)]">{error}</p> : null}
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={() => setForm(null)}>
                 Cancelar
               </Button>
-              <Button type="button" size="sm" className="flex-1" onClick={generate}>
+              <Button type="button" size="sm" className="flex-1" onClick={() => void generate()}>
                 <Icon name="KeyRound" size={15} /> Gerar credencial
               </Button>
             </div>
@@ -247,7 +253,7 @@ export function ClientInvite({
             variant="secondary"
             size="sm"
             className="self-start"
-            onClick={() => setForm({ nome: "", celular: "" })}
+            onClick={() => (setFresh(null), setForm({ nome: "", celular: "" }))}
           >
             <Icon name="Plus" size={15} /> Nova credencial
           </Button>
@@ -256,65 +262,41 @@ export function ClientInvite({
         {list.length ? (
           <div className="flex flex-col gap-2">
             {list.map((invite) => {
-              const state = stateOf(invite);
-              const [tone, label, icon] = TONES[state];
-              const active = state === "pendente";
-              const fresh = copied === `novo-${invite.codigo}`;
+              const state = inviteState(invite);
+              const [tone, text, icon] = TONES[state];
               return (
                 <div
-                  key={invite.codigo}
+                  key={invite.id}
                   className={cn(
-                    "flex flex-col gap-2 rounded-[var(--radius-md)] border p-3",
-                    fresh
-                      ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)]"
-                      : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)]",
-                    active || state === "usada" ? "opacity-100" : "opacity-60",
+                    "flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] p-3",
+                    state === "pendente" || state === "usada" ? "opacity-100" : "opacity-60",
                   )}
                 >
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="font-mono text-[15px] font-medium tracking-[0.06em]">
-                      {invite.codigo}
-                    </span>
-                    <span className="min-w-20 flex-1 text-[12.5px] text-[var(--text-secondary)]">
-                      {invite.nome || "Sem nome"}
+                    <span className="min-w-20 flex-1 text-[13.5px]">
+                      {invite.name_hint || "Sem nome"}
                     </span>
                     <StatusBadge tone={tone} size="sm" icon={icon}>
-                      {label}
+                      {text}
                     </StatusBadge>
                   </div>
                   <div className="font-mono text-[11.5px] text-muted-foreground">
-                    Gerada {shortDate(invite.criadaEm)}
-                    {active ? ` · vale até ${shortDate(invite.expiraEm)}` : ""}
-                    {invite.celular ? ` · ${invite.celular}` : ""}
+                    Gerada {shortDate(invite.created_at)}
+                    {state === "pendente" ? ` · vale até ${shortDate(invite.expires_at)}` : ""}
+                    {invite.phone_hint ? ` · ${invite.phone_hint}` : ""}
                   </div>
-                  {active ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() =>
-                          share(inviteText(invite), invite.link, invite.celular || undefined)
-                        }
-                      >
-                        <Icon name="Send" size={15} />{" "}
-                        {invite.celular ? "Enviar no WhatsApp" : "Enviar"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => copy(invite.link).then(() => mark(invite.codigo))}
-                      >
-                        <Icon name={copied === invite.codigo ? "Check" : "Copy"} size={15} />{" "}
-                        {copied === invite.codigo ? "Copiado" : "Copiar link"}
-                      </Button>
+                  {state === "pendente" ? (
+                    <div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => revoke(invite)}
+                        onClick={async () => {
+                          await revokeInvite(invite.id);
+                          void invites.reload();
+                        }}
                       >
-                        Cancelar
+                        Cancelar credencial
                       </Button>
                     </div>
                   ) : null}

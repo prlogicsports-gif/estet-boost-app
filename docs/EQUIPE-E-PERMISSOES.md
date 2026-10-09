@@ -96,3 +96,20 @@ Testes de RLS da equipe (somar aos de SUPABASE-MODELO-E-RLS.md §7):
 2. **Agenda por profissional**: cada atendimento tem uma profissional responsável? Isso permite agenda e relatórios por pessoa e comissão no futuro.
 3. **Comissão ou repasse**: hoje fora do escopo; se vier, é financeiro e fica só com a gestora.
 4. **Limite de funcionárias** por plano da clínica (se houver planos).
+
+## 7. Implementado: permissões escolhidas pela gestora
+
+A gestora marca, funcionária por funcionária, o que ela acessa. Chaves (migração `20260101000004_permissions.sql`):
+
+| Chave          | Libera                                                                          | Padrão ao convidar |
+| -------------- | ------------------------------------------------------------------------------- | ------------------ |
+| `clientes`     | Carteira, fichas, anamnese, fotos; cadastrar e editar                           | sim                |
+| `agenda`       | Ver e organizar horários, aprovar pedidos (lê nomes de clientes, sem cadastrar) | sim                |
+| `atendimentos` | Realizar e finalizar atendimentos                                               | sim                |
+| `estoque`      | Ver e atualizar produtos (sem custo)                                            | sim                |
+| `financeiro`   | Caixa, a receber, contas, valores, custos                                       | **não**            |
+| `historico`    | Histórico de eventos (eventos de pagamento só com `financeiro`)                 | sim                |
+
+A gestora tem tudo. Equipe **nunca** acessa configurações da clínica, preços dos procedimentos, credenciais e a gestão da equipe (Configurações → Equipe, só da gestora). As regras valem no banco (RLS, função `app.has_perm`) e no app (menu, rotas e abas escondem o que não foi liberado). Mudar a permissão vale na hora.
+
+Onde: Configurações → Equipe → Convidar funcionária (nome, e-mail, caixas de permissão) gera a credencial (válida por 48 h, uso única, só para aquele e-mail); o código aparece uma vez. Depois dá para editar permissões, desativar e reativar.

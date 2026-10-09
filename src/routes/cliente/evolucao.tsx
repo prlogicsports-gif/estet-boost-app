@@ -11,12 +11,10 @@ import { FaceMapHistory } from "@/components/facemap/face-map-history";
 import { useFaceLayout } from "@/lib/face-layout";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { history as mockHistory } from "@/data/cliente-mock";
 import { appointmentsDb, careDb } from "@/data/db";
 import { formatShort } from "@/lib/dates";
 import { useClient } from "@/lib/use-client";
 import type { TimelineEntry } from "@/components/eb/client-timeline";
-import { faceSeed } from "@/data/face-seed";
 import { historyForZone, readFaceMap, type FaceMark } from "@/lib/face-map-store";
 
 export const Route = createFileRoute("/cliente/evolucao")({
@@ -28,8 +26,7 @@ type Tab = "mapa" | "fotos" | "linha" | "recom";
 
 /** O mapa e as fotos são os mesmos que a esteticista registra no perfil desta cliente, só para leitura. */
 const withoutInternal = (mark: FaceMark): FaceMark => ({ ...mark, observacao: "" });
-const load = (clientId: string) =>
-  (readFaceMap(clientId) ?? faceSeed[clientId] ?? []).map(withoutInternal);
+const load = (clientId: string) => (readFaceMap(clientId) ?? []).map(withoutInternal);
 
 function EvolucaoPage() {
   const { openNotifications, unread } = useShell();
@@ -46,9 +43,7 @@ function EvolucaoPage() {
         id: item.id,
         date: formatShort(item.date),
         procedure: item.procedure,
-        professional: "Fernanda Costa",
       })),
-    ...(clientId === "c1" ? mockHistory : []),
   ];
   const [tab, setTab] = useState<Tab>("mapa");
   const [marks, setMarks] = useState<FaceMark[]>([]);

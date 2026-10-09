@@ -26,8 +26,6 @@ import {
   sessionsDb,
   settingsDb,
 } from "@/data/db";
-import { faceSeed } from "@/data/face-seed";
-import { timeline } from "@/data/gestor-mock";
 import { exportRecord } from "@/lib/export-record";
 import { formatShort, formatWeekday, todayISO } from "@/lib/dates";
 import { brl, byDateTime } from "@/lib/view";
@@ -114,7 +112,7 @@ function ClientePage() {
       photos: Number(Boolean(item.beforePhotoId)) + Number(Boolean(item.afterPhotoId)),
       payment: `${item.paidNow ? item.payment : "A receber"} · ${brl(item.procedures.reduce((sum, p) => sum + p.price, 0))}`,
     }));
-  const history = [...done, ...(client.id === "c1" ? timeline : [])];
+  const history = done;
   const digits = client.phone.replace(/\D/g, "");
 
   return (
@@ -344,11 +342,7 @@ function ClientePage() {
       {tab === "evolucao" ? (
         <div className="flex flex-col gap-7">
           <span className={label}>Mapa facial</span>
-          <FaceMapPanel
-            clientId={client.id}
-            seed={faceSeed[client.id]}
-            showGeneralActions={false}
-          />
+          <FaceMapPanel clientId={client.id} showGeneralActions={false} />
         </div>
       ) : null}
 

@@ -13,7 +13,7 @@ import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
 import { appointmentsDb, careDb, ledgerDb } from "@/data/db";
 import { Select } from "@/components/eb/select";
-import { proName } from "@/data/cliente-mock";
+import { useClinic } from "@/lib/use-clinic";
 import { addDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { useClient } from "@/lib/use-client";
 import { brl, byDateTime } from "@/lib/view";
@@ -42,6 +42,8 @@ function InicioPage() {
   const navigate = useNavigate();
   const { openNotifications, unread } = useShell();
   const { clientId, client, profile } = useClient();
+  const { clinic } = useClinic();
+  const proName = clinic?.name ?? "sua clínica";
   const today = todayISO();
   const mine = appointmentsDb.use().filter((item) => item.clientId === clientId);
   const care = careDb
@@ -112,7 +114,7 @@ function InicioPage() {
                 </StatusBadge>
               ) : null}
               <StatusBadge tone="info" icon="MapPin">
-                Estúdio Fernanda Costa
+                {proName}
               </StatusBadge>
               {next.reschedule ? (
                 <StatusBadge tone="pending" icon="CalendarClock">

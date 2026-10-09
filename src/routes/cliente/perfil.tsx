@@ -160,7 +160,7 @@ function PerfilPage() {
           <div className="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-4 py-3.5">
             <div className="text-[15px] font-medium">{clinic.name}</div>
             <div className="text-[12.5px] text-[var(--text-secondary)]">
-              {[clinic.owner, clinic.city, clinic.phone].filter(Boolean).join(" · ")}
+              {[clinic.city, clinic.phone].filter(Boolean).join(" · ")}
             </div>
           </div>
         </>

@@ -12,6 +12,8 @@ import { ToastHost } from "@/components/eb/toast";
 import { Button } from "@/components/ui/button";
 import { appointmentsDb, clientsDb } from "@/data/db";
 import { formatWeekday, todayISO } from "@/lib/dates";
+import { can } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { brl } from "@/lib/view";
 import {
   approveCancel,
@@ -30,6 +32,7 @@ export const Route = createFileRoute("/_gestor/atendimentos/$appointmentId")({
 });
 
 function AtendimentoPage() {
+  const session = useSession();
   const { appointmentId } = Route.useParams();
   const navigate = useNavigate();
   const [confirm, setConfirm] = useState(false);
@@ -85,7 +88,14 @@ function AtendimentoPage() {
     ["Contraindicações", client?.contra ?? "Nenhuma registrada"],
     ["Sensibilidades anteriores", client?.note ?? "Nenhuma registrada"],
     ["Informações faltantes", first ? "Anamnese não iniciada" : "Rotina de casa não atualizada"],
-    ["Valor combinado", `${brl(appointment.price)} · ${appointment.payment}`],
+    ...(can(session, "financeiro")
+      ? [
+          ["Valor combinado", `${brl(appointment.price)} · ${appointment.payment}`] as [
+            string,
+            string,
+          ],
+        ]
+      : []),
     ["Duração", `${appointment.duration} min`],
   ];
   const start = () =>

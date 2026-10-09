@@ -1,123 +1,191 @@
-import { demoAccounts } from "@/data/mock-auth";
-import type { AuthResult, Invite, Session, SignupData } from "@/lib/auth.types";
+import type { AuthResult, Invite, SignupData, StudioSize } from "@/lib/auth.types";
 import { sessionStore } from "@/lib/session";
-import { findInvite, markInviteUsed, stateOf } from "@/lib/invites-store";
-import { clinicBySlug, clinicById, createClinic } from "@/services/clinic.service";
-import { createClient } from "@/services/clients.service";
-import { events } from "@/services/notification-events";
-import { notify } from "@/services/notify";
+import { supabase } from "@/lib/supabase";
 
-const wait = () => new Promise((resolve) => setTimeout(resolve, 350));
+/**
+ * Login real (Supabase Auth). O cadastro tem duas partes: criar o acesso (e-mail e senha, confirmado por
+ * e-mail) e completar o perfil no servidor (criar a clínica ou aceitar a credencial). Como a confirmação por
+ * e-mail abre o app de novo, o que falta fazer fica guardado em `eb.pending` (sem a senha) até o perfil existir.
+ */
+const PENDING_KEY = "eb.pending";
 
-const ACCOUNTS_KEY = "eb.accounts";
+export type Pending =
+  | {
+      type: "gestor";
+      name: string;
+      phone: string;
+      studio: string;
+      city: string;
+      document: string;
+      size: StudioSize;
+    }
+  | { type: "cliente"; name: string; phone: string; code: string | null; slug: string | null }
+  | { type: "equipe"; name: string; code: string };
 
-function savedAccounts(): Session[] {
-  try {
-    return JSON.parse(window.localStorage.getItem(ACCOUNTS_KEY) ?? "[]") as Session[];
-  } catch {
-    return [];
+export const pendingStore = {
+  get(): Pending | null {
+    try {
+      return JSON.parse(window.localStorage.getItem(PENDING_KEY) ?? "null") as Pending | null;
+    } catch {
+      return null;
+    }
+  },
+  set(value: Pending) {
+    try {
+      window.localStorage.setItem(PENDING_KEY, JSON.stringify(value));
+    } catch {
+      /* ignorado */
+    }
+  },
+  clear() {
+    try {
+      window.localStorage.removeItem(PENDING_KEY);
+    } catch {
+      /* ignorado */
+    }
+  },
+};
+
+const origin = () => (typeof window === "undefined" ? "" : window.location.origin);
+
+function friendly(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("invalid login")) return "E-mail ou senha incorretos.";
+  if (text.includes("not confirmed"))
+    return "Confirme seu e-mail pelo link que enviamos e depois entre.";
+  if (text.includes("rate limit") || text.includes("too many"))
+    return "Muitas tentativas. Espere alguns minutos e tente de novo.";
+  if (text.includes("password")) return "A senha precisa ter ao menos 8 caracteres.";
+  if (text.includes("valid email")) return "Esse e-mail não parece válido.";
+  return "Não foi possível concluir. Tente de novo em instantes.";
+}
+
+const REASONS: Record<string, string> = {
+  invalido: "Credencial inválida, expirada ou já usada. Peça uma nova.",
+  bloqueado: "Muitas tentativas erradas. Aguarde uma hora e tente de novo.",
+  email_nao_confirmado: "Confirme seu e-mail primeiro.",
+  dados_incompletos: "Preencha o nome e o nome do estúdio.",
+  sem_permissao: "Sem permissão para essa ação.",
+};
+export const reasonText = (reason: string | undefined) =>
+  REASONS[reason ?? ""] ?? "Não foi possível concluir. Tente de novo.";
+
+async function signUp(email: string, password: string, pending: Pending): Promise<AuthResult> {
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+    options: { emailRedirectTo: `${origin()}/` },
+  });
+  if (error) return { ok: false, message: friendly(error.message) };
+  // Com a confirmação de e-mail ligada, um e-mail já cadastrado volta sem identidades.
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+    return { ok: false, message: "Esse e-mail já tem conta. Entre ou recupere a senha." };
   }
-}
-
-function saveAccount(account: Session) {
-  try {
-    const others = savedAccounts().filter((item) => item.email !== account.email);
-    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([...others, account]));
-  } catch {
-    /* sem armazenamento */
+  pendingStore.set(pending);
+  if (data.session) {
+    const done = await authService.finishPending();
+    return done.ok ? { ok: true } : done;
   }
+  return { ok: true, needsEmail: true };
 }
 
-function open(session: Session): AuthResult {
-  saveAccount(session);
-  sessionStore.set(session);
-  return { ok: true, session };
-}
-
-/** Substituível por Supabase: o perfil (gestor ou cliente) vem da conta, não da tela. */
 export const authService = {
-  async signIn(email: string, _password: string): Promise<AuthResult> {
-    await wait();
-    const key = email.trim().toLowerCase();
-    const found = [...demoAccounts, ...savedAccounts()].find(
-      (item) => item.email.toLowerCase() === key,
-    );
-    if (!found) {
-      return { ok: false, message: "Não encontramos esse e-mail. Confira ou crie sua conta." };
-    }
-    sessionStore.set(found);
-    return { ok: true, session: found };
+  async signIn(email: string, password: string): Promise<AuthResult> {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) return { ok: false, message: friendly(error.message) };
+    return { ok: true };
   },
-  async requestPasswordReset(_email: string) {
-    await wait();
-    return { ok: true as const };
+
+  /** Cadastro pelo app: quem cria conta aqui é a gestora e abre a própria clínica. */
+  signUpGestora(data: SignupData): Promise<AuthResult> {
+    return signUp(data.email, data.password, {
+      type: "gestor",
+      name: data.name.trim(),
+      phone: data.phone.trim(),
+      studio: data.studio.trim(),
+      city: data.city.trim(),
+      document: data.document.trim(),
+      size: data.size,
+    });
   },
-  /** Cadastro pelo app: quem cria conta aqui é gestor (esteticista). */
-  async signUp(data: SignupData): Promise<AuthResult> {
-    await wait();
-    const email = data.email.trim().toLowerCase();
-    if ([...demoAccounts, ...savedAccounts()].some((item) => item.email.toLowerCase() === email)) {
-      return { ok: false, message: "Esse e-mail já tem conta. Entre ou use outro e-mail." };
-    }
-    // Cada esteticista abre a própria clínica: é ela que dá o link e as credenciais de cadastro.
-    const clinic = createClinic(data);
-    return open({ role: "gestor", name: data.name.trim(), email, clinicId: clinic.id });
-  },
-  /** Cadastro por convite: quem entra por convite é cliente. */
-  async acceptInvite(
-    data: { name: string; email: string; phone?: string },
+
+  /** Cadastro de cliente pelo link da clínica ou por credencial. */
+  signUpCliente(
+    data: { name: string; email: string; password: string; phone: string },
     invite: Invite,
   ): Promise<AuthResult> {
-    await wait();
-    // A credencial (ou o link) diz a que clínica a cliente é filiada.
-    let clinicId: string | undefined;
-    if (invite.code) {
-      const found = findInvite(invite.code);
-      if (!found)
-        return {
-          ok: false,
-          message: "Não encontramos essa credencial. Peça uma nova à sua esteticista.",
-        };
-      const state = stateOf(found.invite);
-      if (state !== "pendente")
-        return {
-          ok: false,
-          message:
-            state === "usada"
-              ? "Essa credencial já foi usada."
-              : state === "expirada"
-                ? "Essa credencial expirou. Peça uma nova."
-                : "Essa credencial foi cancelada.",
-        };
-      clinicId = found.clinicId;
-    } else {
-      clinicId = clinicBySlug(invite.slug)?.id;
-      if (!clinicId)
-        return {
-          ok: false,
-          message: "Não encontramos a clínica deste link. Peça um novo link à sua esteticista.",
-        };
-    }
-    const email = data.email.trim().toLowerCase();
-    const client = createClient({
-      name: data.name,
-      email,
-      clinicId,
-      via: "link",
-      ...(data.phone ? { phone: data.phone } : {}),
+    return signUp(data.email, data.password, {
+      type: "cliente",
+      name: data.name.trim(),
+      phone: data.phone.trim(),
+      code: invite.code,
+      slug: invite.slug,
     });
-    if (invite.code) markInviteUsed(clinicId, invite.code);
-    const clinic = clinicById(clinicId);
-    if (clinic) notify(events.affiliated(client.id, clinic));
-    return open({ role: "cliente", name: data.name.trim(), email, clientId: client.id, clinicId });
   },
-  /** Acesso livre temporário: abre a área do perfil sem credencial, até o app ser ativado. */
-  enterAs(role: Session["role"]): Session {
-    const session = demoAccounts.find((item) => item.role === role) ?? demoAccounts[0]!;
-    sessionStore.set(session);
-    return session;
+
+  /** Cadastro da funcionária pela credencial de equipe. */
+  signUpEquipe(
+    data: { name: string; email: string; password: string },
+    invite: Invite,
+  ): Promise<AuthResult> {
+    return signUp(data.email, data.password, {
+      type: "equipe",
+      name: data.name.trim(),
+      code: invite.code ?? "",
+    });
   },
-  signOut() {
-    sessionStore.clear();
+
+  /** Completa o que ficou pendente (criar a clínica ou aceitar a credencial). Seguro para repetir. */
+  async finishPending(): Promise<AuthResult> {
+    const pending = pendingStore.get();
+    if (!pending) return { ok: false, message: "Nada a concluir." };
+    const call =
+      pending.type === "gestor"
+        ? supabase.rpc("create_clinic", {
+            p_name: pending.name,
+            p_phone: pending.phone,
+            p_studio: pending.studio,
+            p_city: pending.city,
+            p_document: pending.document,
+            p_size: pending.size,
+          })
+        : pending.type === "cliente"
+          ? supabase.rpc("accept_invite", {
+              p_code: pending.code ?? "",
+              p_slug: pending.slug ?? "",
+              p_name: pending.name,
+              p_phone: pending.phone,
+            })
+          : supabase.rpc("accept_staff_invite", { p_code: pending.code, p_name: pending.name });
+    const { data, error } = await call;
+    if (error)
+      return { ok: false, message: "Não foi possível concluir o cadastro. Tente de novo." };
+    const result = data as { ok: boolean; reason?: string };
+    if (!result?.ok) {
+      pendingStore.clear();
+      return { ok: false, message: reasonText(result?.reason) };
+    }
+    pendingStore.clear();
+    await sessionStore.refresh();
+    return { ok: true };
+  },
+
+  async requestPasswordReset(email: string): Promise<AuthResult> {
+    await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${origin()}/redefinir-senha`,
+    });
+    return { ok: true }; // resposta igual exista ou não o e-mail
+  },
+
+  async updatePassword(password: string): Promise<AuthResult> {
+    const { error } = await supabase.auth.updateUser({ password });
+    return error ? { ok: false, message: friendly(error.message) } : { ok: true };
+  },
+
+  async signOut() {
+    await supabase.auth.signOut();
   },
 };

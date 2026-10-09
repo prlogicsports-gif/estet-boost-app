@@ -3,14 +3,13 @@ import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-ro
 
 import { AuthCarousel } from "@/components/auth/auth-carousel";
 import { ClientInviteForm } from "@/components/auth/client-invite-form";
-import { FreeAccess } from "@/components/auth/free-access";
+import { FinishSignup } from "@/components/auth/finish-signup";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { LoginForm } from "@/components/auth/login-form";
 import { SignupFlow } from "@/components/auth/signup-flow";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { readInvite } from "@/lib/invite";
-import { homeFor, useSession } from "@/lib/session";
-import type { Session } from "@/lib/auth.types";
+import { homeFor, sessionStore, useAuthState } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -44,15 +43,28 @@ function AuthPage() {
   const navigate = useNavigate();
   const searchStr = useRouterState({ select: (state) => state.location.searchStr });
   const invite = readInvite(searchStr ?? "");
-  const session = useSession();
+  const auth = useAuthState();
   const [mode, setMode] = useState<Mode>("entrar");
-
-  const goHome = (next: Session) => navigate({ to: homeFor(next.role) });
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Quem já tem sessão vai direto para a área do próprio perfil.
   useEffect(() => {
-    if (session) navigate({ to: homeFor(session.role) });
-  }, [session, navigate]);
+    if (auth.status === "in") navigate({ to: homeFor(auth.session.role) });
+  }, [auth, navigate]);
+
+  useEffect(() => {
+    try {
+      const text = window.sessionStorage.getItem("eb.notice");
+      if (text) {
+        setNotice(text);
+        window.sessionStorage.removeItem("eb.notice");
+      }
+    } catch {
+      /* ignorado */
+    }
+  }, []);
+
+  const nothing = () => {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,10 +80,33 @@ function AuthPage() {
             className="w-full max-w-[440px] rounded-[28px] border border-[var(--glass-border)] bg-[var(--glass)] p-7 backdrop-blur-[22px] backdrop-saturate-[1.15]"
             style={{ boxShadow: "var(--glass-shadow), var(--glass-highlight)" }}
           >
-            {invite ? (
+            {notice ? (
+              <p
+                role="alert"
+                className="mb-4 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--eb-ivory-a06)] px-3.5 py-3 text-[13px] text-[var(--text-secondary)]"
+              >
+                {notice}
+              </p>
+            ) : null}
+            {auth.status === "loading" || auth.status === "in" ? (
+              <div className="min-h-[200px]" aria-busy />
+            ) : auth.status === "error" ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-[14px] text-[var(--text-secondary)]">{auth.message}</p>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-full border border-[var(--border-card)] px-4 text-sm"
+                  onClick={() => void sessionStore.refresh()}
+                >
+                  Tentar de novo
+                </button>
+              </div>
+            ) : auth.status === "needs-profile" ? (
+              <FinishSignup email={auth.email} />
+            ) : invite ? (
               <ClientInviteForm
                 invite={invite}
-                onSuccess={goHome}
+                onSuccess={nothing}
                 onLogin={() => navigate({ to: "/", search: {} })}
               />
             ) : mode === "recuperar" ? (
@@ -103,14 +138,13 @@ function AuthPage() {
 
                 {mode === "entrar" ? (
                   <LoginForm
-                    onSuccess={goHome}
+                    onSuccess={nothing}
                     onForgot={() => setMode("recuperar")}
                     onCreate={() => setMode("criar")}
                   />
                 ) : (
-                  <SignupFlow onSuccess={goHome} onLogin={() => setMode("entrar")} />
+                  <SignupFlow onSuccess={nothing} onLogin={() => setMode("entrar")} />
                 )}
-                <FreeAccess onEnter={goHome} />
               </>
             )}
           </div>

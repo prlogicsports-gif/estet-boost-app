@@ -4,9 +4,10 @@ import { Lock, Mail, Phone, User } from "lucide-react";
 import { AuthTitle, TermsCheck, authLink } from "@/components/auth/terms-check";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/auth/field";
-import type { Invite, Session } from "@/lib/auth.types";
+import { CheckEmail } from "@/components/auth/check-email";
+import type { Invite } from "@/lib/auth.types";
 import { authService } from "@/services/auth.service";
-import { initialsOf } from "@/data/mock-auth";
+import { initialsOf } from "@/lib/initials";
 
 export function ClientInviteForm({
   invite,
@@ -14,13 +15,17 @@ export function ClientInviteForm({
   onLogin,
 }: {
   invite: Invite;
-  onSuccess: (session: Session) => void;
+  onSuccess: () => void;
   onLogin: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [terms, setTerms] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const staff = invite.kind === "equipe";
   const firstName = invite.professional.split(" ")[0] || "ela";
+
+  if (sentTo) return <CheckEmail email={sentTo} onBack={onLogin} />;
 
   return (
     <form
@@ -29,17 +34,20 @@ export function ClientInviteForm({
         event.preventDefault();
         const data = new FormData(event.currentTarget);
         setLoading(true);
-        const result = await authService.acceptInvite(
-          {
-            name: String(data.get("nome")),
-            email: String(data.get("email")),
-            phone: String(data.get("celular") ?? ""),
-          },
-          invite,
-        );
+        const email = String(data.get("email"));
+        const password = String(data.get("senha"));
+        const name = String(data.get("nome"));
+        const result = staff
+          ? await authService.signUpEquipe({ name, email, password }, invite)
+          : await authService.signUpCliente(
+              { name, email, password, phone: String(data.get("celular") ?? "") },
+              invite,
+            );
         setLoading(false);
-        if (result.ok) onSuccess(result.session);
-        else setError(result.message);
+        if (result.ok) {
+          if (result.needsEmail) setSentTo(email);
+          else onSuccess();
+        } else setError(result.message);
       }}
     >
       <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] px-3.5 py-3">
@@ -47,20 +55,20 @@ export function ClientInviteForm({
           {initialsOf(invite.professional || "EB")}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs text-[var(--text-secondary)]">Convite de</span>
+          <span className="block text-xs text-[var(--text-secondary)]">
+            {staff ? "Equipe de" : "Convite de"}
+          </span>
           <span className="block text-[15px] font-medium text-foreground">
             {invite.professional || "sua esteticista"}
           </span>
         </span>
-        {invite.code ? (
-          <span className="font-mono text-xs text-[var(--text-secondary)]">{invite.code}</span>
-        ) : null}
       </div>
 
       <div className="mt-5">
-        <AuthTitle title="Crie seu acesso.">
-          Seu cadastro fica vinculado a {firstName}: você acompanha seus horários, sua evolução e as
-          recomendações dela.
+        <AuthTitle title={staff ? "Entre para a equipe." : "Crie seu acesso."}>
+          {staff
+            ? `Você vai trabalhar com ${invite.professional || "a clínica"}. Use o mesmo e-mail que a gestora informou ao gerar a sua credencial.`
+            : `Seu cadastro fica vinculado a ${firstName}: você acompanha seus horários, sua evolução e as recomendações dela.`}
         </AuthTitle>
       </div>
 
@@ -73,15 +81,17 @@ export function ClientInviteForm({
           icon={<User aria-hidden />}
           required
         />
-        <Field
-          label="Celular"
-          type="tel"
-          name="celular"
-          autoComplete="tel"
-          placeholder="(11) 90000-0000"
-          icon={<Phone aria-hidden />}
-          required
-        />
+        {staff ? null : (
+          <Field
+            label="Celular"
+            type="tel"
+            name="celular"
+            autoComplete="tel"
+            placeholder="(11) 90000-0000"
+            icon={<Phone aria-hidden />}
+            required
+          />
+        )}
         <Field
           label="E-mail"
           type="email"
@@ -122,7 +132,7 @@ export function ClientInviteForm({
       </TermsCheck>
 
       <Button type="submit" size="lg" className="mt-5 w-full" disabled={!terms || loading}>
-        {loading ? "Criando acesso..." : "Criar meu acesso"}
+        {loading ? "Criando acesso..." : staff ? "Entrar para a equipe" : "Criar meu acesso"}
       </Button>
 
       <p className="mt-[18px] text-center text-[13.5px] leading-normal text-[var(--text-secondary)]">

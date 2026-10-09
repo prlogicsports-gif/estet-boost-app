@@ -1,6 +1,6 @@
 import { logActivity } from "@/services/activity.service";
-import { clientsDb, DEMO_CLINIC, type ClientRec } from "@/data/db";
-import { initialsOf } from "@/data/mock-auth";
+import { clientsDb, type ClientRec } from "@/data/db";
+import { initialsOf } from "@/lib/initials";
 import { events } from "@/services/notification-events";
 import { notify } from "@/services/notify";
 
@@ -9,7 +9,6 @@ export type NewClient = {
   phone?: string | undefined;
   email?: string | undefined;
   procedure?: string | undefined;
-  clinicId?: string | undefined;
   birth?: string | undefined;
   document?: string | undefined;
   address?: string | undefined;
@@ -42,14 +41,12 @@ export function ageOf(birth: string | undefined) {
 /** Cadastra uma cliente na carteira de uma clínica (pela esteticista ou quando a cliente aceita o convite). */
 export function createClient(input: NewClient): ClientRec {
   const email = input.email?.trim().toLowerCase();
-  const clinicId = input.clinicId ?? DEMO_CLINIC;
   const existing = clientsDb
     .get()
     .find(
       (client) =>
-        (client.clinicId ?? DEMO_CLINIC) === clinicId &&
-        ((email && client.email === email) ||
-          client.name.toLowerCase() === input.name.trim().toLowerCase()),
+        (email && client.email === email) ||
+        client.name.toLowerCase() === input.name.trim().toLowerCase(),
     );
   if (existing) return existing;
   const rec: ClientRec = {
@@ -63,7 +60,6 @@ export function createClient(input: NewClient): ClientRec {
     age: ageOf(input.birth),
     phone: input.phone?.trim() ?? "",
     email,
-    clinicId,
     createdAt: new Date().toISOString(),
     ...clean({
       birth: input.birth,

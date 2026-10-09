@@ -5,7 +5,7 @@ import { RoleGate } from "@/components/auth/role-gate";
 /** O atendimento é um fluxo independente em tela cheia: sem menu, sem barra, só o passo a passo. */
 export function SessionFrame({ children }: { children: ReactNode }) {
   return (
-    <RoleGate role="gestor">
+    <RoleGate role="gestor" permissions={["atendimentos"]}>
       <div
         className="fixed inset-0 z-50 overflow-y-auto bg-background"
         style={{ animation: "page-in 180ms ease-out" }}

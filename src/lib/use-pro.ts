@@ -1,10 +1,11 @@
-import { pro as demo } from "@/data/gestor-mock";
-import { initialsOf } from "@/data/mock-auth";
+import { initialsOf } from "@/lib/initials";
 import { useSession } from "@/lib/session";
 
-/** A esteticista logada. Quem cria conta vê o próprio nome; a conta de demonstração é a Fernanda. */
+const ROLE = { gestor: "Gestora", funcionario: "Equipe", cliente: "Cliente" } as const;
+
+/** A pessoa da equipe logada (gestora ou funcionária). */
 export function usePro() {
   const session = useSession();
-  if (!session || session.role !== "gestor") return demo;
-  return { name: session.name, initials: initialsOf(session.name), role: demo.role };
+  const name = session?.name ?? "";
+  return { name, initials: initialsOf(name), role: session ? ROLE[session.role] : "" };
 }

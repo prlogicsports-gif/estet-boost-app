@@ -27,8 +27,10 @@ export async function registerPush(): Promise<PushStatus> {
 /** Mostra a notificação no aparelho, se a pessoa liberou e ela é do perfil que está logado. */
 export function showPush(rec: NotificationRec) {
   if (pushStatus() !== "granted") return;
-  const session = sessionStore.get();
-  if (!session || session.role !== rec.audience) return;
+  const auth = sessionStore.get();
+  if (auth.status !== "in") return;
+  const session = auth.session;
+  if ((session.role === "cliente" ? "cliente" : "gestor") !== rec.audience) return;
   if (
     rec.audience === "cliente" &&
     session.clientId &&

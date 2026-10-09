@@ -1,7 +1,7 @@
 import type { ClientRec } from "@/data/db";
-import type { LedgerEntry } from "@/data/gestor-mock";
+import type { LedgerEntry } from "@/lib/models";
 import { formatWeekday } from "@/lib/dates";
-import type { AppointmentRec, BillRec, CareRec, ClinicRec, StockRec } from "@/lib/models";
+import type { AppointmentRec, BillRec, CareRec, StockRec } from "@/lib/models";
 import { brl } from "@/lib/view";
 import type { NotificationDraft } from "@/services/notify";
 
@@ -159,13 +159,6 @@ export const events = {
     }),
 
   // ── para a cliente ──
-  affiliated: (clientId: string, clinic: Pick<ClinicRec, "name">) =>
-    toCliente(clientId, {
-      kind: "confirmed",
-      title: `Você agora faz parte de ${clinic.name}`,
-      body: "Acompanhe horários, evolução e recomendações por aqui",
-      href: "/cliente",
-    }),
   appointmentScheduled: (a: AppointmentRec) =>
     toCliente(a.clientId, {
       kind: "reminder",

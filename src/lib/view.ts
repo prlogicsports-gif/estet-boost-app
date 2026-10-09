@@ -5,7 +5,8 @@ import type { AppointmentRec } from "@/lib/models";
 export const brl = (value: number) => `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
 
 /** Atendimento do banco no formato do card. */
-export function toCard(rec: AppointmentRec): Appointment & { done?: boolean } {
+/** `showPrice: false` esconde o valor (a funcionária sem permissão de financeiro não vê dinheiro). */
+export function toCard(rec: AppointmentRec, showPrice = true): Appointment & { done?: boolean } {
   return {
     id: rec.id,
     clientId: rec.clientId,
@@ -17,7 +18,7 @@ export function toCard(rec: AppointmentRec): Appointment & { done?: boolean } {
     ...(rec.session ? { session: rec.session } : {}),
     ...(rec.sessionsTotal ? { sessionsTotal: rec.sessionsTotal } : {}),
     status: rec.status,
-    price: brl(rec.price),
+    price: showPrice ? brl(rec.price) : "",
     ...(rec.alert
       ? { alert: rec.alert }
       : rec.request

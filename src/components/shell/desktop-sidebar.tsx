@@ -2,12 +2,16 @@ import { Link } from "@tanstack/react-router";
 
 import { BrandMark } from "@/components/brand/brand-mark";
 import type { NavConfig } from "@/components/shell/nav-items";
+import { LogOut } from "lucide-react";
+
 import { initialsOf, roleLabel } from "@/data/mock-auth";
+import { useSignOut } from "@/lib/use-sign-out";
 import { useSession } from "@/lib/session";
 
 /** O dock do celular em pé: o mesmo vidro, as mesmas rotas, o perfil fixo embaixo. */
 export function DesktopSidebar({ nav }: { nav: NavConfig }) {
   const session = useSession();
+  const signOut = useSignOut();
   const items = [...nav.primary, ...nav.secondary];
 
   return (
@@ -46,6 +50,15 @@ export function DesktopSidebar({ nav }: { nav: NavConfig }) {
               {roleLabel[session.role]}
             </span>
           </span>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            aria-label="Sair da conta"
+            title="Sair da conta"
+            className="ml-auto grid size-11 flex-none place-items-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--accent)] hover:text-foreground"
+          >
+            <LogOut className="size-[18px]" aria-hidden />
+          </button>
         </div>
       ) : null}
     </aside>
