@@ -8,7 +8,7 @@ export function SegmentedTabs<T extends string>({
   scroll,
   className,
 }: {
-  tabs: { id: T; label: string }[];
+  tabs: { id: T; label: string; /** Texto menor no celular. */ short?: string }[];
   active: T;
   onSelect: (id: T) => void;
   size?: "sm" | "md";
@@ -45,7 +45,14 @@ export function SegmentedTabs<T extends string>({
             )}
             style={on ? { boxShadow: "var(--shadow-card)" } : undefined}
           >
-            {tab.label}
+            {tab.short ? (
+              <>
+                <span className="sm:hidden">{tab.short}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+              </>
+            ) : (
+              tab.label
+            )}
           </button>
         );
       })}

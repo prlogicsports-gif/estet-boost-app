@@ -69,10 +69,10 @@ function EvolucaoPage() {
         active={tab}
         onSelect={setTab}
         tabs={[
-          { id: "mapa", label: "Mapa facial" },
-          { id: "fotos", label: "Fotografias" },
-          { id: "linha", label: "Linha do tempo" },
-          { id: "recom", label: "Recomendações" },
+          { id: "mapa", label: "Mapa facial", short: "Mapa" },
+          { id: "fotos", label: "Fotografias", short: "Fotos" },
+          { id: "linha", label: "Linha do tempo", short: "Linha" },
+          { id: "recom", label: "Recomendações", short: "Dicas" },
         ]}
       />
 
