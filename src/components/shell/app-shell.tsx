@@ -42,12 +42,37 @@ export function AppShell({ nav, children }: { nav: NavConfig; children: ReactNod
     };
   }, []);
 
-  // Telas que se abrem por botão (e não por link) também são baixadas antes do uso.
+  // Depois que a primeira tela aparece, baixa em segundo plano o código de TODAS as telas do perfil,
+  // para nenhum clique (menu ou botão) precisar esperar download.
   const router = useRouter();
   useEffect(() => {
-    const ids = nav.role === "gestor" ? ["/atendimento/novo"] : [];
-    const warm = () => ids.forEach((to) => router.preloadRoute({ to }).catch(() => {}));
-    const handle = window.setTimeout(warm, 2000);
+    const targets =
+      nav.role === "gestor"
+        ? [
+            { to: "/hoje" },
+            { to: "/agenda" },
+            { to: "/clientes" },
+            { to: "/gestao" },
+            { to: "/notificacoes" },
+            { to: "/credenciais" },
+            { to: "/configuracoes" },
+            { to: "/atendimento/novo" },
+            { to: "/clientes/$clientId", params: { clientId: "x" } },
+            { to: "/atendimentos/$appointmentId", params: { appointmentId: "x" } },
+            { to: "/atendimento/$sessionId", params: { sessionId: "x" } },
+          ]
+        : [
+            { to: "/cliente" },
+            { to: "/cliente/agenda" },
+            { to: "/cliente/evolucao" },
+            { to: "/cliente/perfil" },
+          ];
+    const handle = window.setTimeout(async () => {
+      for (const target of targets) {
+        await router.preloadRoute(target as never).catch(() => {});
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+    }, 1200);
     return () => window.clearTimeout(handle);
   }, [router, nav.role]);
 
