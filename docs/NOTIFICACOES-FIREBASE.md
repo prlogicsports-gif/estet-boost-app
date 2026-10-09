@@ -1,6 +1,8 @@
-# Notificações com Firebase: especificação para o Lovable
+# Notificações: avisos no Supabase e push pelo Firebase (FCM)
 
-O app já funciona de ponta a ponta **sem banco**: cadastro de clientes, agendamentos, pedidos da cliente, caixa, contas, estoque e notificações. Tudo vive no aparelho (`localStorage`) e foi escrito para trocar o armazenamento sem mexer nas telas. Este documento diz o que o Firebase precisa fazer no lugar.
+> **Decisão atual:** os avisos e os dados vivem no **Supabase** (tabela `notifications`, Realtime, `pg_cron`, Edge Function `send_push`). O **Firebase é usado só para o Cloud Messaging** (entrega do push). Onde este texto fala em Firestore ou Cloud Functions, leia: tabelas do Postgres e funções do Supabase. Veja [Arquitetura](./ARQUITETURA.md) e [Modelo do banco](./SUPABASE-MODELO-E-RLS.md).
+
+O app já funciona de ponta a ponta **sem banco**: cadastro de clientes, agendamentos, pedidos da cliente, caixa, contas, estoque e notificações. Tudo vive no aparelho (`localStorage`) e foi escrito para trocar o armazenamento sem mexer nas telas. Este documento diz o que o backend precisa fazer no lugar.
 
 ## 1. O que já existe e onde
 
@@ -15,33 +17,19 @@ O app já funciona de ponta a ponta **sem banco**: cadastro de clientes, agendam
 | Push no navegador      | `src/services/push.service.ts`              | Permissão e exibição local; vira registro de token FCM                                                     |
 | Central de avisos      | `src/components/eb/notifications-panel.tsx` | Lista, filtro, leitura e preferências                                                                      |
 
-## 2. Modelo no Firestore
+## 2. Modelo no Supabase
 
-Fuso de todas as regras: **America/Sao_Paulo**. Datas como `AAAA-MM-DD`; instantes em ISO UTC.
+Fuso de todas as regras: **America/Sao_Paulo**. Datas como `date`; instantes em `timestamptz`.
 
-```
-users/{uid}
-  role: "gestor" | "cliente"
-  clientId?: string            // só para cliente: id em clients
-  fcmTokens: string[]          // um por aparelho/navegador
-  prefs: { appointments, payments, stock, recommendations, push, whatsapp: boolean }
+- `profiles` (papel e clínica), `clients`, `appointments`, `ledger`, `bills`, `stock`, `care`, `prefs`: ver [SUPABASE-MODELO-E-RLS.md](./SUPABASE-MODELO-E-RLS.md).
+- `push_tokens (user_id, token, platform)`: um por aparelho/navegador.
+- `notifications (id, clinic_id, recipient_id, rule_key, kind, title, body, href, read, created_at)` com `unique (recipient_id, rule_key)`: **um registro por destinatário** (a gestora, cada funcionária e a cliente). O aviso "para a equipe" gera uma linha para cada pessoa da equipe.
 
-clients/{clientId}             // ClientRec em src/data/db.ts
-appointments/{id}              // AppointmentRec em src/lib/models.ts
-notifications/{ruleKey|autoId} // NotificationRec; o id do documento É a ruleKey nas automáticas
-bills/{id}                     // BillRec
-ledger/{id}                    // LedgerEntry (entradas, saidas, receber)
-stock/{nome}                   // StockEntry
-care/{id}                      // CareRec (recomendações, com horário de lembrete)
-```
-
-`notifications` precisa de `audience` ("gestor" | "cliente"), `clientId?`, `read`, `createdAt`, `kind`, `title`, `body`, `href?`, ordenado por `createdAt` desc.
-
-Para evitar notificação duplicada, grave o documento com **id = ruleKey** usando `create()` (falha se já existir).
+Para evitar notificação duplicada, insira com `on conflict (recipient_id, rule_key) do nothing`.
 
 ## 3. Quando avisar (as regras)
 
-O texto, o destino e o `ruleKey` de **cada** aviso estão num catálogo único: `src/services/notification-events.ts` (objeto `events`). As regras agendadas estão em `src/services/reminders.ts`. As Cloud Functions devem reproduzir os dois:
+O texto, o destino e o `ruleKey` de **cada** aviso estão num catálogo único: `src/services/notification-events.ts` (objeto `events`). As regras agendadas estão em `src/services/reminders.ts`. As funções do Supabase (SQL e Edge Functions) devem reproduzir os dois:
 
 ### Eventos (disparam na hora, por gatilho de escrita)
 
@@ -87,23 +75,25 @@ Respeite as preferências: `appointments`, `payments`, `stock`, `recommendations
 
 ## 4. Entrega (FCM)
 
-1. Ao entrar, o app pede permissão (`registerPush` em `push.service.ts`), obtém o token com `getToken()` e grava em `users/{uid}.fcmTokens` (`arrayUnion`).
-2. Adicione `public/firebase-messaging-sw.js` para receber push com o app fechado; o clique abre `href`.
-3. A função que cria a notificação envia o push para os `fcmTokens` do destinatário (`sendEachForMulticast`) e remove tokens inválidos.
-4. Destinatário = `audience: "gestor"` → o usuário gestor; `audience: "cliente"` → o usuário com `clientId` igual.
+1. Ao entrar, o app pede permissão (`registerPush` em `push.service.ts`), obtém o token do FCM com `getToken()` e grava em `push_tokens` (RLS: cada pessoa só grava e lê os próprios).
+2. Adicione `public/firebase-messaging-sw.js` para receber push com o app fechado; o clique abre `href`. (Depende da instalação na tela inicial, etapa PWA.)
+3. Ao inserir uma linha em `notifications`, um gatilho do banco chama a **Edge Function `send_push`**, que lê os `push_tokens` do destinatário e envia pela API **HTTP v1** do FCM, removendo tokens inválidos.
+4. A conta de serviço do Firebase é **secret** da função (`supabase secrets set`), nunca no navegador nem no repositório.
+5. Respeita `prefs.push`: com `push = false`, a linha entra em `notifications` (aparece no app) mas **não há envio de push**.
+6. Destinatário: `audience gestor` → a gestora; `equipe` → gestora e funcionárias (avisos de atendimento, estoque e clientes, **nunca** financeiros para a funcionária); `cliente` → a conta da cliente.
 
-## 5. Regras de segurança (resumo)
+## 5. Segurança
 
-- `gestor`: lê e escreve tudo da própria clínica.
-- `cliente`: lê **só** seus `appointments`, `care`, `notifications` (com seu `clientId`) e o próprio `clients/{clientId}`; escreve apenas solicitações (`appointments` com `origin: "cliente"`) e preferências.
-- Observações internas das marcações do mapa facial **não** vão para a cliente (hoje o app as remove antes de exibir).
+- RLS: cada pessoa lê só `notifications` com `recipient_id = auth.uid()` e só marca `read`.
+- Cliente nunca recebe observações internas do mapa facial (hoje o app as remove antes de exibir).
+- Avisos financeiros (`payment`, `bill`, margem) só vão para a gestora.
 
 ## 6. Como migrar sem mexer nas telas
 
-1. Reimplemente `createStore` em `src/lib/db.ts` com Firestore, mantendo `get`, `set`, `reset` e `use` (use `onSnapshot` para o `use`).
+1. Reimplemente `createStore` em `src/lib/db.ts` com `supabase-js` (consulta inicial + Realtime), mantendo `get`, `set`, `reset` e `use`.
 2. Mantenha `src/services/*` como estão: eles só chamam `store.set(...)` e `notify(...)`.
-3. Troque o corpo de `notify()` por escrita em `notifications` (com `ruleKey` como id).
-4. Mova `runReminders()` para uma Cloud Function agendada e **remova o `setInterval`** em `src/components/shell/app-shell.tsx`.
-5. Troque `authService` (`src/services/auth.service.ts`) por Firebase Auth. O perfil (`gestor`/`cliente`) e o `clientId` vêm de `users/{uid}`; `RoleGate` e as rotas protegidas já usam isso.
+3. Troque o corpo de `notify()` por inserção em `notifications` (com `rule_key`).
+4. Mova `runReminders()` para uma função agendada por **pg_cron** (a cada 5 min) e **remova o `setInterval`** em `src/components/shell/app-shell.tsx`.
+5. Troque `authService` (`src/services/auth.service.ts`) por Supabase Auth. O papel e a clínica vêm de `profiles`; `RoleGate` e as rotas protegidas já usam isso.
 
-Para testar localmente a qualquer momento: Configurações → "Restaurar dados de exemplo".
+Para testar localmente a qualquer momento: Configurações → "Restaurar dados de exemplo" (só no estado de teste atual).

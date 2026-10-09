@@ -1,6 +1,6 @@
 # Equipe da clínica: acesso de funcionária
 
-Decisão: uma clínica pode ter profissionais trabalhando com acesso próprio. A gestora gera uma **credencial** e a pessoa entra com o papel **`funcionario`**: acessa tudo da clínica **menos o financeiro**. Este documento complementa e, onde houver conflito, **prevalece sobre** [Arquitetura](./ARQUITETURA.md) (§3 e §4), [Segurança](./SEGURANCA-PRIVACIDADE.md) (§4 matriz), [Firestore e regras](./FIRESTORE-MODELO-E-REGRAS.md) e [Fluxos](./FLUXOS.md).
+Decisão: uma clínica pode ter profissionais trabalhando com acesso próprio. A gestora gera uma **credencial** e a pessoa entra com o papel **`funcionario`**: acessa tudo da clínica **menos o financeiro**. Este documento complementa e, onde houver conflito, **prevalece sobre** [Arquitetura](./ARQUITETURA.md) (§3 e §4), [Segurança](./SEGURANCA-PRIVACIDADE.md) (§4 matriz), [Modelo do banco e RLS](./SUPABASE-MODELO-E-RLS.md) e [Fluxos](./FLUXOS.md).
 
 ## 1. Papéis
 
@@ -40,58 +40,46 @@ sequenceDiagram
   participant G as Gestora
   participant F as Funcionária
   participant App as App
-  participant Fn as Funções
-  participant FS as Firestore
-  G->>Fn: createStaffInvite({nome, e-mail})
-  Fn->>Fn: só gestora da clínica; limite de convites pendentes
-  Fn->>FS: invites/{hash}: role=funcionario, clinicId, validade 48 h, uso único
+  participant Auth as Supabase Auth
+  participant DB as Postgres
+  G->>DB: rpc create_staff_invite(nome, e-mail)
+  DB->>DB: só gestora da clínica; limite de convites pendentes
+  DB->>DB: invites: só o hash, role=funcionario, clinic_id, validade 48 h, uso único
   G->>F: envia link ou código (WhatsApp)
-  F->>App: abre o link, cria nome e senha (e-mail do convite)
-  App->>Fn: acceptStaffInvite({requestId, código, dados})
-  Fn->>Fn: código válido, não usado, não expirado, e-mail confere
-  Fn->>FS: transação: clinics/{id}/staff/{uid}, users/{uid}, marca uso
-  Fn->>Fn: claims role=funcionario, clinicId, staffId
-  Fn->>FS: activity e aviso à gestora
+  F->>App: abre o link, cria senha (o e-mail precisa ser o do convite)
+  App->>Auth: signUp (Turnstile) e confirma o e-mail
+  App->>DB: rpc accept_staff_invite(request_id, código)
+  DB->>DB: código válido, não usado, não expirado, e-mail confere
+  DB->>DB: transação: profiles(role=funcionario, clinic_id, active), marca uso
+  DB->>DB: activity e aviso à gestora
 ```
 
-- Credencial de equipe é **diferente** da de cliente: validade menor (48 h), amarrada ao e-mail, exige **e-mail verificado** e recomenda **MFA**.
-- A gestora **desativa** uma funcionária a qualquer momento (função `disableStaff`: desativa o login, revoga tokens e marca `active=false`); o acesso cai na próxima renovação do token, no máximo em 1 hora, ou na hora com revogação.
-- O que a funcionária faz fica registrado com o `staffId` (quem atendeu, quem corrigiu o quê).
+- Credencial de equipe é **diferente** da de cliente: validade menor (48 h), amarrada ao e-mail, exige **e-mail confirmado** e recomenda **MFA**.
+- A gestora **desativa** uma funcionária a qualquer momento (`disable_staff`): marca `profiles.active = false` e revoga as sessões. Como o RLS consulta `profiles.active` a cada acesso, **o bloqueio é imediato**, sem esperar o token expirar.
+- O que a funcionária faz fica registrado com o `staff_id` (quem atendeu, quem corrigiu o quê).
 
-## 4. Mudanças no modelo e nas regras
+## 4. Mudanças no modelo e nas políticas
 
-Novas peças:
+Detalhes completos em [SUPABASE-MODELO-E-RLS.md](./SUPABASE-MODELO-E-RLS.md). Em resumo:
 
-- `clinics/{id}/staff/{uid}`: `{ name, email, active, createdAt, createdBy }`.
-- `invites/{hash}` ganha `role: "cliente" | "funcionario"` e `emailHint`.
-- **Financeiro isolado em caminhos que só a gestora lê**: `clinics/{id}/ledger`, `bills` (já separados) e `stock/{id}/private/cost` (custo e fornecedor saem do documento principal do estoque).
-- `sessions` finalizadas: o resumo financeiro (`totals`, `paidNow`, `payment`, `procedures[].price` cobrado) fica em `sessions/{id}/private/finance`, lido só pela gestora.
-- `activity` ganha `sensitive: boolean` (eventos financeiros); a funcionária lê apenas `sensitive == false`.
+- `profiles.role` aceita `funcionario`; `invites.role` distingue credencial de cliente e de equipe (com `email_hint`).
+- **Financeiro isolado em tabelas que só a gestora lê**: `ledger`, `bills`, `stock_costs` (custo e fornecedor), `session_finance` (valores cobrados, pagamento, custo) e `appointment_finance` (valor combinado do horário). O RLS protege linhas, não colunas; por isso o dinheiro mora em tabelas separadas.
+- `activity.sensitive` marca eventos financeiros; a funcionária lê só `sensitive = false`.
+- Funções auxiliares do banco: `app.is_gestor()` (financeiro e administração) e `app.is_team()` (gestora ou funcionária: clientes, agenda, anamnese, fotos, rascunho de atendimento, estoque sem custo, leitura de procedimentos).
+- A funcionária **não** altera valores nem o estado financeiro em nenhum caminho; as RPCs financeiras exigem `app.is_gestor()` dentro da função.
 
-Funções auxiliares nas regras:
+Testes de RLS da equipe (somar aos de SUPABASE-MODELO-E-RLS.md §7):
 
-```
-function isStaff(c)   { return inClinic(c) && role() == 'funcionario'; }
-function isPro(c)     { return isGestor(c) || isStaff(c); }   // "equipe"
-```
-
-- Onde hoje está `isGestor(c)` para **clientes, agenda, anamnese, fotos, rascunho de atendimento, estoque (sem custo), blocks e procedures (leitura)**, passa a valer `isPro(c)`.
-- Onde é financeiro ou administração (`ledger`, `bills`, `private/*`, `config` de clínica, `procedures` escrita, `staff`, `invites`), continua `isGestor(c)`.
-- Funcionária **não** pode alterar campos de valor nem `reported`/estado financeiro em nenhum caminho.
-
-Novos testes das regras (somar aos de FIRESTORE §7):
-
-| Teste                                                         | Esperado                  |
-| ------------------------------------------------------------- | ------------------------- |
-| Funcionária lê `ledger`, `bills` ou `private/*`               | Negado                    |
-| Funcionária lê estoque (sem custo) e agenda                   | Permitido                 |
-| Funcionária lê `stock/{id}/private/cost`                      | Negado                    |
-| Funcionária edita preço de procedimento                       | Negado                    |
-| Funcionária cria credencial ou lê `staff` de outros           | Negado                    |
-| Funcionária de clínica X lê clínica Y                         | Negado                    |
-| Funcionária desativada (`active=false`) acessa algo           | Negado após revogar token |
-| Credencial de equipe usada duas vezes ou com e-mail diferente | Negado                    |
-| Funcionária confirma pagamento ou fecha com valor alterado    | Negado                    |
+| Teste                                                                                     | Esperado               |
+| ----------------------------------------------------------------------------------------- | ---------------------- |
+| Funcionária lê `ledger`, `bills`, `stock_costs`, `session_finance`, `appointment_finance` | 0 linhas               |
+| Funcionária lê estoque (sem custo), agenda e clientes da própria clínica                  | Permitido              |
+| Funcionária edita preço de procedimento                                                   | Negado                 |
+| Funcionária cria credencial ou lê credenciais/equipe                                      | Negado                 |
+| Funcionária da clínica X lê a clínica Y                                                   | 0 linhas               |
+| Funcionária desativada (`active=false`) acessa qualquer tabela                            | 0 linhas imediatamente |
+| Credencial de equipe usada duas vezes ou com e-mail diferente                             | `{ok:false}`           |
+| Funcionária confirma pagamento ou fecha atendimento alterando valor                       | Negado                 |
 
 ## 5. Mudanças nas telas (na implementação)
 

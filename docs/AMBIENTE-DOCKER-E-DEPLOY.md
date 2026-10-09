@@ -1,112 +1,100 @@
 # Ambiente local (Docker), testes e publicação
 
-Projeto. **Docker é só para desenvolvimento e testes**: sobe o Firebase Emulator Suite com dados de teste. Produção roda na Cloudflare (site) e no Firebase (dados e funções), sem container nosso.
+Projeto. **Docker é só para desenvolvimento e testes**: o Supabase CLI sobe a pilha completa do Supabase em containers no seu computador, com dados de teste. Produção roda na Cloudflare (site) e no Supabase na nuvem (dados), sem container nosso.
 
 ## 1. Por que Docker aqui
 
-- Testar login, regras, funções e avisos **sem tocar em dados reais e sem custo**.
+- Testar login, RLS, funções, e-mails e avisos **sem tocar em dados reais e sem custo**.
 - Todo mundo da equipe (e o CI) roda o mesmo ambiente.
-- Os testes das regras de segurança rodam contra o emulador antes de qualquer publicação.
+- Os testes de segurança (RLS) rodam contra esse banco antes de qualquer publicação.
 
 ## 2. Estrutura prevista no repositório
 
 ```
-firebase.json              emuladores, regras, índices, funções
-.firebaserc                projetos: dev, staging, prod
-firestore.rules            regras (ver FIRESTORE-MODELO-E-REGRAS.md)
-firestore.indexes.json     índices
-storage.rules              regras do Storage
-functions/                 Cloud Functions (TypeScript)
-  src/{createClinic,acceptInvite,completeSession,confirmPayment,reminders,...}.ts
-emulator/
-  Dockerfile               Node + Java + firebase-tools
-  seed.ts                  dados de exemplo (o que hoje está em src/data/db.ts seed*)
-docker-compose.yml
+supabase/
+  config.toml              configuração local (portas, Auth, Storage)
+  migrations/              esquema, funções, RLS, índices (versionados, revisados como código)
+  seed.sql                 dados de exemplo (hoje em src/data/db.ts seed*)
+  functions/               Edge Functions (TypeScript/Deno): send_push, export_client_data, reminders...
+  tests/                   testes pgTAP das políticas RLS
+src/lib/supabase.ts        único arquivo que cria o cliente supabase-js
 .env.example               só variáveis públicas e nomes de segredos (sem valores)
+.github/workflows/         CI
 ```
 
-## 3. `docker-compose.yml` (rascunho)
+## 3. Subir o ambiente local
 
-```yaml
-services:
-  emulators:
-    build: ./emulator
-    command: firebase emulators:start --project estetboost-dev --import ./emulator/data --export-on-exit
-    ports:
-      - "4000:4000" # Emulator UI (ver e editar o banco de teste)
-      - "9099:9099" # Auth
-      - "8081:8081" # Firestore
-      - "9199:9199" # Storage
-      - "5001:5001" # Functions
-    volumes:
-      - ./:/workspace
-    working_dir: /workspace
-  app:
-    image: oven/bun:1
-    working_dir: /workspace
-    command: sh -c "bun install && bun run dev -- --host 0.0.0.0 --port 8080"
-    environment:
-      VITE_FIREBASE_USE_EMULATOR: "true"
-      VITE_FIREBASE_PROJECT_ID: estetboost-dev
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./:/workspace
-    depends_on: [emulators]
+Pré-requisito: **Docker Desktop**. Depois:
+
+```
+supabase start        # sobe Postgres, Auth, Storage, Realtime, Studio, e-mail de teste
+supabase db reset     # aplica as migrações e o seed.sql
+supabase functions serve   # Edge Functions locais
+bun run dev           # o app, apontando para o Supabase local
 ```
 
-`emulator/Dockerfile`: imagem Node com Java (o Firestore Emulator exige) e `npm i -g firebase-tools`. Nada de credencial real dentro da imagem.
+Endereços locais padrão (do Supabase CLI):
 
-Para ver o banco de teste: **http://localhost:4000** (Emulator UI mostra usuários, documentos, arquivos e logs de funções).
+| Serviço                                             | Endereço                 |
+| --------------------------------------------------- | ------------------------ |
+| API (URL e chaves locais, só de teste)              | `http://127.0.0.1:54321` |
+| **Studio** (ver e editar o banco de teste)          | `http://127.0.0.1:54323` |
+| Caixa de e-mail de teste (confirmação, recuperação) | `http://127.0.0.1:54324` |
+| Postgres                                            | `127.0.0.1:54322`        |
 
-## 4. Conexão do app ao emulador
+`supabase status` mostra a URL e as chaves **locais** (descartáveis). Elas não valem em nenhum outro ambiente.
 
-Hoje não existe `firebase` no `package.json`. Na implementação: um módulo único `src/lib/firebase.ts` que inicializa o SDK com variáveis públicas e, se `VITE_FIREBASE_USE_EMULATOR=true`, aponta para `localhost`. Nenhum outro arquivo importa o SDK direto; só os serviços em `src/services/*`.
+## 4. Conexão do app
+
+Hoje não existe `@supabase/supabase-js` no `package.json`. Na implementação: um módulo único `src/lib/supabase.ts` cria o cliente com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (públicas). Nenhum outro arquivo importa o SDK direto; só os serviços em `src/services/*`. Tipos do banco gerados com `supabase gen types typescript`.
 
 ## 5. Testes
 
-| O que                       | Como                                                                                               | Quando                                                |
-| --------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Regras do Firestore/Storage | `@firebase/rules-unit-testing` contra o emulador                                                   | A cada PR (tabela em FIRESTORE-MODELO-E-REGRAS.md §7) |
-| Funções                     | Testes unitários + emulador                                                                        | A cada PR                                             |
-| Fluxos de tela              | Playwright (scripts existentes em `scratchpad/e2e`, a mover para `e2e/`) apontando para o emulador | A cada PR                                             |
-| Tipos e estilo              | `tsc --noEmit`, `eslint`                                                                           | A cada PR                                             |
-| Dependências                | `bun audit`                                                                                        | A cada PR e semanal                                   |
+| O que                | Como                                                                                                     | Quando              |
+| -------------------- | -------------------------------------------------------------------------------------------------------- | ------------------- |
+| Políticas RLS e RPCs | pgTAP: `supabase test db` (tabela em SUPABASE-MODELO-E-RLS.md §7)                                        | A cada PR           |
+| Tabela sem RLS       | `supabase db lint` + teste que lista tabelas sem RLS                                                     | A cada PR           |
+| Edge Functions       | Testes Deno + `supabase functions serve`                                                                 | A cada PR           |
+| Fluxos de tela       | Playwright (scripts existentes em `scratchpad/e2e`, a mover para `e2e/`) apontando para o Supabase local | A cada PR           |
+| Tipos e estilo       | `tsc --noEmit`, `eslint`                                                                                 | A cada PR           |
+| Dependências         | `bun audit`                                                                                              | A cada PR e semanal |
 
 ## 6. Pipeline (GitHub Actions, rascunho)
 
 1. `bun install --frozen-lockfile`
 2. `tsc --noEmit` e `eslint`
 3. `bun run build`
-4. `firebase emulators:exec "bun run test:rules && bun run test:functions && bun run test:e2e"`
+4. `supabase start` no runner → `supabase db reset` → `supabase test db` → testes de fluxo
 5. `bun audit` e varredura de segredos
-6. Em `main` aprovado: publicar regras, índices e funções no **staging**; produção por aprovação manual.
+6. Em `main` aprovado: `supabase db push` para o **staging**; produção por aprovação manual.
 
-O site é publicado pelo **Lovable/Cloudflare a cada push**. Para impedir que código sem teste vá ao ar, proteger o `main` (revisão e checks obrigatórios) e usar o preview do Cloudflare para validar.
+O site é publicado pelo **Lovable/Cloudflare a cada push**. Para impedir que código sem teste vá ao ar, proteger o `main` (revisão e checks obrigatórios) e usar o preview do Cloudflare.
+
+> Cuidado com o Lovable: se a integração do Lovable gerar ou alterar migrações sozinha, elas entram no repositório. Revisar todo arquivo em `supabase/migrations` antes de publicar e nunca alterar a produção pelo painel.
 
 ## 7. Publicação
 
-| Peça                         | Como                                  | Comando                                                                                      |
-| ---------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Site                         | Push no GitHub → Lovable → Cloudflare | automático                                                                                   |
-| Regras e índices             | CI                                    | `firebase deploy --only firestore:rules,firestore:indexes,storage --project estetboost-prod` |
-| Funções                      | CI                                    | `firebase deploy --only functions --project estetboost-prod`                                 |
-| Segredos das funções         | uma vez, no terminal                  | `firebase functions:secrets:set NOME`                                                        |
-| Segredos do site (se houver) | painel Cloudflare, por ambiente       | Settings → Variables and Secrets                                                             |
+| Peça                                | Como                                  | Comando                                                         |
+| ----------------------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| Site                                | Push no GitHub → Lovable → Cloudflare | automático                                                      |
+| Banco (migrações, RLS, funções SQL) | CI                                    | `supabase db push --linked` (staging, depois prod)              |
+| Edge Functions                      | CI                                    | `supabase functions deploy`                                     |
+| Segredos das funções                | uma vez, no terminal                  | `supabase secrets set NOME=valor` (nunca em arquivo versionado) |
+| Segredos do site (se houver)        | painel Cloudflare, por ambiente       | Settings → Variables and Secrets                                |
 
-Ordem segura de uma mudança que altera dado e tela: publicar **funções e regras compatíveis com a versão antiga e a nova**, depois o site, depois remover o legado.
+Ordem segura de uma mudança que altera dado e tela: publicar migração **compatível com a versão antiga e a nova**, depois o site, depois remover o legado.
 
 ## 8. Cloudflare (site)
 
 - Domínio próprio com HTTPS obrigatório e HSTS.
-- **WAF e limite de requisições** em `/` (cadastro/login) e rotas de recuperação.
-- Cabeçalhos de segurança definidos no SSR (`src/server.ts`) conforme [SEGURANCA-PRIVACIDADE.md](./SEGURANCA-PRIVACIDADE.md) §6.
-- Variáveis `VITE_*` só com valores públicos; nada de segredo.
+- **WAF e limite de requisições** em `/` (cadastro/login) e rotas de recuperação; Turnstile nos formulários de acesso.
+- Cabeçalhos de segurança no SSR (`src/server.ts`) conforme [SEGURANCA-PRIVACIDADE.md](./SEGURANCA-PRIVACIDADE.md) §6.
+- Variáveis `VITE_*` só com valores públicos; **nunca** `service_role`.
 
 ## 9. Passo a passo para quem vai configurar (resumo)
 
-1. Criar a conta Google e três projetos no Firebase: `estetboost-dev`, `-staging`, `-prod` (região São Paulo).
-2. No prod: ativar **Authentication** (e-mail/senha), **Firestore**, **Storage**, **Functions** (plano Blaze) e **App Check**.
-3. Em Google Cloud: **alerta de orçamento** e **Audit Logs**.
-4. Instalar Docker Desktop e rodar `docker compose up` para o ambiente local.
-5. Só então começar a troca dos serviços (ver ordem em `docs/PROXIMA-ETAPA.md`).
+1. Criar a conta Supabase (organização sua) e dois projetos, **`estetboost-staging`** e **`estetboost-prod`**, região **São Paulo**; ativar o plano Pro no prod.
+2. No prod: Auth → exigir confirmação de e-mail, ligar Turnstile, configurar SMTP próprio e limites; Storage → criar o bucket **privado** `photos`.
+3. Criar o projeto Firebase **só para push** (Cloud Messaging) e gerar a chave de conta de serviço; guardá-la como secret da função `send_push` (nunca no chat ou no código).
+4. Instalar o Docker Desktop e o Supabase CLI; rodar `supabase start`.
+5. Só então começar a troca dos serviços (ordem em [PROXIMA-ETAPA.md](./PROXIMA-ETAPA.md)).

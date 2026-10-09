@@ -1,14 +1,13 @@
 # Mapa de fluxos do EstetBoost.
 
-> **Equipe:** novo fluxo de credencial de funcionária (`createStaffInvite` e `acceptStaffInvite`). Ver [Equipe e permissões](./EQUIPE-E-PERMISSOES.md) §3.
-> Projeto. Cada fluxo mostra quem chama, o que valida o servidor, o que é atômico e o que acontece se falhar. Os nomes de função (`createClinic`, `acceptInvite`…) são as Cloud Functions callable previstas em [ARQUITETURA.md](./ARQUITETURA.md). As telas e serviços citados já existem no app.
+Projeto. Cada fluxo mostra quem chama, o que valida o servidor, o que é atômico e o que acontece se falhar. Os nomes `create_clinic`, `accept_invite`… são as RPCs (funções do Postgres) descritas em [SUPABASE-MODELO-E-RLS.md](./SUPABASE-MODELO-E-RLS.md) §4. As telas e serviços citados já existem no app. Papéis e o que a funcionária não vê: [EQUIPE-E-PERMISSOES.md](./EQUIPE-E-PERMISSOES.md).
 
 Regras gerais de robustez:
 
-- **Idempotência**: toda função recebe um `requestId`; repetir a chamada (rede ruim, toque duplo) não duplica nada.
-- **Atomicidade**: o que mexe em várias coleções (fechar atendimento, confirmar pagamento) usa **transação** do Firestore.
+- **Idempotência**: toda RPC recebe um `request_id`; repetir a chamada (rede ruim, toque duplo) não duplica nada.
+- **Atomicidade**: o que mexe em várias tabelas (fechar atendimento, confirmar pagamento) roda dentro de **uma função do Postgres**, que é transacional: ou tudo, ou nada.
 - **Falha visível**: erro de servidor vira mensagem clara na tela e nada fica pela metade.
-- **Offline**: leituras vêm do cache; escritas de rascunho entram na fila local do SDK e sincronizam ao voltar.
+- **Offline**: leituras vêm do cache; o rascunho de atendimento guarda localmente e sincroniza ao voltar.
 
 ## 1. Criar conta da esteticista (nasce a clínica)
 
@@ -18,22 +17,20 @@ Tela: `components/auth/signup-flow.tsx` (2 passos).
 sequenceDiagram
   participant U as Esteticista
   participant App as App
-  participant Auth as Firebase Auth
-  participant Fn as createClinic (função)
-  participant FS as Firestore
+  participant Auth as Supabase Auth
+  participant DB as Postgres (create_clinic)
   U->>App: nome, e-mail, celular, senha (passo 1) + estúdio, cidade, documento (passo 2)
-  App->>Auth: createUserWithEmailAndPassword (App Check)
-  Auth-->>App: usuário criado, e-mail de verificação enviado
-  App->>Fn: createClinic({requestId, estúdio, cidade, documento, porte})
-  Fn->>Fn: valida login, e-mail verificado, 1 clínica por usuário
-  Fn->>FS: transação: clinics/{id}, slugs/{slug}, users/{uid}
-  Fn->>Auth: setCustomUserClaims(role=gestor, clinicId)
-  Fn-->>App: ok
-  App->>Auth: renova token (getIdToken(true)) para receber as claims
+  App->>Auth: signUp (Turnstile) -> e-mail de confirmação
+  U->>Auth: confirma o e-mail pelo link
+  Auth-->>App: usuário logado
+  App->>DB: rpc create_clinic(request_id, estúdio, cidade, documento, porte)
+  DB->>DB: valida login, 1 clínica por usuário
+  DB->>DB: transação: clinics, profiles(role=gestor), clinic_config, slug único
+  DB-->>App: ok
   App->>U: abre Hoje
 ```
 
-Falhas tratadas: e-mail já existe (mensagem neutra), função cai depois de criar o usuário (login mostra "terminar cadastro" e repete `createClinic` com o mesmo `requestId`), slug em uso (gera `studio-bia-2`).
+Falhas tratadas: e-mail já existe (mensagem neutra), a pessoa confirma o e-mail mas fecha o app antes de criar a clínica (no próximo login o app mostra "terminar cadastro" e repete `create_clinic` com o mesmo `request_id`), slug em uso (gera `studio-bia-2`). Os dados do passo 2 ficam guardados no aparelho até a clínica ser criada.
 
 ## 2. Cadastro da cliente por link ou credencial
 
@@ -44,137 +41,141 @@ sequenceDiagram
   participant G as Gestora
   participant C as Cliente
   participant App as App
-  participant Fn as Funções
-  participant FS as Firestore
-  G->>Fn: createInvite({nome?, celular?})
-  Fn->>FS: invites/{hash}: clinicId, validade 7 dias (código só volta uma vez para a tela)
+  participant Auth as Supabase Auth
+  participant DB as Postgres
+  G->>DB: rpc create_invite(nome?, celular?)
+  DB->>DB: grava só o hash, validade 7 dias; devolve o código uma vez
   G->>C: envia link ou código (WhatsApp)
-  C->>App: abre o link (App Check)
-  App->>FS: slugs/{slug} -> nome público da clínica
+  C->>App: abre o link (nome público da clínica via slug)
   C->>App: nome, celular, e-mail, senha
-  App->>Fn: acceptInvite({requestId, código|slug, dados})
-  Fn->>Fn: código válido, não usado, não expirado, não cancelado, limite de tentativas
-  Fn->>FS: transação: marca uso, clients/{id} (clinicId), users/{uid}
-  Fn->>Fn: claims role=cliente, clinicId, clientId
-  Fn->>FS: notifications (gestora: nova cliente; cliente: boas-vindas), activity
-  Fn-->>App: ok, entra na área da cliente
+  App->>Auth: signUp (Turnstile) -> confirma o e-mail
+  Auth-->>App: logada (o código volta no link de confirmação)
+  App->>DB: rpc accept_invite(request_id, código|slug, dados)
+  DB->>DB: válido, não usado, não expirado, não cancelado, limite de tentativas
+  DB->>DB: transação: clients (clinic_id), profiles(role=cliente), marca uso
+  DB->>DB: notifications (gestora: nova cliente; cliente: boas-vindas), activity
+  DB-->>App: ok, entra na área da cliente
 ```
 
-Regras: resposta **genérica** para código inválido; cadastro pelo link fixo não precisa de código mas tem limite por aparelho/IP; a filiação vem do servidor, não do navegador. Se a cliente já foi cadastrada pela gestora (mesmo e-mail), `acceptInvite` **vincula** ao registro existente em vez de duplicar.
+Regras: resposta **genérica** a código inválido; cadastro pelo link fixo não precisa de código, mas tem limite por conta e IP; a filiação vem do servidor. Se a cliente já foi cadastrada pela gestora (mesmo e-mail), `accept_invite` **vincula** ao registro existente em vez de duplicar.
+
+## 2b. Entrada da funcionária (credencial de equipe)
+
+Mesmo desenho do fluxo 2, com `create_staff_invite` e `accept_staff_invite`: credencial de 48 h, amarrada ao e-mail, uso único, e-mail verificado, MFA recomendado. Detalhes em [EQUIPE-E-PERMISSOES.md](./EQUIPE-E-PERMISSOES.md) §3.
 
 ## 3. Login, sessão e recuperação
 
 ```mermaid
 flowchart TD
   A[Abrir app] --> B{Tem sessão válida?}
-  B -- sim --> H{Claim role}
+  B -- sim --> H{Papel em profiles}
   B -- não --> L[Tela de login]
-  L --> M[signInWithEmailAndPassword + App Check]
+  L --> M[signInWithPassword + Turnstile]
   M -- erro --> N[Mensagem neutra e limite de tentativas]
-  M -- ok --> V{E-mail verificado?}
-  V -- não --> W[Pedir verificação]
+  M -- ok --> V{E-mail confirmado?}
+  V -- não --> W[Pedir confirmação]
   V -- sim --> H
-  H -- gestor --> G[/hoje/]
+  H -- gestor --> G[/hoje + Gestão/]
+  H -- funcionario --> F[/hoje sem Gestão financeira/]
   H -- cliente --> C[/cliente/]
-  H -- sem claims --> X[Terminar cadastro]
+  H -- sem perfil --> X[Terminar cadastro]
   L --> R[Esqueci a senha: e-mail de redefinição, resposta igual exista ou não]
 ```
 
-- Token renova sozinho a cada hora; se a conta for desativada ou a senha trocada, o próximo refresh falha e o app volta ao login.
-- `RoleGate` (já existe) passa a ler o papel das **claims**, nunca de dado editável.
+- O token renova sozinho a cada hora; se a conta for desativada, o RLS já bloqueia os dados e o app volta ao login.
+- `RoleGate` (já existe) passa a ler o papel de `profiles`, nunca de dado editável.
 
 ## 4. Horários (agenda)
 
 ```mermaid
 stateDiagram-v2
-  [*] --> pendente: cliente solicita (requestAppointment)
-  [*] --> confirmado: gestora agenda (scheduleAppointment)
-  pendente --> confirmado: gestora aprova
-  pendente --> cancelado: gestora recusa
+  [*] --> pendente: cliente solicita (insert com RLS)
+  [*] --> confirmado: equipe agenda
+  pendente --> confirmado: equipe aprova
+  pendente --> cancelado: equipe recusa
   confirmado --> confirmado: cliente confirma presença
-  confirmado --> remarcacao: cliente propõe nova data
-  remarcacao --> confirmado: gestora aprova ou recusa
+  confirmado --> remarcacao: cliente propõe nova data (request_reschedule)
+  remarcacao --> confirmado: equipe aprova ou recusa
   confirmado --> cancelado: cancelamento (>24 h direto; <24 h pede aprovação)
   confirmado --> realizado: atendimento finalizado
 ```
 
-- Disponibilidade vem de `config/hours`, `blocks` e horários ocupados (`lib/availability.ts`). **No servidor** o gatilho revalida conflito de horário (dois pedidos simultâneos no mesmo horário: o segundo recebe "horário ocupado").
-- Cada passo grava `activity` e gera notificação pelo catálogo `notification-events.ts`.
+- Disponibilidade vem de `clinic_config.hours`, `blocks` e horários ocupados (`lib/availability.ts`). **No servidor**, uma restrição única (`clinic_id, date, time` para horários ativos) impede dois pedidos no mesmo horário: o segundo recebe "horário ocupado".
+- Cada passo grava `activity` e gera aviso pelo catálogo `notification-events.ts` (para toda a equipe).
 
 ## 5. Atendimento (rascunho até o fechamento)
 
 ```mermaid
 sequenceDiagram
-  participant G as Gestora
+  participant E as Equipe
   participant App as App (session-screen)
-  participant FS as Firestore
+  participant DB as Postgres
   participant St as Storage
-  participant Fn as completeSession
-  G->>App: escolhe a cliente
-  App->>FS: sessions/{id} status=draft (autosave a cada alteração)
-  G->>App: fotos antes/depois
-  App->>St: upload (regras: só gestora da clínica, imagem até 5 MB)
-  App->>FS: photos/{id} metadados (tipo, sessaoId)
-  G->>App: procedimentos, produtos, pagamento
-  G->>App: Finalizar
-  App->>Fn: completeSession({requestId, sessionId, cuidados, retorno})
-  Fn->>FS: transação
-  Note over Fn,FS: sessão=done · agenda=done · ledger (entrada ou a receber) · estoque baixa · care · retorno sugerido
-  Fn->>FS: notifications (cliente: cuidados; gestora: alerta de estoque/margem), activity
-  Fn-->>App: ok
+  E->>App: escolhe a cliente
+  App->>DB: sessions status=draft (autosave a cada alteração)
+  E->>App: fotos antes/depois
+  App->>St: upload no bucket privado (política: só equipe da clínica, imagem até 5 MB)
+  App->>DB: photos (tipo, session_id)
+  E->>App: procedimentos, produtos, pagamento
+  E->>App: Finalizar
+  App->>DB: rpc complete_session(request_id, session_id, cuidados, retorno)
+  Note over DB: transação: sessão=done · agenda=done · session_finance e ledger (só gestora vê) · baixa de estoque · care · retorno sugerido · avisos · activity
+  DB-->>App: ok
 ```
 
-Falhas tratadas: produto sem estoque suficiente (a função recusa e informa qual), fechar duas vezes (idempotente por `sessionId`), sem internet no fechamento (botão fica "pendente" e reenvia; rascunho nunca se perde).
+Falhas tratadas: estoque insuficiente (RPC devolve `{ok:false, motivo}` com o produto), fechar duas vezes (idempotente por `session_id`), sem internet no fechamento (botão fica pendente e reenvia; o rascunho nunca se perde).
 
-Correção/exclusão de atendimento finalizado (`editFinishedSession`, `deleteFinishedSession`) também passam a função, para ajustar caixa, agenda e estoque juntos e deixar registro em `activity`.
+Para a funcionária, a etapa de produtos não mostra custo e o resumo financeiro não aparece; o valor vem do procedimento e o lançamento é feito pelo servidor. Correção e exclusão de atendimento finalizado também são RPCs.
 
 ## 6. Pagamentos
 
 ```mermaid
 stateDiagram-v2
   [*] --> aReceber: atendimento fechado como "a receber" ou cobrança criada
-  aReceber --> informado: cliente informa que pagou (reported)
-  informado --> pago: gestora confirma (confirmPayment)
-  informado --> aReceber: gestora não localizou (rejectPayment)
+  aReceber --> informado: cliente informa que pagou (report_payment)
+  informado --> pago: gestora confirma (confirm_payment)
+  informado --> aReceber: gestora não localizou (reject_payment)
   aReceber --> pago: gestora marca recebido
-  pago --> aReceber: gestora desfaz recebimento (correção)
+  pago --> aReceber: gestora desfaz (reopen_receivable)
 ```
 
-- A cliente só escreve o campo `reported`; **só a gestora** muda o estado financeiro (regras + função).
-- Confirmar gera lançamento de entrada, notificação à cliente e `activity` na mesma transação.
+- **Sem cobrança automática**: a gestora cadastra em Configurações um link/código de pagamento (`clinic_config.payment_info`); a cliente vê o botão **Copiar** na cobrança, paga fora do app e informa que pagou.
+- A cliente só altera `reported`; **só a gestora** muda o estado financeiro (RPCs + RLS).
+- Confirmar gera a entrada no caixa, o aviso à cliente e `activity` na mesma transação.
 
 ## 7. Fotos
 
-- Upload: o app reduz a imagem (`shrinkImage`), envia ao Storage; uma função remove EXIF e grava metadados.
-- Exibição: o app pede `signedPhotoUrl`; a função só devolve URL (vida curta, ex. 10 min) se for gestora da clínica ou a própria cliente **e** houver `imageConsent`.
-- Antes/depois: pareados por `sessaoId` e `tipo`, exibidos na aba Fotos da ficha.
+- Upload: `shrinkImage` reduz e re-codifica a imagem no navegador (descarta EXIF); o bucket aceita só imagem até 5 MB e só equipe da clínica.
+- Exibição: `createSignedUrl` (vida curta, ex. 10 min); a política só autoriza a equipe da clínica ou a própria cliente **com** `image_consent`.
+- Antes/depois: pareados por `session_id` e `tipo`, exibidos na aba Fotos da ficha.
 
-## 8. Avisos (push e central)
+## 8. Avisos (central e push)
 
 ```mermaid
 flowchart LR
-  E[Evento no app: gatilho onWrite] --> N[Função monta o aviso pelo catálogo]
-  S[Cloud Scheduler a cada 5 min] --> R[Função de lembretes]
+  E[Evento: RPC ou gatilho no banco] --> N[Função monta o aviso pelo catálogo]
+  S[pg_cron a cada 5 min] --> R[Função de lembretes]
   R --> N
-  N --> D{Preferências do usuário}
-  D -- app --> F[Grava em notifications]
-  D -- push --> P[FCM para os aparelhos em fcmTokens]
+  N --> D{Preferências do destinatário}
+  D -- app --> F[insert em notifications por destinatário]
+  D -- push --> P[Edge Function send_push -> FCM -> aparelhos em push_tokens]
 ```
 
-`ruleKey` impede duplicar (mesma regra, mesmo dia). Detalhes de textos e regras: `docs/NOTIFICACOES-FIREBASE.md`.
+`unique (recipient_id, rule_key)` impede duplicar. A central atualiza em tempo real (Realtime). Textos e regras: [NOTIFICACOES-FIREBASE.md](./NOTIFICACOES-FIREBASE.md).
 
 ## 9. Direitos do titular (LGPD)
 
-- **Exportar**: gestora pede em Ficha → Exportar prontuário (hoje arquivo de texto local) → função `exportClientData` gera arquivo e registra `activity`.
-- **Excluir**: `deleteClientData` apaga ficha, anamnese, fotos, agendas e cobranças pessoais da cliente, mantendo apenas o que a lei obriga a guardar (por exemplo, lançamentos fiscais, anonimizados). Registro de auditoria permanece sem dados pessoais.
+- **Exportar**: Ficha → Exportar prontuário (hoje arquivo de texto local) → Edge Function `export_client_data` gera o arquivo e registra `activity`.
+- **Excluir** (só gestora): `delete_client_data` apaga ficha, anamnese, fotos, agendas e dados pessoais da cliente, mantendo só o que a lei obriga a guardar (por exemplo, lançamentos fiscais anonimizados). A auditoria permanece sem dados pessoais.
 - A cliente pode solicitar pelo perfil; a gestora é avisada e tem prazo para atender.
 
 ## 10. Mapa de telas por papel
 
-| Papel     | Rotas                                                                                                                            | Dados lidos               |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Visitante | `/` (login, criar conta, link/credencial)                                                                                        | Só `slugs` (nome público) |
-| Gestora   | `/hoje`, `/agenda`, `/clientes`, `/clientes/:id`, `/atendimento/*`, `/gestao`, `/notificacoes`, `/credenciais`, `/configuracoes` | Toda a clínica            |
-| Cliente   | `/cliente`, `/cliente/agenda`, `/cliente/evolucao`, `/cliente/perfil`                                                            | Só os próprios dados      |
+| Papel       | Rotas                                                                                                                                           | Dados lidos                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Visitante   | `/` (login, criar conta, link/credencial)                                                                                                       | Só o nome público da clínica |
+| Gestora     | `/hoje`, `/agenda`, `/clientes`, `/clientes/:id`, `/atendimento/*`, `/gestao`, `/notificacoes`, `/credenciais`, `/configuracoes` (incl. Equipe) | Toda a clínica               |
+| Funcionária | Igual, **sem** `/gestao` financeiro, `/credenciais` e a administração de `/configuracoes`                                                       | Clínica sem financeiro       |
+| Cliente     | `/cliente`, `/cliente/agenda`, `/cliente/evolucao`, `/cliente/perfil`                                                                           | Só os próprios dados         |
 
-`RoleGate` redireciona papel errado; as **regras** garantem que, mesmo burlando a tela, o dado não vem.
+`RoleGate` redireciona papel errado; o **RLS** garante que, mesmo burlando a tela, o dado não vem.

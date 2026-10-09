@@ -1,13 +1,14 @@
 # Próxima etapa: banco de dados, fluxos e auditoria
 
-> **Projeto aprovado em documentos** (Firebase, site na Cloudflare via Lovable, Docker só para o emulador):
+> **Projeto aprovado em documentos.** Banco, login, arquivos e tempo real no **Supabase**; **Firebase só para push (FCM)**; site na Cloudflare via Lovable; Docker só para o ambiente local.
+>
 > **Decisão registrada:** clínica com equipe; credencial gera acesso de funcionária sem financeiro: [Equipe e permissões](./EQUIPE-E-PERMISSOES.md).
 >
-> [Arquitetura](./ARQUITETURA.md) · [Segurança e privacidade](./SEGURANCA-PRIVACIDADE.md) · [Firestore e regras](./FIRESTORE-MODELO-E-REGRAS.md) · [Fluxos](./FLUXOS.md) · [Docker e deploy](./AMBIENTE-DOCKER-E-DEPLOY.md) · [Guia do console Firebase](./FIREBASE-CONSOLE-GUIA.md)
+> [Arquitetura](./ARQUITETURA.md) · [Segurança e privacidade](./SEGURANCA-PRIVACIDADE.md) · [Modelo do banco e RLS](./SUPABASE-MODELO-E-RLS.md) · [Fluxos](./FLUXOS.md) · [Docker e deploy](./AMBIENTE-DOCKER-E-DEPLOY.md) · [Guia do painel Supabase](./SUPABASE-CONSOLE-GUIA.md) · [Notificações e push](./NOTIFICACOES-FIREBASE.md)
 >
-> **Ordem de implementação:** 1) projetos Firebase dev/staging/prod + Blaze com alerta de orçamento (você, com o guia) → 2) emulador em Docker + regras negando tudo + testes das regras → 3) Auth real, claims, `createClinic` e `acceptInvite`; remover acesso livre e contas demo → 4) trocar `src/services/*` por Firestore, uma área por vez (clientes, agenda, atendimento/caixa/estoque, avisos, fotos) → 5) cabeçalhos de segurança, App Check, push e agendador → 6) teste de invasão e só então auditoria de código e PWA.
+> **Ordem de implementação:** 1) projetos Supabase (staging e prod) e projeto Firebase só de push, com plano Pro e alerta de gasto (você, com o guia) → 2) Supabase local em Docker + migrações com RLS negando tudo + testes pgTAP → 3) Auth real, `profiles`, `create_clinic`, `accept_invite` e credencial de funcionária; remover acesso livre e contas demo → 4) trocar `src/services/*` por Supabase, uma área por vez (clientes, agenda, atendimento/caixa/estoque, avisos, fotos) → 5) cabeçalhos de segurança, Turnstile, push por FCM e agendador (pg_cron) → 6) teste de invasão e só então auditoria de código e PWA.
 >
-> **Você precisa fornecer:** conta Google, cartão para o plano Blaze, domínio próprio, e-mail do encarregado de dados (LGPD) e as respostas às decisões em aberto (restam: cobrança online, domínio, encarregado de dados e as 4 pendências de `EQUIPE-E-PERMISSOES.md` §6).
+> **Você precisa fornecer:** conta Supabase (organização sua), conta Google para o Firebase (push), cartão para o plano Pro, domínio próprio e e-mail remetente (SMTP), e-mail do encarregado de dados (LGPD).
 
 O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/services/*`). Esta etapa troca a camada local por um backend real **sem mexer nas telas**, e só depois faz a auditoria de código.
 
@@ -24,13 +25,13 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 
 ## 2. O que falta antes de começar
 
-1. **Escolher o backend.** Firebase (Auth + Firestore + Storage + FCM + Functions) ou Supabase (Auth + Postgres + Storage + Edge Functions). Decide: o modelo relacional (carteira, caixa e estoque pedem relatórios) pesa a favor de Postgres; push e tempo real, a favor de Firebase. Notificações já estão especificadas para Firebase em `docs/NOTIFICACOES-FIREBASE.md`.
+1. **Backend escolhido:** Supabase (Postgres, Auth, Storage, Realtime, Edge Functions) + Firebase Cloud Messaging só para push. Notificações: `docs/NOTIFICACOES-FIREBASE.md`.
 2. **Autenticação real.** Hoje qualquer senha entra e o perfil vem de contas de demonstração. Falta: senha de verdade, recuperação, sessão no servidor e o botão "Acesso livre" removido.
 3. **Isolamento por clínica (`clinicId`).** Clientes e agendamentos já são filtrados por clínica. **Caixa, contas, estoque, procedimentos, horários, bloqueios e configurações ainda são globais do aparelho**: no banco todos precisam de `clinicId` e de regras de segurança por clínica.
 4. **Link e credenciais.** Hoje as credenciais ficam no aparelho de quem as gerou, então um link aberto em outro aparelho não acha a clínica. No banco: coleção `convites` (código, `clinicId`, validade, usado) e página de cadastro que resolve `?p=slug`.
 5. **Fotos.** Hoje ficam em IndexedDB. Precisam de storage com URL assinada, autorização de imagem por foto e vínculo `sessaoId` + `tipo` (antes/depois).
 6. **Regras de segurança.** Cliente só lê o que é dela; esteticista só lê a própria clínica; confirmação de pagamento só pela esteticista.
-7. **Agendador de avisos.** Cloud Function/cron reproduzindo `runReminders()` (hoje roda a cada 60 s com o app aberto) e entrega por push.
+7. **Agendador de avisos.** `pg_cron` + função reproduzindo `runReminders()` (hoje roda a cada 60 s com o app aberto) e entrega por push.
 8. **Definir o que o modelo ainda não cobre:** pacotes de sessões (hoje só um texto "sessão 2 de 4"), equipe/várias profissionais por clínica, recibo/nota, cobrança online (Pix com baixa automática), e-mails transacionais.
 
 ## 3. Entregáveis desta etapa
@@ -54,4 +55,4 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 
 - Equipe: funcionária com acesso a tudo menos financeiro (suposições de `EQUIPE-E-PERMISSOES.md` §2 e §6 aprovadas: aviso para toda a equipe).
 - **Sem cobrança Pix automática.** Em vez disso, a gestora pode **cadastrar um link ou código de pagamento** (Pix copia e cola, link de cartão, etc.) em Configurações, e a cliente vê o botão **Copiar** na cobrança. A confirmação continua manual: a cliente informa que pagou e a gestora confirma. Dado guardado em `clinics/{id}/config/payment` (texto livre, só a gestora escreve; cliente lê só o da própria clínica).
-- Firebase será usado **direto** (Auth, Firestore, Storage, Functions); ver nota sobre o conector do Lovable em `ARQUITETURA.md`.
+- **Banco: Supabase. Firebase: apenas Cloud Messaging (push).** O conector de Firebase do Lovable só cobre push; não é necessário para o banco.
