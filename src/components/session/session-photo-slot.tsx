@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { FaceCamera } from "@/components/eb/face-camera";
 import { Icon } from "@/components/eb/icon";
 import { Button } from "@/components/ui/button";
 import { addPhoto, photoUrl, removePhoto } from "@/lib/photo-store";
@@ -26,7 +27,7 @@ export function SessionPhotoSlot({
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const me = useSession();
-  const camera = useRef<HTMLInputElement>(null);
+  const [shooting, setShooting] = useState(false);
   const gallery = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export function SessionPhotoSlot({
           variant="secondary"
           size="sm"
           disabled={busy}
-          onClick={() => camera.current?.click()}
+          onClick={() => setShooting(true)}
         >
           <Icon name="Camera" size={15} /> Tirar foto
         </Button>
@@ -113,16 +114,11 @@ export function SessionPhotoSlot({
           </Button>
         ) : null}
       </div>
-      <input
-        ref={camera}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(event) => {
-          void pick(event.target.files?.[0]);
-          event.target.value = "";
-        }}
+      <FaceCamera
+        open={shooting}
+        onClose={() => setShooting(false)}
+        onCapture={(file) => void pick(file)}
+        title={`Foto ${title.toLowerCase()}`}
       />
       <input
         ref={gallery}

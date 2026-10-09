@@ -157,11 +157,13 @@ function AgendaClientePage() {
             className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5"
           >
             <div className="flex items-center gap-3">
-              <span className="w-[58px] font-mono text-[var(--nude-sand)]">
-                {formatShort(item.date)}
-              </span>
-              <span className="w-12 font-mono text-[var(--text-secondary)]">{item.time}</span>
-              <span className="min-w-0 flex-1 text-[13.5px]">{item.procedure}</span>
+              <div className="flex w-[68px] flex-none flex-col items-center gap-0.5 rounded-[var(--radius-sm)] bg-[var(--eb-ivory-a06)] py-1.5 text-center">
+                <span className="font-mono text-[12px] leading-none text-[var(--nude-sand)]">
+                  {formatShort(item.date)}
+                </span>
+                <span className="font-mono text-[16px] font-medium leading-none">{item.time}</span>
+              </div>
+              <span className="min-w-0 flex-1 text-[14px]">{item.procedure}</span>
               <StatusBadge tone={item.status} size="sm" />
             </div>
             {item.request ? (

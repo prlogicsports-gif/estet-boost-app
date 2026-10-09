@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
+import { FaceCamera } from "@/components/eb/face-camera";
 import { Icon } from "@/components/eb/icon";
 import { PhotoComparator } from "@/components/eb/photo-comparator";
 import { StatusBadge } from "@/components/eb/status-badge";
@@ -41,7 +42,7 @@ export function PhotoVault({
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"slider" | "side">("slider");
   const inputRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const [shooting, setShooting] = useState(false);
 
   // Endereços assinados de vida curta para exibir as fotos (renovados quando a lista muda).
   useEffect(() => {
@@ -54,7 +55,7 @@ export function PhotoVault({
     };
   }, [list]);
 
-  function insert(files: FileList | null) {
+  function insert(files: FileList | File[] | null) {
     const images = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
     if (!images.length || !session) return;
     setError(null);
@@ -167,7 +168,7 @@ export function PhotoVault({
             <Button type="button" onClick={() => inputRef.current?.click()}>
               <Icon name="Images" size={18} /> Escolher imagens
             </Button>
-            <Button type="button" variant="secondary" onClick={() => cameraRef.current?.click()}>
+            <Button type="button" variant="secondary" onClick={() => setShooting(true)}>
               <Icon name="Camera" size={18} /> Tirar foto
             </Button>
           </div>
@@ -182,16 +183,12 @@ export function PhotoVault({
               event.target.value = "";
             }}
           />
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(event) => {
-              insert(event.target.files);
-              event.target.value = "";
-            }}
+          <FaceCamera
+            open={shooting}
+            onClose={() => setShooting(false)}
+            onCapture={(file) => insert([file])}
+            title="Nova foto"
+            initialFacing={canEdit ? "environment" : "user"}
           />
         </div>
       ) : null}

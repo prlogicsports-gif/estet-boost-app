@@ -196,6 +196,7 @@ function ProfileDrawer({
     studio: "",
     phone: "",
     city: "",
+    address: "",
     document: "",
   });
   useEffect(() => {
@@ -206,6 +207,7 @@ function ProfileDrawer({
       studio: clinic?.name ?? "",
       phone: clinic?.phone ?? "",
       city: clinic?.city ?? "",
+      address: clinic?.address ?? "",
       document: clinic?.document ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +229,7 @@ function ProfileDrawer({
           name: f.studio.trim(),
           phone: f.phone.trim() || null,
           city: f.city.trim() || null,
+          address: f.address.trim() || null,
           document: f.document.trim() || null,
         })
         .eq("id", clinic.id);
@@ -279,6 +282,13 @@ function ProfileDrawer({
               <Input label="Celular" type="tel" value={f.phone} onChange={set("phone")} />
               <Input label="Cidade" value={f.city} onChange={set("city")} />
             </div>
+            <Input
+              label="Endereço do estúdio"
+              icon="MapPin"
+              value={f.address}
+              onChange={set("address")}
+              hint="Rua, número, bairro. A cliente toca no endereço para abrir no mapa."
+            />
             <Input
               label="CNPJ ou CPF"
               inputMode="numeric"

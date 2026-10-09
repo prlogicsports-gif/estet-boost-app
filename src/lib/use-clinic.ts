@@ -11,6 +11,7 @@ export type Clinic = {
   email: string | null;
   phone: string | null;
   city: string | null;
+  address: string | null;
   document: string | null;
   size: "autonoma" | "clinica" | null;
 };
@@ -23,13 +24,26 @@ const emit = () => listeners.forEach((listener) => listener());
 
 export async function refreshClinic(id: string) {
   loading = id;
-  const { data } = await supabase
-    .from("clinics")
-    .select("id, slug, name, email, phone, city, document, size")
-    .eq("id", id)
-    .maybeSingle();
+  // "*" para continuar funcionando mesmo antes da migração que cria a coluna `address`
+  const { data } = await supabase.from("clinics").select("*").eq("id", id).maybeSingle();
   loading = null;
-  cache = { id, clinic: (data as Clinic | null) ?? null };
+  const row = data as (Omit<Clinic, "address"> & { address?: string | null }) | null;
+  cache = {
+    id,
+    clinic: row
+      ? {
+          id: row.id,
+          slug: row.slug,
+          name: row.name,
+          email: row.email,
+          phone: row.phone,
+          city: row.city,
+          address: row.address ?? null,
+          document: row.document,
+          size: row.size,
+        }
+      : null,
+  };
   emit();
 }
 

@@ -2070,3 +2070,6 @@ update public.appointments a set client_name = c.name
  where a.client_id = c.id and a.client_name is distinct from c.name;
 
 revoke all on function app.sync_client_name() from public, anon, authenticated;
+-- Endereço do estúdio: a gestora cadastra e a cliente toca para abrir no mapa. Pode ser rodada mais de uma vez.
+alter table public.clinics add column if not exists address text;
+grant update (address) on public.clinics to authenticated;

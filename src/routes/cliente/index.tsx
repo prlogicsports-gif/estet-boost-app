@@ -16,6 +16,7 @@ import { Select } from "@/components/eb/select";
 import { useClinic } from "@/lib/use-clinic";
 import { addDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { useClient } from "@/lib/use-client";
+import { mapsUrl } from "@/lib/maps";
 import { brl, byDateTime } from "@/lib/view";
 import { confirmAppointment, requestReschedule } from "@/services/appointments.service";
 import { reportPayment } from "@/services/finance.service";
@@ -91,18 +92,27 @@ function InicioPage() {
         className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-card)] p-[18px]"
         style={{ boxShadow: "var(--shadow-raised)" }}
       >
-        <span className="text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+        <span className="text-[12px] font-semibold uppercase leading-[1.2] tracking-[0.14em] text-[var(--eb-teal-500)]">
           Próximo atendimento
         </span>
         {next ? (
           <>
             <div className="flex flex-wrap items-center gap-3.5">
               <div className="min-w-[180px] flex-1">
-                <div className="text-xl font-medium tracking-[-0.01em]">{next.procedure}</div>
-                <div className="mt-[3px] text-[13.5px] text-[var(--text-secondary)]">
-                  {formatLong(next.date).split(" de ").slice(0, 2).join(" de ")} · {next.time} · com{" "}
-                  {proName}
+                <div className="text-[24px] font-bold leading-[1.15] tracking-[-0.015em]">
+                  {next.procedure}
                 </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14.5px] font-medium text-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="CalendarDays" size={15} color="var(--eb-nude-300)" />
+                    {formatLong(next.date).split(" de ").slice(0, 2).join(" de ")}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="Clock" size={15} color="var(--eb-nude-300)" />
+                    {next.time}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[13px] text-[var(--text-secondary)]">com {proName}</div>
               </div>
               <StatusBadge tone={next.status} />
             </div>
@@ -113,9 +123,22 @@ function InicioPage() {
                   {next.sessionsTotal ? ` de ${next.sessionsTotal}` : ""}
                 </StatusBadge>
               ) : null}
-              <StatusBadge tone="info" icon="MapPin">
-                {proName}
-              </StatusBadge>
+              {clinic?.address ? (
+                <a
+                  href={mapsUrl(`${clinic.address}${clinic.city ? `, ${clinic.city}` : ""}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] px-3 text-[12.5px] text-foreground"
+                >
+                  <Icon name="MapPin" size={14} color="var(--eb-teal-500)" />
+                  <span className="min-w-0 truncate">{clinic.address}</span>
+                  <Icon name="ExternalLink" size={12} />
+                </a>
+              ) : (
+                <StatusBadge tone="info" icon="MapPin">
+                  {proName}
+                </StatusBadge>
+              )}
               {next.reschedule ? (
                 <StatusBadge tone="pending" icon="CalendarClock">
                   Remarcação aguardando
@@ -183,12 +206,15 @@ function InicioPage() {
                 : "—"
           }
           icon="History"
+          compact
         />
         <MetricCard
           label="Retorno sugerido"
           value={next ? formatShort(next.date) : "—"}
+          {...(next ? { hint: `às ${next.time}` } : {})}
           icon="Sparkles"
           tone="tech"
+          compact
         />
       </div>
 

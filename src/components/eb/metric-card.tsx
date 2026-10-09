@@ -14,6 +14,7 @@ export function MetricCard({
   hint,
   icon,
   tone = "neutral",
+  compact,
   onClick,
 }: {
   label: string;
@@ -22,6 +23,8 @@ export function MetricCard({
   hint?: string;
   icon?: string;
   tone?: keyof typeof toneColor;
+  /** Valor menor, para datas e textos curtos. */
+  compact?: boolean;
   onClick?: () => void;
 }) {
   const color = toneColor[tone];
@@ -40,7 +43,7 @@ export function MetricCard({
       </div>
       <div className="flex items-baseline gap-1">
         <span
-          className="font-mono text-[28px] font-medium leading-[1.05] tracking-[-0.02em]"
+          className={`font-mono font-medium leading-[1.05] tracking-[-0.02em] ${compact ? "text-[22px]" : "text-[28px]"}`}
           style={{ color }}
         >
           {value}
