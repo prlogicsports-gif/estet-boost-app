@@ -8,6 +8,7 @@ import { defaultPrefs, prefsDb } from "@/data/db";
 import { relativeDay, timeAgo, toISO } from "@/lib/dates";
 import type { Audience, NotificationPrefs, NotificationRec } from "@/lib/models";
 import { markAllRead, markRead, setPrefs } from "@/services/notify";
+import { supabase } from "@/lib/supabase";
 import { pushStatus, registerPush, pushSupported, unregisterPush } from "@/services/push.service";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,28 @@ function Switch({
 /** Preferências de aviso: guardadas no aparelho; o banco depois só troca onde elas ficam. */
 export function NotificationPrefsEditor({ audience }: { audience: Audience }) {
   const prefs = { ...defaultPrefs, ...prefsDb.use()[audience] };
+  const [test, setTest] = useState<string | null>(null);
+  const sendTest = async () => {
+    setTest("Enviando…");
+    try {
+      const { data, error } = await supabase.rpc("send_test_push");
+      const reply = data as { ok?: boolean; reason?: string } | null;
+      if (error) {
+        setTest(
+          /send_test_push/.test(error.message)
+            ? "Falta aplicar a migração 09 no Supabase."
+            : "Não foi possível enviar agora. Confira a internet.",
+        );
+      } else if (reply?.reason === "aguarde") setTest("Aguarde 1 minuto para pedir outro teste.");
+      else if (reply?.ok)
+        setTest(
+          "Teste enviado. Feche o app ou bloqueie a tela: o aviso chega em alguns segundos. Se não chegar, confira se o push está ligado acima.",
+        );
+      else setTest("Não foi possível enviar o teste.");
+    } catch {
+      setTest("Não foi possível enviar agora. Confira a internet.");
+    }
+  };
   return (
     <div className="flex flex-col gap-2">
       {PREF_ROWS[audience].map((row) => (
@@ -113,6 +136,16 @@ export function NotificationPrefsEditor({ audience }: { audience: Audience }) {
           />
         </div>
       ))}
+      <div className="flex flex-col gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => void sendTest()}
+          className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-full border border-[var(--border-card)] bg-[var(--eb-ivory-a06)] px-4 text-[13.5px]"
+        >
+          <Icon name="BellRing" size={16} /> Enviar notificação de teste
+        </button>
+        {test ? <p className="text-[12.5px] text-[var(--text-secondary)]">{test}</p> : null}
+      </div>
     </div>
   );
 }
