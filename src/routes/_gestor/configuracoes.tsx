@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { ClientInvite } from "@/components/eb/client-invite";
+import { InstallCard } from "@/components/eb/install-app";
 import { Icon } from "@/components/eb/icon";
 import { IconButton } from "@/components/eb/icon-button";
 import { Input } from "@/components/eb/input";
@@ -118,6 +119,8 @@ function ConfiguracoesPage() {
           <Icon name="PencilLine" size={15} /> Editar perfil
         </Button>
       </div>
+
+      <InstallCard />
 
       <span className={heading}>Avisos</span>
       <NotificationPrefsEditor audience="gestor" />

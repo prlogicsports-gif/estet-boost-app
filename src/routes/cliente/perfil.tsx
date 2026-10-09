@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { Icon } from "@/components/eb/icon";
+import { InstallCard } from "@/components/eb/install-app";
 import { Input } from "@/components/eb/input";
 import { NotificationPrefsEditor } from "@/components/eb/notifications-panel";
 import { ToastHost } from "@/components/eb/toast";
@@ -165,6 +166,8 @@ function PerfilPage() {
           </div>
         </>
       ) : null}
+
+      <InstallCard />
 
       <span className={label}>Preferências de notificação</span>
       <NotificationPrefsEditor audience="cliente" />

@@ -159,3 +159,11 @@ Tentar, com contas de teste, e **todas devem falhar**:
 - [ ] Alerta de uso/gasto configurado; SMTP próprio
 - [ ] Termos, política de privacidade e encarregado publicados
 - [ ] Roteiro de teste de invasão (§10) executado e sem falhas
+
+## 12. Dados no aparelho (modo sem internet)
+
+- A cópia dos dados e a fila de alterações ficam no IndexedDB do aparelho, separadas por pessoa. **Não são criptografadas**: a proteção é a trava do aparelho.
+- **Ao sair da conta, tudo da pessoa é apagado** do aparelho (cópia, fila e fotos pendentes). Se houver alterações ainda não enviadas, o app avisa antes.
+- Ao entrar uma pessoa diferente no mesmo aparelho, os dados da anterior são apagados.
+- O service worker guarda apenas a "casca" pública do app (páginas sem dado de ninguém, arquivos, ícones). Chamadas ao Supabase e ao Firebase nunca passam por ele.
+- Para a CSP (§6) incluir: `worker-src 'self'`, `manifest-src 'self'`.

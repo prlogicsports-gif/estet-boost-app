@@ -1,4 +1,5 @@
-import { createRemoteStore } from "@/lib/remote-store";
+import { classifyError } from "@/lib/errors";
+import { createRemoteStore, pendingBlob, queueUpload } from "@/lib/remote-store";
 import { supabase } from "@/lib/supabase";
 import { newId } from "@/lib/uuid";
 
@@ -43,6 +44,7 @@ async function insertRow(rec: VaultPhoto, clinicId: string) {
 
 export const photosDb = createRemoteStore<VaultPhoto>({
   key: "photos",
+  label: () => "Foto",
   table: "photos",
   order: { column: "taken_at", ascending: false },
   fromRow: (r) => ({
@@ -99,14 +101,18 @@ export async function photoUrls(
 ): Promise<Record<string, string>> {
   const now = Date.now();
   const out: Record<string, string> = {};
-  const missing = photos.filter((photo) => {
-    const hit = signed.get(photo.id);
-    if (hit && hit.until > now) {
-      out[photo.id] = hit.url;
-      return false;
+  const missing: Pick<VaultPhoto, "id" | "path">[] = [];
+  for (const photo of photos) {
+    // foto tirada sem internet: ainda está só neste aparelho, esperando para subir
+    const local = await pendingBlob(photo.path);
+    if (local) {
+      out[photo.id] = URL.createObjectURL(local);
+      continue;
     }
-    return true;
-  });
+    const hit = signed.get(photo.id);
+    if (hit && hit.until > now) out[photo.id] = hit.url;
+    else missing.push(photo);
+  }
   if (missing.length) {
     const { data } = await supabase.storage.from(BUCKET).createSignedUrls(
       missing.map((photo) => photo.path),
@@ -195,7 +201,14 @@ export async function addPhoto(
 ): Promise<string> {
   const blob = await shrinkImage(file);
   const id = newId();
-  const path = await uploadPhotoBlob(meta.clinicId, clientId, id, blob);
+  let path = `${meta.clinicId}/${clientId}/${id}.jpg`;
+  try {
+    path = await uploadPhotoBlob(meta.clinicId, clientId, id, blob);
+  } catch (error) {
+    // sem internet: a foto fica guardada no aparelho e sobe sozinha quando a conexão voltar
+    if (classifyError(error) !== "rede") throw error;
+    await queueUpload(path, blob, "Foto");
+  }
   const photo: VaultPhoto = {
     id,
     clientId,

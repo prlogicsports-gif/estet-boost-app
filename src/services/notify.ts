@@ -1,6 +1,6 @@
 import { notificationsDb, prefsDb } from "@/data/db";
 import type { Audience, NotificationRec } from "@/lib/models";
-import { supabase } from "@/lib/supabase";
+import { runRpc } from "@/lib/remote-store";
 
 export type NotificationDraft = Omit<NotificationRec, "id" | "createdAt" | "read"> & {
   createdAt?: string;
@@ -31,8 +31,9 @@ export function notify(draft: Draft): void {
     if (sent.has(draft.ruleKey)) return;
     sent.add(draft.ruleKey);
   }
-  void supabase
-    .rpc("push_notification", {
+  void runRpc(
+    "push_notification",
+    {
       p_audience: draft.audience === "gestor" ? "equipe" : "cliente",
       p_client_id: draft.clientId ?? null,
       p_kind: draft.kind,
@@ -41,8 +42,9 @@ export function notify(draft: Draft): void {
       p_href: draft.href ?? null,
       p_rule: draft.ruleKey ?? null,
       p_perm: draft.audience === "gestor" ? (PERMISSION_OF_KIND[draft.kind] ?? "agenda") : null,
-    })
-    .then(() => {});
+    },
+    { label: "Aviso", quiet: true },
+  );
 }
 
 const mine = (item: NotificationRec, audience: Audience, clientId?: string) =>

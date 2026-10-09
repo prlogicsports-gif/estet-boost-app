@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import type { Permissions, Role, Session } from "@/lib/auth.types";
 import { PERMISSION_KEYS } from "@/lib/auth.types";
+import { classifyError } from "@/lib/errors";
 import { ensureOwner } from "@/lib/local-data";
 import { startSync, stopSync } from "@/lib/remote-store";
 import { supabase } from "@/lib/supabase";
@@ -42,15 +43,64 @@ type ProfileRow = {
   permissions: Partial<Record<string, boolean>> | null;
 };
 
+// Última identidade conhecida: deixa o app abrir sem internet (a sessão do Supabase continua guardada no aparelho).
+const IDENTITY_KEY = "eb.identity";
+function readIdentity(): Session | null {
+  try {
+    return JSON.parse(window.localStorage.getItem(IDENTITY_KEY) ?? "null") as Session | null;
+  } catch {
+    return null;
+  }
+}
+function writeIdentity(session: Session | null) {
+  try {
+    if (session) window.localStorage.setItem(IDENTITY_KEY, JSON.stringify(session));
+    else window.localStorage.removeItem(IDENTITY_KEY);
+  } catch {
+    /* ignorado */
+  }
+}
+
 async function load(uid: string, email: string) {
   const mine = ++sequence;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, clinic_id, role, client_id, name, email, active, permissions")
-    .eq("id", uid)
-    .maybeSingle();
+  let data: unknown = null;
+  let error: unknown = null;
+  const cachedIdentity = readIdentity();
+  const known = cachedIdentity && cachedIdentity.uid === uid;
+  if (known && typeof navigator !== "undefined" && navigator.onLine === false) {
+    // sem internet e já conhecida neste aparelho: abre na hora com os dados da última vez
+    error = { message: "TypeError: Failed to fetch" };
+  } else {
+    try {
+      // O cliente do Supabase repete a consulta por ~7 s quando a rede cai; aqui espera no máximo 3 s se já conhecemos a pessoa.
+      const query = supabase
+        .from("profiles")
+        .select("id, clinic_id, role, client_id, name, email, active, permissions")
+        .eq("id", uid)
+        .maybeSingle();
+      const result = known
+        ? await Promise.race([
+            query,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("TypeError: timeout")), 3000),
+            ),
+          ])
+        : await query;
+      data = result.data;
+      error = result.error;
+    } catch (thrown) {
+      error = thrown; // sem internet o navegador pode lançar o erro em vez de devolvê-lo
+    }
+  }
   if (mine !== sequence) return;
   if (error) {
+    const cached = readIdentity();
+    if (cached && cached.uid === uid && classifyError(error) === "rede") {
+      // sem internet: abre com os dados da última vez
+      set({ status: "in", session: cached });
+      startSync(cached);
+      return;
+    }
     set({
       status: "error",
       message: "Não foi possível carregar sua conta. Confira a conexão e tente de novo.",
@@ -92,6 +142,7 @@ async function load(uid: string, email: string) {
     ...(row.client_id ? { clientId: row.client_id } : {}),
     permissions,
   };
+  writeIdentity(session);
   set({ status: "in", session });
   startSync(session);
 }
@@ -99,11 +150,24 @@ async function load(uid: string, email: string) {
 function start() {
   if (started || typeof window === "undefined") return;
   started = true;
-  supabase.auth.onAuthStateChange((_event, authSession) => {
+  supabase.auth.onAuthStateChange((event, authSession) => {
     // Não chamar o Supabase dentro do callback (trava o cliente): adia para o próximo ciclo.
     if (!authSession) {
+      const cached = readIdentity();
+      if (
+        cached &&
+        event !== "SIGNED_OUT" &&
+        typeof navigator !== "undefined" &&
+        navigator.onLine === false
+      ) {
+        // sem internet a renovação do login falha: continua com a identidade guardada
+        set({ status: "in", session: cached });
+        startSync(cached);
+        return;
+      }
       sequence += 1;
       stopSync();
+      writeIdentity(null);
       set({ status: "out" });
       return;
     }
@@ -118,6 +182,7 @@ export const sessionStore = {
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
       stopSync();
+      writeIdentity(null);
       set({ status: "out" });
       return;
     }

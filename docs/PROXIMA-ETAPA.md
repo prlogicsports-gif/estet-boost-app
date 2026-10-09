@@ -65,3 +65,9 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 - **Lembretes e push com o app fechado:** prontos no código (migração `…07_push_reminders.sql`, função `send-push` e service worker). Falta ligar do seu lado, em 5 passos curtos: [PUSH-PASSO-A-PASSO.md](./PUSH-PASSO-A-PASSO.md).
 - **Migrações do banco, na ordem, uma por vez no SQL Editor:** `…04_permissions.sql` (se ainda não aplicou), `…05_data_sync.sql`, `…06_storage.sql` e `…07_push_reminders.sql`. As três primeiras já foram aplicadas.
 - **Configuração do Supabase para o login funcionar:** em _Authentication → URL Configuration_, definir **Site URL** (o endereço do app) e adicionar em **Redirect URLs** o endereço do app, a prévia do Lovable e `http://localhost:8080`. Configurar **SMTP próprio**: o e-mail padrão do Supabase tem limite muito baixo de envios por hora.
+
+## 8. Modo sem internet e app instalado (PWA)
+
+- **Pronto:** o app abre e funciona sem internet (cópia no aparelho + fila de alterações enviada em ordem ao reconectar), com protocolo de erros e tela de Pendências: [OFFLINE-E-ERROS.md](./OFFLINE-E-ERROS.md).
+- **Pronto:** app instalável (manifesto, ícones EB., service worker, instalação guiada no iPhone e no Android, modo de tela cheia): [PWA.md](./PWA.md).
+- **Teste em aparelho de verdade (você):** instalar no iPhone e no Android e seguir o "Teste de aceitação" de `PWA.md`.

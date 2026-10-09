@@ -363,3 +363,19 @@
     animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
+
+/* Comportamento de aplicativo: sem "puxar para atualizar", sem destaque azul no toque, sem zoom por duplo toque. */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+button,
+a,
+[role="button"] {
+  -webkit-touch-callout: none;
+}

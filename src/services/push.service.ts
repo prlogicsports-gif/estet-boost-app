@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 /**
  * Push no aparelho, mesmo com o app fechado: o aparelho se registra no Firebase Cloud Messaging, o token fica
  * em `push_tokens` (só a própria pessoa lê e grava) e o servidor envia (Edge Function `send-push`) a cada aviso novo.
- * O service worker `public/push-sw.js` mostra a notificação. No iPhone, o push só funciona com o app instalado na
+ * O service worker `public/sw.js` mostra a notificação. No iPhone, o push só funciona com o app instalado na
  * tela inicial.
  */
 export type PushStatus = "granted" | "denied" | "default" | "unsupported";
@@ -37,7 +37,7 @@ export async function syncPushToken(): Promise<boolean> {
   const auth = sessionStore.get();
   if (!supported() || Notification.permission !== "granted" || auth.status !== "in") return false;
   try {
-    const registration = await navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
+    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     await navigator.serviceWorker.ready;
     const [{ initializeApp, getApps }, { getMessaging, getToken }] = await Promise.all([
       import("firebase/app"),

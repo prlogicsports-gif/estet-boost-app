@@ -6,6 +6,8 @@ const tables = new Map<string, Row[]>();
 const calls: { table: string; op: string; row?: Row; match?: [string, unknown] }[] = [];
 const rpcs: { name: string; args: unknown }[] = [];
 let failTable: string | null = null;
+let failError: { message: string; code?: string } = { message: "negado", code: "42501" };
+let networkDown = false;
 
 function builder(table: string) {
   let op = "select";
@@ -21,10 +23,15 @@ function builder(table: string) {
     eq: (col: string, val: unknown) => ((match = [col, val]), q),
     maybeSingle: () => q,
     then: (resolve: (value: unknown) => void) => {
+      if (networkDown)
+        return resolve({ data: null, error: { message: "TypeError: Failed to fetch", code: "" } });
       if (op === "select") return resolve({ data: tables.get(table) ?? [], error: null });
       calls.push({ table, op, ...(row ? { row } : {}), ...(match ? { match } : {}) });
-      if (failTable === table) return resolve({ data: null, error: { message: "negado" } });
-      return resolve({ data: null, error: null });
+      if (failTable === table) return resolve({ data: null, error: failError });
+      return resolve({
+        data: op === "update" || op === "delete" ? [{ id: "x" }] : null,
+        error: null,
+      });
     },
   };
   return q;
@@ -33,6 +40,11 @@ function builder(table: string) {
 const fake = {
   from: (table: string) => builder(table),
   rpc: (name: string, args: unknown) => {
+    if (networkDown)
+      return Promise.resolve({
+        data: null,
+        error: { message: "TypeError: Failed to fetch", code: "" },
+      });
     rpcs.push({ name, args });
     return Promise.resolve({ data: { ok: true }, error: null });
   },
@@ -75,8 +87,20 @@ const events: { type: string; detail: string }[] = [];
 };
 
 const { appointmentsDb, clientsDb, ledgerDb, sessionsDb, stockDb } = await import("@/data/db");
-const { flushAll, startSync, stopSync } = await import("@/lib/remote-store");
+const {
+  discardFailed,
+  failedItems,
+  flushAll,
+  pendingCount,
+  retryFailed,
+  runRpc,
+  startSync,
+  stopSync,
+  useSyncStatus: _unused,
+} = await import("@/lib/remote-store");
+void _unused;
 import type { Session } from "@/lib/auth.types";
+import { idbClear } from "@/lib/idb";
 
 const all = {
   clientes: true,
@@ -101,13 +125,16 @@ const funcionaria: Session = {
   permissions: { ...all, financeiro: false },
 };
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
+const tick = () => new Promise((resolve) => setTimeout(resolve, 40));
 async function boot(session: Session) {
   stopSync();
+  await idbClear(); // aparelho "novo": sem cópia nem fila de antes
   calls.length = 0;
   rpcs.length = 0;
   events.length = 0;
   failTable = null;
+  failError = { message: "negado", code: "42501" };
+  networkDown = false;
   startSync(session);
   await tick();
 }
@@ -347,6 +374,177 @@ describe("escrita", () => {
     const data = (rows[0]!.row as { data: { products: Record<string, unknown>[] } }).data;
     expect(data.products[0]).toEqual({ stockId: "s1", name: "Ácido", qty: 2 });
     expect(JSON.stringify(rows[0]!.row)).not.toContain("78");
+  });
+});
+
+const newClient = (id: string, name: string) => ({
+  id,
+  name,
+  initials: name.slice(0, 1),
+  mainProcedure: "x",
+  lastVisit: "—",
+  nextReturn: "—",
+  status: "neutral" as const,
+  age: 0,
+  phone: "",
+  createdAt: "x",
+});
+const newAppt = (id: string, clientId: string) => ({
+  id,
+  clientId,
+  client: "X",
+  initials: "X",
+  procedure: "x",
+  date: "2026-07-01",
+  time: "09:00",
+  duration: 60,
+  price: 0,
+  payment: "A definir",
+  status: "confirmed" as const,
+  kind: "retorno" as const,
+  origin: "gestor" as const,
+  createdAt: "x",
+});
+
+describe("sem internet", () => {
+  test("a alteração fica na tela e na fila; ao voltar a internet, é enviada em ordem", async () => {
+    await boot(gestora);
+    networkDown = true;
+    clientsDb.set((list) => [...list, newClient("c-off", "Offline")]);
+    appointmentsDb.set((list) => [...list, newAppt("a-off", "c-off")]);
+    await flushAll();
+    expect(pendingCount()).toBe(2);
+    expect(clientsDb.get().some((c) => c.id === "c-off")).toBe(true); // continua na tela
+    expect(calls.filter((c) => c.op === "insert").length).toBe(0);
+    networkDown = false;
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    const order = calls.filter((c) => c.op === "insert").map((c) => c.table);
+    expect(order).toEqual(["clients", "appointments"]);
+  });
+
+  test("fechar o app sem internet não perde nada: a fila e a cópia voltam ao reabrir", async () => {
+    await boot(gestora);
+    networkDown = true;
+    clientsDb.set((list) => [...list, newClient("c-persist", "Guardada")]);
+    await flushAll();
+    expect(pendingCount()).toBe(1);
+    stopSync(); // fecha o app
+    expect(clientsDb.get().length).toBe(0);
+    calls.length = 0;
+    startSync(gestora); // abre de novo, ainda sem internet
+    await tick();
+    await tick();
+    expect(pendingCount()).toBe(1);
+    expect(clientsDb.get().some((c) => c.id === "c-persist")).toBe(true); // a cópia do aparelho mostra a cliente
+    networkDown = false;
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    expect(
+      calls.some(
+        (c) =>
+          c.table === "clients" &&
+          c.op === "insert" &&
+          (c.row as { id: string }).id === "c-persist",
+      ),
+    ).toBe(true);
+  });
+
+  test("função do servidor sem internet fica guardada e roda depois do que veio antes", async () => {
+    await boot(gestora);
+    networkDown = true;
+    clientsDb.set((list) => [...list, newClient("c-rpc", "Rpc")]);
+    const outcome = await runRpc(
+      "complete_session",
+      { p_session_id: "s" },
+      { label: "Fechar atendimento" },
+    );
+    expect(outcome.status).toBe("queued");
+    expect(pendingCount()).toBe(2);
+    networkDown = false;
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    expect(calls.some((c) => c.table === "clients" && c.op === "insert")).toBe(true);
+    expect(rpcs.map((r) => r.name)).toContain("complete_session");
+  });
+
+  test("criada e apagada sem internet: nunca chega ao servidor", async () => {
+    await boot(gestora);
+    networkDown = true;
+    clientsDb.set((list) => [...list, newClient("c-tmp", "Temporária")]);
+    clientsDb.set((list) => list.filter((c) => c.id !== "c-tmp"));
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    networkDown = false;
+    await flushAll();
+    expect(calls.length).toBe(0);
+  });
+});
+
+describe("pendências", () => {
+  test("recusa do banco sai da fila, volta ao servidor e vai para Pendências com o motivo", async () => {
+    await boot(gestora);
+    failTable = "clients";
+    clientsDb.set((list) => [...list, newClient("c-ruim", "Recusada")]);
+    await flushAll();
+    await tick();
+    expect(pendingCount()).toBe(0);
+    expect(clientsDb.get().some((c) => c.id === "c-ruim")).toBe(false);
+    const failed = failedItems();
+    expect(failed.length).toBe(1);
+    expect(failed[0]!.kind).toBe("permissao");
+    expect(failed[0]!.message).toContain("permissão");
+  });
+
+  test("conflito (horário ocupado) é classificado e nunca fica tentando para sempre", async () => {
+    await boot(gestora);
+    failTable = "appointments";
+    failError = { message: "duplicate key value violates unique constraint", code: "23505" };
+    appointmentsDb.set((list) => [...list, newAppt("a-dup", "c1")]);
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    expect(failedItems()[0]!.kind).toBe("conflito");
+  });
+
+  test("erro do servidor tenta de novo depois e mantém a ordem", async () => {
+    await boot(gestora);
+    failTable = "clients";
+    failError = { message: "Service Unavailable", code: "", status: 503 } as never;
+    clientsDb.set((list) => [...list, newClient("c-5xx", "Servidor")]);
+    await flushAll();
+    expect(pendingCount()).toBe(1); // continua na fila para a próxima tentativa
+    expect(failedItems().length).toBe(0);
+  });
+
+  test("tentar de novo uma pendência recoloca na tela e reenvia", async () => {
+    await boot(gestora);
+    failTable = "clients";
+    clientsDb.set((list) => [...list, newClient("c-retry", "Retry")]);
+    await flushAll();
+    await tick();
+    expect(failedItems().length).toBe(1);
+    failTable = null;
+    retryFailed(failedItems()[0]!.item.seq);
+    expect(clientsDb.get().some((c) => c.id === "c-retry")).toBe(true);
+    await flushAll();
+    expect(pendingCount()).toBe(0);
+    expect(failedItems().length).toBe(0);
+    expect(
+      calls.some(
+        (c) =>
+          c.table === "clients" && c.op === "insert" && (c.row as { id: string }).id === "c-retry",
+      ),
+    ).toBe(true);
+  });
+
+  test("descartar uma pendência a remove da lista", async () => {
+    await boot(gestora);
+    failTable = "clients";
+    clientsDb.set((list) => [...list, newClient("c-desc", "Descartar")]);
+    await flushAll();
+    await tick();
+    discardFailed(failedItems()[0]!.item.seq);
+    expect(failedItems().length).toBe(0);
   });
 });
 

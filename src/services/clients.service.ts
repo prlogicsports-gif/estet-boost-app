@@ -3,7 +3,7 @@ import { clientsDb, type ClientRec } from "@/data/db";
 import { initialsOf } from "@/lib/initials";
 import { events } from "@/services/notification-events";
 import { currentRole } from "@/lib/session";
-import { supabase } from "@/lib/supabase";
+import { runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
 import { notify } from "@/services/notify";
 
@@ -101,7 +101,9 @@ export function updateClient(id: string, patch: Partial<Omit<ClientRec, "id" | "
     if ("goal" in patch) body["goal"] = patch.goal ?? "";
     if ("allergies" in patch) body["allergies"] = patch.allergies ?? "";
     if ("imageConsent" in patch) body["image_consent"] = Boolean(patch.imageConsent);
-    void supabase.rpc("update_my_profile", { p_patch: body }).then(() => clientsDb.reload());
+    void runRpc("update_my_profile", { p_patch: body }, { label: "Seus dados" }).then(() =>
+      clientsDb.reload(),
+    );
     return;
   }
   clientsDb.set((list) =>

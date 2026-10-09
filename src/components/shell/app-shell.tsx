@@ -11,6 +11,8 @@ import { ShellContext } from "@/components/shell/shell-context";
 import { useVisibleNav } from "@/components/shell/use-visible-nav";
 import { notificationsDb } from "@/data/db";
 import { ToastHost } from "@/components/eb/toast";
+import { InstallBanner } from "@/components/eb/install-app";
+import { SyncStatusBar } from "@/components/shell/sync-status";
 import { useSyncReady } from "@/lib/remote-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useSession } from "@/lib/session";
@@ -126,6 +128,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
               className="mx-auto min-w-0 flex-1 pb-32 lg:pb-6"
               style={{ maxWidth: nav.maxWidth }}
             >
+              <InstallBanner />
               <div key={pathname} style={{ animation: "page-in 320ms cubic-bezier(.22,1,.36,1)" }}>
                 {children}
               </div>
@@ -156,6 +159,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
           </BottomSheet>
         )}
       </ShellContext.Provider>
+      <SyncStatusBar />
       <ToastHost toast={syncError ? { message: syncError } : null} />
     </RoleGate>
   );

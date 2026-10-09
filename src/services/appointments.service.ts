@@ -2,7 +2,7 @@ import { logActivity } from "@/services/activity.service";
 import { appointmentsDb, clientsDb } from "@/data/db";
 import type { AppointmentRec, AppointmentStatus } from "@/lib/models";
 import { currentRole } from "@/lib/session";
-import { supabase } from "@/lib/supabase";
+import { runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
 import { createClient } from "@/services/clients.service";
 import { events } from "@/services/notification-events";
@@ -126,9 +126,9 @@ export function confirmAppointment(id: string, by: "gestor" | "cliente") {
   if (!a) return;
   if (by === "cliente" && currentRole() === "cliente") {
     // a cliente confirma o próprio horário por função do banco (ela não escreve na agenda)
-    void supabase
-      .rpc("confirm_my_appointment", { p_appt_id: id })
-      .then(() => appointmentsDb.reload());
+    void runRpc("confirm_my_appointment", { p_appt_id: id }, { label: "Presença confirmada" }).then(
+      () => appointmentsDb.reload(),
+    );
   } else update(id, { status: "confirmed", alert: undefined });
   notify(by === "cliente" ? events.confirmedByClient(a) : events.confirmedByStudio(a));
   logActivity({
@@ -148,7 +148,9 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
   if (!a) return;
   if (by === "cliente" && currentRole() === "cliente") {
     // o servidor decide (mais de 24 h cancela direto; menos pede aprovação), avisa a equipe e registra no histórico
-    void supabase.rpc("request_cancel", { p_appt_id: id }).then(() => appointmentsDb.reload());
+    void runRpc("request_cancel", { p_appt_id: id }, { label: "Cancelamento de horário" }).then(
+      () => appointmentsDb.reload(),
+    );
     return;
   }
   if (by === "cliente") {
@@ -197,9 +199,11 @@ export function requestReschedule(id: string, date: string, time: string) {
   const a = find(id);
   if (!a) return;
   if (currentRole() === "cliente") {
-    void supabase
-      .rpc("request_reschedule", { p_appt_id: id, p_date: date, p_time: time })
-      .then(() => appointmentsDb.reload());
+    void runRpc(
+      "request_reschedule",
+      { p_appt_id: id, p_date: date, p_time: time },
+      { label: "Pedido de remarcação" },
+    ).then(() => appointmentsDb.reload());
     return;
   }
   update(id, { reschedule: true, proposedDate: date, proposedTime: time });

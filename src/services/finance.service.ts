@@ -5,7 +5,7 @@ import type { BillRec, StockRec } from "@/lib/models";
 import { events } from "@/services/notification-events";
 import { logActivity } from "@/services/activity.service";
 import { notify } from "@/services/notify";
-import { supabase } from "@/lib/supabase";
+import { runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
 import { brl } from "@/lib/view";
 
@@ -64,9 +64,11 @@ export function removeStock(id: string) {
 
 /** A cliente avisa que pagou: o servidor registra, avisa a gestora e ela ainda precisa confirmar o recebimento. */
 export function reportPayment(entryId: string, method: string) {
-  void supabase
-    .rpc("report_payment", { p_entry_id: entryId, p_method: method })
-    .then(() => ledgerDb.reload());
+  void runRpc(
+    "report_payment",
+    { p_entry_id: entryId, p_method: method },
+    { label: "Pagamento informado" },
+  ).then(() => ledgerDb.reload());
 }
 
 /** A esteticista confirma o recebimento: a cobrança vira entrada no caixa. */

@@ -91,12 +91,15 @@ const first = <T>(embed: T | T[] | null | undefined): T | undefined =>
   Array.isArray(embed) ? embed[0] : (embed ?? undefined);
 
 async function write(table: string, rec: Row, prev: unknown, key = "id") {
-  const query =
-    prev === undefined
-      ? supabase.from(table).insert(rec)
-      : supabase.from(table).update(rec).eq(key, rec[key]);
-  const { error } = await query;
+  if (prev === undefined) {
+    const { error } = await supabase.from(table).insert(rec);
+    if (error) throw error;
+    return;
+  }
+  // Atualizar 0 linhas = o banco não deixou (RLS) ou o registro não existe mais: vira erro de permissão
+  const { data, error } = await supabase.from(table).update(rec).eq(key, rec[key]).select(key);
   if (error) throw error;
+  if (!data || data.length === 0) throw { code: "EB_NOROWS", message: "0 linhas atualizadas" };
 }
 
 async function drop(table: string, id: string, key = "id") {
@@ -126,6 +129,7 @@ const ageOf = (birth: string | null) => {
 // ---------------------------------------------------------------- clientes
 export const clientsDb = createRemoteStore<ClientRec>({
   key: "clients",
+  label: (rec) => `Cliente ${rec.name}`,
   table: "clients",
   order: { column: "name" },
   fromRow: (r) => ({
@@ -182,6 +186,7 @@ export const clientsDb = createRemoteStore<ClientRec>({
 // ---------------------------------------------------------------- agenda
 export const appointmentsDb = createRemoteStore<AppointmentRec>({
   key: "appointments",
+  label: (rec) => `Horário de ${rec.client} em ${rec.date} às ${rec.time}`,
   table: "appointments",
   select: "*, appointment_finance(price, payment)",
   watch: ["appointment_finance"],
@@ -263,6 +268,7 @@ export const appointmentsDb = createRemoteStore<AppointmentRec>({
 // ---------------------------------------------------------------- avisos (criados no servidor; a pessoa só marca como lida)
 export const notificationsDb = createRemoteStore<NotificationRec>({
   key: "notifications",
+  label: () => "Aviso",
   table: "notifications",
   order: { column: "created_at", ascending: false },
   fromRow: (r, ctx) => ({
@@ -296,6 +302,7 @@ export const notificationsDb = createRemoteStore<NotificationRec>({
 // ---------------------------------------------------------------- financeiro
 export const billsDb = createRemoteStore<BillRec>({
   key: "bills",
+  label: (rec) => `Conta ${rec.name}`,
   table: "bills",
   order: { column: "due" },
   fromRow: (r) => ({
@@ -325,6 +332,7 @@ export const billsDb = createRemoteStore<BillRec>({
 
 export const ledgerDb = createRemoteStore<LedgerEntry>({
   key: "ledger",
+  label: (rec) => `Lançamento ${rec.label}`,
   table: "ledger",
   order: { column: "date", ascending: false },
   fromRow: (r) => ({
@@ -365,6 +373,7 @@ export const ledgerDb = createRemoteStore<LedgerEntry>({
 // ---------------------------------------------------------------- estoque (o custo mora numa tabela só do financeiro)
 export const stockDb = createRemoteStore<StockRec>({
   key: "stock",
+  label: (rec) => `Produto ${rec.name}`,
   table: "stock",
   select: "*, stock_costs(cost, supplier)",
   watch: ["stock_costs"],
@@ -419,6 +428,7 @@ export const stockDb = createRemoteStore<StockRec>({
 // ---------------------------------------------------------------- clínico
 export const careDb = createRemoteStore<CareRec>({
   key: "care",
+  label: () => "Recomendação",
   table: "care",
   order: { column: "created_at", ascending: false },
   fromRow: (r) => ({
@@ -447,6 +457,7 @@ export const careDb = createRemoteStore<CareRec>({
 
 export const anamnesisDb = createRemoteStore<AnamnesisRec>({
   key: "anamnesis",
+  label: () => "Anamnese",
   table: "anamnesis",
   idOf: (rec) => rec.clientId,
   fromRow: (r) => ({
@@ -473,6 +484,7 @@ export const anamnesisDb = createRemoteStore<AnamnesisRec>({
 
 export const proceduresDb = createRemoteStore<ProcedureRec>({
   key: "procedures",
+  label: (rec) => `Procedimento ${rec.name}`,
   table: "procedures",
   order: { column: "name" },
   fromRow: (r) => ({
@@ -501,6 +513,7 @@ export const proceduresDb = createRemoteStore<ProcedureRec>({
 // ---------------------------------------------------------------- atendimento (rascunho no banco; fechar é função do servidor)
 export const sessionsDb = createRemoteStore<SessionRec>({
   key: "sessions",
+  label: (rec) => `Atendimento de ${rec.client}`,
   table: "sessions",
   select: "*, session_finance(items, paid_now, payment, due_date)",
   watch: ["session_finance"],
@@ -579,6 +592,7 @@ export const sessionsDb = createRemoteStore<SessionRec>({
 // ---------------------------------------------------------------- agenda: bloqueios e horários
 export const blocksDb = createRemoteStore<BlockRec>({
   key: "blocks",
+  label: (rec) => `Bloqueio em ${rec.date}`,
   table: "blocks",
   order: { column: "date" },
   fromRow: (r) => ({

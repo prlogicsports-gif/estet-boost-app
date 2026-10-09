@@ -31,6 +31,7 @@ export type FaceMapRec = { clientId: string; marks: FaceMark[] };
  */
 export const faceMapsDb = createRemoteStore<FaceMapRec>({
   key: "face_maps",
+  label: () => "Mapa facial",
   table: "face_maps",
   idOf: (rec) => rec.clientId,
   fromRow: (r) => ({

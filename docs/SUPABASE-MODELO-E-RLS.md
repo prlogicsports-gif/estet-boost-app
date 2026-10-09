@@ -231,4 +231,4 @@ Migrações em `supabase/migrations`, todas testadas com `bun run test` (91 veri
 
 No app, `src/lib/remote-store.ts` liga cada coleção à sua tabela (leitura, tempo real, gravação agrupada e na ordem certa) e `src/data/db.ts` define como cada registro vira linha e volta.
 
-Push: função `supabase/functions/send-push` (Firebase Cloud Messaging) e `public/push-sw.js`; ligar em [PUSH-PASSO-A-PASSO.md](./PUSH-PASSO-A-PASSO.md).
+Push: função `supabase/functions/send-push` (Firebase Cloud Messaging) e `public/sw.js`; ligar em [PUSH-PASSO-A-PASSO.md](./PUSH-PASSO-A-PASSO.md).

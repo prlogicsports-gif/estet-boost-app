@@ -61,6 +61,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
   const [closing, setClosing] = useState(false);
   const [done, setDone] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
   const [saving, setSaving] = useState(false);
   const me = useSession();
   const fin = can(me, "financeiro");
@@ -146,8 +147,10 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
               retorno: result.retorno,
             });
             setSaving(false);
-            if (outcome.ok) setDone(true);
-            else setCloseError(outcome.message);
+            if (outcome.ok) {
+              setQueued(Boolean(outcome.queued));
+              setDone(true);
+            } else setCloseError(outcome.message);
           }}
         />
         {closeError ? (
@@ -159,7 +162,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           open={done}
           onClose={() => setDone(false)}
           title="Atendimento finalizado"
-          subtitle={`Registro salvo no prontuário de ${s.client.split(" ")[0]}, com antes e depois. ${
+          subtitle={`${queued ? "Sem internet: o fechamento ficou guardado neste aparelho e será concluído sozinho quando a conexão voltar. " : ""}Registro salvo no prontuário de ${s.client.split(" ")[0]}, com antes e depois. ${
             summary?.retorno
               ? `Retorno pedido para ${returnDate} às ${summary.retorno.hora}, aguardando confirmação.`
               : `Sem reagendamento${summary?.semRetorno ? ` · ${summary.semRetorno.toLowerCase()}` : ""}.`

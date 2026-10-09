@@ -1,6 +1,6 @@
 # Push com o app fechado: como ligar
 
-Como funciona: cada aviso novo entra na tabela `notifications` (pelo app ou pelos lembretes agendados). Um gatilho do banco chama a função `send-push`, que envia o push pelo Firebase Cloud Messaging. O service worker do app (`public/push-sw.js`) mostra a notificação, mesmo com o app fechado. Os lembretes (horários, contas, cobranças, estoque, validade, cuidados, clientes paradas) rodam sozinhos no servidor a cada 5 minutos (`app.run_reminders`, via pg_cron).
+Como funciona: cada aviso novo entra na tabela `notifications` (pelo app ou pelos lembretes agendados). Um gatilho do banco chama a função `send-push`, que envia o push pelo Firebase Cloud Messaging. O service worker do app (`public/sw.js`) mostra a notificação, mesmo com o app fechado. Os lembretes (horários, contas, cobranças, estoque, validade, cuidados, clientes paradas) rodam sozinhos no servidor a cada 5 minutos (`app.run_reminders`, via pg_cron).
 
 > **Nunca** cole o JSON da conta de serviço no chat, no repositório ou em arquivo do app. Ele só vai no campo de _secret_ do Supabase (passo 3).
 
@@ -37,7 +37,7 @@ on conflict (name) do update set value = excluded.value;
 No app, **Configurações → Avisos → Notificações no aparelho**: ligue e permita quando o navegador pedir. O aparelho se registra sozinho. Quem usa o app em mais de um aparelho liga em cada um.
 
 - **Android e computador (Chrome, Edge):** funciona direto.
-- **iPhone/iPad:** o push só funciona depois de instalar o app na tela inicial (Compartilhar → Adicionar à Tela de Início). Isso entra na etapa do PWA.
+- **iPhone/iPad:** o push só funciona depois de instalar o app na tela inicial (Compartilhar → Adicionar à Tela de Início) e abri-lo pelo ícone **EB.**; veja [PWA.md](./PWA.md).
 
 ## 6. Testar
 

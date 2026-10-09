@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
 import { RoleGate } from "@/components/auth/role-gate";
+import { SyncStatusBar } from "@/components/shell/sync-status";
 
 /** O atendimento é um fluxo independente em tela cheia: sem menu, sem barra, só o passo a passo. */
 export function SessionFrame({ children }: { children: ReactNode }) {
   return (
     <RoleGate role="gestor" permissions={["atendimentos"]}>
+      <SyncStatusBar />
       <div
         className="fixed inset-0 z-50 overflow-y-auto bg-background"
         style={{ animation: "page-in 320ms cubic-bezier(.22,1,.36,1)" }}

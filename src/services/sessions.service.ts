@@ -1,8 +1,7 @@
 import { appointmentsDb, clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
 import { addDays, todayISO } from "@/lib/dates";
 import type { ProcedureRec, SessionRec } from "@/lib/models";
-import { flushAll, reloadAll } from "@/lib/remote-store";
-import { supabase } from "@/lib/supabase";
+import { reloadAll, runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
 
 /** Se os produtos passam desta fatia do valor cobrado, a esteticista é avisada. */
@@ -116,7 +115,7 @@ export function cancelSession(id: string) {
   sessionsDb.set((list) => list.filter((item) => item.id !== id));
 }
 
-export type SessionResult = { ok: true } | { ok: false; message: string };
+export type SessionResult = { ok: true; queued?: boolean } | { ok: false; message: string };
 
 const REASONS: Record<string, string> = {
   sem_permissao: "Você não tem permissão para isso.",
@@ -127,12 +126,20 @@ const failure = (reason?: string): SessionResult => ({
   message: REASONS[reason ?? ""] ?? "Não foi possível concluir. Tente de novo.",
 });
 
-async function callSession(name: string, args: Record<string, unknown>): Promise<SessionResult> {
-  await flushAll(); // o rascunho precisa estar salvo antes de o servidor usá-lo
-  const { data, error } = await supabase.rpc(name, args);
-  if (error) return failure();
+/**
+ * Chama a função do servidor. O rascunho salvo vai na frente (a fila mantém a ordem). Sem internet, o pedido fica
+ * guardado no aparelho e é concluído sozinho quando a conexão voltar (`queued`).
+ */
+async function callSession(
+  name: string,
+  args: Record<string, unknown>,
+  label: string,
+): Promise<SessionResult> {
+  const outcome = await runRpc(name, args, { label });
+  if (outcome.status === "queued") return { ok: true, queued: true };
+  if (outcome.status === "rejected") return { ok: false, message: outcome.message };
   await reloadAll();
-  const result = data as { ok: boolean; reason?: string };
+  const result = outcome.data as { ok: boolean; reason?: string };
   return result?.ok ? { ok: true } : failure(result?.reason);
 }
 
@@ -145,11 +152,11 @@ export function completeSession(
   id: string,
   closing: { cuidados: string[]; retorno: { data: string; hora: string } | null },
 ): Promise<SessionResult> {
-  return callSession("complete_session", {
-    p_session_id: id,
-    p_cuidados: closing.cuidados,
-    p_retorno: closing.retorno,
-  });
+  return callSession(
+    "complete_session",
+    { p_session_id: id, p_cuidados: closing.cuidados, p_retorno: closing.retorno },
+    "Fechar atendimento",
+  );
 }
 
 /** Corrige um atendimento já finalizado. O caixa e a agenda acompanham (valores só com permissão financeira). */
@@ -157,17 +164,21 @@ export function editFinishedSession(
   id: string,
   patch: Pick<SessionRec, "procedures" | "notes" | "payment">,
 ): Promise<SessionResult> {
-  return callSession("edit_finished_session", {
-    p_session_id: id,
-    p_procedures: patch.procedures,
-    p_notes: patch.notes,
-    p_payment: patch.payment,
-  });
+  return callSession(
+    "edit_finished_session",
+    {
+      p_session_id: id,
+      p_procedures: patch.procedures,
+      p_notes: patch.notes,
+      p_payment: patch.payment,
+    },
+    "Corrigir atendimento",
+  );
 }
 
 /** Apaga um atendimento lançado por engano: sai do caixa, volta o estoque e a agenda (só gestora). */
 export function deleteFinishedSession(id: string): Promise<SessionResult> {
-  return callSession("delete_finished_session", { p_session_id: id });
+  return callSession("delete_finished_session", { p_session_id: id }, "Apagar atendimento");
 }
 
 /** Produtos em falta para o que o atendimento pede (usado para avisar antes de finalizar). */
