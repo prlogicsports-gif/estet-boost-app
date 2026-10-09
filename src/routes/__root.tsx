@@ -94,7 +94,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#241c20" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "EstetBoost" },
+      { name: "apple-mobile-web-app-title", content: "EstetBoost." },
       { name: "apple-mobile-web-app-status-bar-style", content: "black" },
       { name: "format-detection", content: "telephone=no" },
       { title: "EstetBoost." },

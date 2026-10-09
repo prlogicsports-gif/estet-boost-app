@@ -9,6 +9,7 @@ const DISMISS_KEY = "eb.install-dismissed";
 /** Cartão "Instalar o app": botão no Android/computador e passo a passo no iPhone/iPad. Some quando já está instalado. */
 export function InstallCard() {
   const { standalone, ios, canPrompt, install } = useInstall();
+  const [steps, setSteps] = useState(false);
   if (standalone) {
     return (
       <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-3 text-[13.5px] text-[var(--text-secondary)]">
@@ -33,19 +34,28 @@ export function InstallCard() {
         </div>
       </div>
       {ios ? (
-        <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-5 text-[13px] text-[var(--text-secondary)]">
-          <li>
-            Toque em <strong className="text-foreground">Compartilhar</strong>{" "}
-            <Icon name="Share" size={14} className="inline align-[-2px]" /> na barra do Safari.
-          </li>
-          <li>
-            Escolha <strong className="text-foreground">Adicionar à Tela de Início</strong>.
-          </li>
-          <li>
-            Toque em <strong className="text-foreground">Adicionar</strong> e abra o app pelo ícone{" "}
-            <strong className="text-foreground">EB.</strong>
-          </li>
-        </ol>
+        <>
+          <Button type="button" onClick={() => setSteps((v) => !v)} className="self-start">
+            <Icon name="Download" size={16} /> Adicionar à tela inicial
+          </Button>
+          {steps ? (
+            <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-5 text-[13px] text-[var(--text-secondary)]">
+              <li>
+                Toque em <strong className="text-foreground">Compartilhar</strong>{" "}
+                <Icon name="Share" size={14} className="inline align-[-2px]" /> na barra do Safari.
+              </li>
+              <li>
+                Escolha <strong className="text-foreground">Adicionar à Tela de Início</strong>. O
+                nome <strong className="text-foreground">EstetBoost.</strong> e o ícone já vêm
+                preenchidos.
+              </li>
+              <li>
+                Toque em <strong className="text-foreground">Adicionar</strong> e abra o app pelo
+                ícone <strong className="text-foreground">EB.</strong>
+              </li>
+            </ol>
+          ) : null}
+        </>
       ) : (
         <Button type="button" onClick={() => void install()} className="self-start">
           <Icon name="Download" size={16} /> Instalar app
