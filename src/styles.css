@@ -260,7 +260,7 @@
 }
 @keyframes splash-out {
   0%,
-  78% {
+  85% {
     opacity: 1;
   }
   100% {
