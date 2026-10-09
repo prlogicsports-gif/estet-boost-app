@@ -8,10 +8,11 @@
  *  permissao   o banco recusou (RLS, 403)           → desfaz na tela e avisa; vai para "Pendências"
  *  conflito    registro repetido ou ocupado (409)   → desfaz na tela e avisa; vai para "Pendências"
  *  invalido    dado recusado (campo/obrigatório)    → desfaz na tela e avisa; vai para "Pendências"
+ *  banco       tabela/coluna/função não existe      → o banco do Supabase está desatualizado (faltam migrações); vai para "Pendências"
  *  desconhecido qualquer outro                      → tratado como servidor
  */
 export type ErrorClass =
-  "rede" | "sessao" | "servidor" | "permissao" | "conflito" | "invalido" | "desconhecido";
+  "rede" | "sessao" | "servidor" | "permissao" | "conflito" | "invalido" | "banco" | "desconhecido";
 
 type Loose =
   | { message?: string; code?: string | number; status?: number; details?: string }
@@ -34,6 +35,11 @@ export function classifyError(
     )
   )
     return "rede";
+  if (
+    /^(PGRST20[245]|42703|42P01|42883)$/.test(code) ||
+    /could not find the .* column|could not find the table|schema cache/.test(message)
+  )
+    return "banco";
   if (
     status === 401 ||
     /jwt|token.*expired|not authenticated|invalid claim/.test(message) ||
@@ -78,6 +84,8 @@ const HUMAN: Record<ErrorClass, string> = {
   permissao: "Você não tem permissão para essa alteração.",
   conflito: "Esse registro já existe ou o horário foi ocupado por outra pessoa.",
   invalido: "O servidor não aceitou os dados dessa alteração.",
+  banco:
+    "O banco de dados do Supabase está desatualizado (faltam migrações). Aplique as migrações pendentes e toque em Tentar de novo.",
   desconhecido: "Algo deu errado. Vamos tentar de novo.",
 };
 
