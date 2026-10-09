@@ -3,6 +3,7 @@ import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 
 import { RoleGate } from "@/components/auth/role-gate";
 import { NotificationsPanel } from "@/components/eb/notifications-panel";
+import { PushPrompt } from "@/components/eb/push-prompt";
 import { BottomSheet, Drawer } from "@/components/eb/overlays";
 import { DesktopSidebar } from "@/components/shell/desktop-sidebar";
 import { MobileDock } from "@/components/shell/mobile-dock";
@@ -160,6 +161,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
         )}
       </ShellContext.Provider>
       <SyncStatusBar />
+      <PushPrompt audience={nav.role} ready={ready} />
       <ToastHost toast={syncError ? { message: syncError } : null} />
     </RoleGate>
   );
