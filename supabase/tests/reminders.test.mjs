@@ -83,6 +83,11 @@ check(
     gt.includes("Luz está atrasada") &&
     gt.some((t) => /Cobrança de Cliente vence amanhã/.test(t)),
 );
+check(
+  "cliente: lembrete 1 hora antes do atendimento",
+  ct.includes("Seu atendimento é daqui a pouco"),
+  JSON.stringify(ct),
+);
 check("conta que só vence daqui a 20 dias não avisa", !gt.some((t) => /Internet/.test(t)));
 check(
   "gestora: estoque baixo, vencendo e vencido",
