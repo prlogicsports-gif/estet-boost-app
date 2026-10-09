@@ -49,3 +49,9 @@ O app já roda **sem banco** (tudo em `localStorage`/IndexedDB, atrás de `src/s
 ## 5. Lembrete para a etapa seguinte
 
 **Instalar na tela inicial (PWA):** manifesto com nome "EstetBoost." e ícone EB, service worker, ícones 192/512 e maskable, tela de abertura, botão "Instalar app" (Android) e instrução para iOS (Compartilhar → Adicionar à Tela de Início).
+
+## 6. Decisões fechadas (confirmadas pela dona do projeto)
+
+- Equipe: funcionária com acesso a tudo menos financeiro (suposições de `EQUIPE-E-PERMISSOES.md` §2 e §6 aprovadas: aviso para toda a equipe).
+- **Sem cobrança Pix automática.** Em vez disso, a gestora pode **cadastrar um link ou código de pagamento** (Pix copia e cola, link de cartão, etc.) em Configurações, e a cliente vê o botão **Copiar** na cobrança. A confirmação continua manual: a cliente informa que pagou e a gestora confirma. Dado guardado em `clinics/{id}/config/payment` (texto livre, só a gestora escreve; cliente lê só o da própria clínica).
+- Firebase será usado **direto** (Auth, Firestore, Storage, Functions); ver nota sobre o conector do Lovable em `ARQUITETURA.md`.

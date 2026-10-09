@@ -125,3 +125,11 @@ O que **pode** ser escrito direto pelo navegador, sob regras estritas: rascunho 
 2. Uma clínica pode ter várias profissionais (equipe)? Muda o modelo de `users` e regras. Hoje é uma gestora por clínica.
 3. Cobrança online (Pix com baixa automática) entra nesta fase ou depois?
 4. Domínio próprio e e-mail transacional (para credenciais e recuperação de senha).
+
+## 9. Conector Firebase do Lovable: usar ou não?
+
+O Lovable oferece um conector oficial apenas para **Firebase Cloud Messaging** (push), em que se envia a chave JSON do projeto e ela fica guardada como segredo. Não há conector oficial para Auth, Firestore e regras. Por isso a recomendação é:
+
+- **Auth, Firestore, Storage, regras e Functions: direto no Firebase**, como descrito acima. Só assim as regras de segurança, os papéis (claims) e os testes no emulador ficam sob nosso controle.
+- **Push (FCM)**: o conector do Lovable pode servir para enviar avisos, mas o agendador e os gatilhos já ficam nas Cloud Functions; usar um segundo caminho duplicaria a lógica. Decidir na implementação; padrão: FCM pelas Cloud Functions.
+- Em qualquer caso, **a chave JSON da conta de serviço nunca é colada no chat nem no código**: só em Secret Manager (Functions) ou no campo de segredo do Lovable/Cloudflare.
