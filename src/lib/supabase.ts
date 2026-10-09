@@ -1,15 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
-
 /**
- * Único lugar que cria o cliente do Supabase. Usa só a chave PÚBLICA (publishable/anon):
- * quem protege os dados são as políticas RLS do banco. A chave secreta (service_role) nunca
- * entra aqui nem em qualquer variável VITE_*.
+ * Ponto único de acesso ao Supabase para o app. O cliente em si é gerado pelo Lovable
+ * (`src/integrations/supabase/client.ts`, não editar) e usa só a chave PÚBLICA: quem protege
+ * os dados são as políticas RLS do banco. A chave secreta (service_role) nunca entra no navegador
+ * e só é usada em funções de servidor (`client.server.ts`), que ignoram o RLS e por isso exigem
+ * checagem de papel manual.
  */
-const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
-const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined;
-
-export const supabaseConfigured = Boolean(url && key);
-
-export const supabase = createClient(url ?? "http://localhost:54321", key ?? "sem-chave", {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-});
+export { supabase } from "@/integrations/supabase/client";
+export const supabaseConfigured = true;
