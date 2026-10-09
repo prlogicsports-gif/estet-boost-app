@@ -9,10 +9,10 @@ export function SessionFrame({ children }: { children: ReactNode }) {
     <RoleGate role="gestor" permissions={["atendimentos"]}>
       <SyncStatusBar />
       <div
-        className="fixed inset-0 z-50 overflow-y-auto bg-background"
+        className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-background"
         style={{ animation: "page-in 320ms cubic-bezier(.22,1,.36,1)" }}
       >
-        <div className="mx-auto max-w-[880px] px-4 pb-12 lg:max-w-none lg:px-10 xl:px-14 pt-[calc(env(safe-area-inset-top)+20px)]">
+        <div className="mx-auto w-full min-w-0 max-w-[880px] px-4 pb-12 lg:max-w-none lg:px-10 xl:px-14 pt-[calc(env(safe-area-inset-top)+20px)]">
           {children}
         </div>
       </div>

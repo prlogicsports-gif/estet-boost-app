@@ -163,7 +163,7 @@ export const events = {
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Novo horário agendado",
-      body: `${a.procedure} · ${when(a)}`,
+      body: `${a.procedure} · ${when(a)}. Toque para confirmar sua presença.`,
       href: "/cliente/agenda",
     }),
   requestApproved: (a: AppointmentRec) =>

@@ -204,14 +204,14 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
         </StatusBadge>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-10">
         <div className="lg:sticky lg:top-6">
           <AnamnesisStepper steps={STEPS} current={step} onSelect={go} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
           {step === 0 ? (
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
               {client?.allergies ? (
                 <div className="xl:col-span-2">
                   <AlertCard
@@ -242,7 +242,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           ) : null}
 
           {step === 1 ? (
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
               <Input
                 label="Avaliação da pele hoje"
                 multiline
@@ -263,7 +263,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           ) : null}
 
           {step === 2 ? (
-            <div className="grid gap-5 md:grid-cols-[minmax(240px,360px)_1fr]">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(240px,360px)_minmax(0,1fr)]">
               <SessionPhotoSlot
                 clientId={s.clientId}
                 sessionId={s.id}
@@ -376,7 +376,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           ) : null}
 
           {step === 5 ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
               <div className="flex flex-col gap-2.5">
                 <span className={label}>Produtos usados</span>
                 {stock.map((item) => {
@@ -470,7 +470,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
                   />
                 </div>
               ) : null}
-              <div className="grid gap-5 sm:grid-cols-2 xl:max-w-[760px]">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:max-w-[760px]">
                 <div className="flex flex-col gap-2.5">
                   {s.beforePhotoId ? null : (
                     <AlertCard
@@ -531,7 +531,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           ) : null}
 
           {step === 8 && fin ? (
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <div className={card}>
                 <span className={label}>Resumo</span>
                 {s.procedures.map((item, index) => (

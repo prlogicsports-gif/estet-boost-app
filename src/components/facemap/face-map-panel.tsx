@@ -120,7 +120,7 @@ export function FaceMapPanel({
   return (
     <div>
       {tabs}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className="relative mx-auto w-full max-w-[440px] overflow-hidden rounded-[var(--radius-xl)]">
           <FaceMap
             selected={selected}

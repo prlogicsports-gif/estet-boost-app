@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { Icon } from "@/components/eb/icon";
@@ -24,6 +24,17 @@ export function SyncStatusBar() {
   const status = useSyncStatus();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  // O "Enviando…" só aparece se demorar: o salvamento automático de cada passo leva instantes e não deve piscar.
+  const sending = status.pending > 0 && status.online && !status.authExpired && !status.failed;
+  const [showSending, setShowSending] = useState(false);
+  useEffect(() => {
+    if (!sending) {
+      setShowSending(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowSending(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [sending]);
 
   const message = status.authExpired
     ? {
@@ -48,7 +59,7 @@ export function SyncStatusBar() {
               : "Sem internet · você pode continuar usando",
             action: status.pending ? "Ver" : "",
           }
-        : status.pending
+        : status.pending && showSending
           ? {
               tone: "info",
               icon: "RefreshCw",

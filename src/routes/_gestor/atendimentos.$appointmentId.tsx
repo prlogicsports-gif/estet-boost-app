@@ -170,6 +170,18 @@ function AtendimentoPage() {
         />
       ) : null}
 
+      {appointment.status === "pending" &&
+      !appointment.request &&
+      !cancelled &&
+      !appointment.done ? (
+        <AlertCard
+          tone="info"
+          icon="Hourglass"
+          title="Aguardando a confirmação da cliente."
+          description="Ela confirma pelo acesso dela. Se confirmou por WhatsApp ou telefone, use “Marcar como confirmada”."
+        />
+      ) : null}
+
       <section
         className="rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--surface-card)] px-[18px] py-4"
         style={{ boxShadow: "var(--shadow-raised)" }}
@@ -292,7 +304,7 @@ function AtendimentoPage() {
                   say("Horário confirmado")
                 )}
               >
-                <Icon name="Check" size={18} /> Confirmar horário
+                <Icon name="Check" size={18} /> Marcar como confirmada
               </Button>
             ) : null}
           </>

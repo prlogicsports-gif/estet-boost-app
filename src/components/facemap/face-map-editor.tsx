@@ -735,7 +735,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
   const parId = zonaEd ? layout.pairOf(zonaEd.id) : null;
 
   return (
-    <div className="grid items-start gap-[18px] lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
       <div className="mx-auto w-full max-w-[420px]">
         <FaceMap
           layout={layout}

@@ -26,7 +26,10 @@ export type NewAppointment = {
   sendConfirmation: boolean;
 };
 
-/** A esteticista agenda: já nasce confirmado, e a cliente é avisada se a confirmação estiver marcada. */
+/**
+ * A esteticista agenda: o horário nasce "aguardando confirmação". Quem confirma é a cliente (botão na área dela)
+ * ou a esteticista, à mão, quando a cliente confirmou por fora (WhatsApp, telefone).
+ */
 export function scheduleAppointment(input: NewAppointment): AppointmentRec {
   const client =
     (input.clientId ? clientsDb.get().find((item) => item.id === input.clientId) : undefined) ??
@@ -42,7 +45,7 @@ export function scheduleAppointment(input: NewAppointment): AppointmentRec {
     duration: input.duration,
     price: input.price,
     payment: input.payment,
-    status: "confirmed",
+    status: "pending",
     kind: client.lastVisit === "—" ? "primeira" : "retorno",
     origin: "gestor",
     notes: input.notes,
