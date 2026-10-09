@@ -247,7 +247,7 @@
     max-width: 0;
   }
   to {
-    max-width: 2.2em;
+    max-width: 2.6em;
   }
 }
 @keyframes splash-boost {
@@ -255,12 +255,12 @@
     max-width: 0;
   }
   to {
-    max-width: 2.5em;
+    max-width: 3em;
   }
 }
 @keyframes splash-out {
   0%,
-  82% {
+  78% {
     opacity: 1;
   }
   100% {
