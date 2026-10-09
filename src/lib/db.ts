@@ -19,15 +19,16 @@ export function createStore<T>(key: string, seed: () => T): Store<T> {
 
   const notify = () => listeners.forEach((listener) => listener());
 
+  // O valor fica em memória: o localStorage só é relido na primeira leitura e quando outra aba grava.
   function get(): T {
     if (typeof window === "undefined") return (serverValue ??= seed());
+    if (cache) return cache.value;
     let raw: string | null = null;
     try {
       raw = window.localStorage.getItem(key);
     } catch {
       /* sem armazenamento: vale o que está em memória */
     }
-    if (cache && cache.raw === raw) return cache.value;
     let value: T;
     try {
       value = raw === null ? seed() : (JSON.parse(raw) as T);
@@ -63,7 +64,9 @@ export function createStore<T>(key: string, seed: () => T): Store<T> {
   const subscribe = (listener: () => void) => {
     listeners.add(listener);
     const onStorage = (event: StorageEvent) => {
-      if (event.key === key) listener();
+      if (event.key !== key && event.key !== null) return;
+      cache = null;
+      listener();
     };
     window.addEventListener("storage", onStorage);
     return () => {

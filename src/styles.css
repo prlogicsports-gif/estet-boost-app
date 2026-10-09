@@ -267,6 +267,17 @@
     opacity: 0;
   }
 }
+/* Troca de tela: nunca some o conteúdo (começa em 90% de opacidade) e só dura o suficiente para suavizar. */
+@keyframes page-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 @keyframes fade-up {
   from {
     transform: translateY(10px);

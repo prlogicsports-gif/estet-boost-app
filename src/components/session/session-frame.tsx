@@ -8,7 +8,7 @@ export function SessionFrame({ children }: { children: ReactNode }) {
     <RoleGate role="gestor">
       <div
         className="fixed inset-0 z-50 overflow-y-auto bg-background"
-        style={{ animation: "fade-up 320ms cubic-bezier(.16,1,.3,1)" }}
+        style={{ animation: "page-in 180ms ease-out" }}
       >
         <div className="mx-auto max-w-[880px] px-4 pb-12 lg:max-w-none lg:px-10 xl:px-14 pt-[calc(env(safe-area-inset-top)+20px)]">
           {children}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 
 import { RoleGate } from "@/components/auth/role-gate";
 import { NotificationsPanel } from "@/components/eb/notifications-panel";
@@ -32,11 +32,24 @@ export function AppShell({ nav, children }: { nav: NavConfig; children: ReactNod
   );
   const unread = items.filter((item) => !item.read).length;
 
+  // Lembretes rodam depois que a tela já apareceu (nunca no meio da troca de tela).
   useEffect(() => {
-    runReminders();
+    const first = window.setTimeout(() => runReminders(), 1500);
     const timer = window.setInterval(() => runReminders(), 60000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
   }, []);
+
+  // Telas que se abrem por botão (e não por link) também são baixadas antes do uso.
+  const router = useRouter();
+  useEffect(() => {
+    const ids = nav.role === "gestor" ? ["/atendimento/novo"] : [];
+    const warm = () => ids.forEach((to) => router.preloadRoute({ to }).catch(() => {}));
+    const handle = window.setTimeout(warm, 2000);
+    return () => window.clearTimeout(handle);
+  }, [router, nav.role]);
 
   const panel = (
     <NotificationsPanel
@@ -70,7 +83,7 @@ export function AppShell({ nav, children }: { nav: NavConfig; children: ReactNod
               className="mx-auto min-w-0 flex-1 pb-32 lg:pb-6"
               style={{ maxWidth: nav.maxWidth }}
             >
-              <div key={pathname} style={{ animation: "fade-up 320ms cubic-bezier(.16,1,.3,1)" }}>
+              <div key={pathname} style={{ animation: "page-in 180ms ease-out" }}>
                 {children}
               </div>
             </main>

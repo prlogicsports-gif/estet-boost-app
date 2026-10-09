@@ -9,6 +9,8 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Baixa o código das telas antes do clique (links visíveis e toque/hover), para a troca ser instantânea.
+    defaultPreload: "viewport",
     defaultPreloadStaleTime: 0,
   });
 
