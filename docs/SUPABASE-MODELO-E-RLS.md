@@ -77,8 +77,7 @@ Como as funções leem `profiles` (e `active`), **desativar uma pessoa bloqueia 
 > Rascunho de projeto; será ajustado e coberto por testes pgTAP. Regra: **RLS ligado e forçado em tudo** e nenhuma política = nada permitido.
 
 ```sql
-alter table clients enable row level security;
-alter table clients force row level security;
+alter table clients enable row level security;   -- o dono do banco (postgres) ignora RLS; as funções SECURITY DEFINER dependem disso
 
 -- equipe lê e escreve clientes da própria clínica
 create policy clients_team on clients for all to authenticated
@@ -216,3 +215,7 @@ Usuários de teste: gestora X, funcionária X, gestora Y, cliente A (clínica X)
 | Upload de arquivo não-imagem ou > 5 MB                                      | Negado                 |
 | Cliente lê foto sem `image_consent`                                         | Negado                 |
 | Tabela nova sem RLS                                                         | CI falha               |
+
+## 8. Estado da implementação
+
+Já escrito e testado (`bun run test:db`, 62 verificações): `supabase/migrations/20260101000001_schema.sql` (tabelas), `…02_rls.sql` (funções auxiliares e políticas) e `…03_identity_rpcs.sql` (`create_clinic`, credenciais de cliente e de equipe, `accept_invite`, `accept_staff_invite`, `set_staff_active`, `report_payment`, `request_cancel`, `request_reschedule`, `update_my_profile`). Pendentes: `complete_session`, `confirm_payment`/`reject_payment`/`reopen_receivable`, correção e exclusão de atendimento, bucket e políticas de Storage, envio de push e agendador (pg_cron).

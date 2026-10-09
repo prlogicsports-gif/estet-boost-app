@@ -98,3 +98,12 @@ Ordem segura de uma mudança que altera dado e tela: publicar migração **compa
 3. Criar o projeto Firebase **só para push** (Cloud Messaging) e gerar a chave de conta de serviço; guardá-la como secret da função `send_push` (nunca no chat ou no código).
 4. Instalar o Docker Desktop e o Supabase CLI; rodar `supabase start`.
 5. Só então começar a troca dos serviços (ordem em [PROXIMA-ETAPA.md](./PROXIMA-ETAPA.md)).
+
+## 10. Alternativa sem Docker (decisão atual do projeto)
+
+O projeto **não usa Docker** por enquanto. No lugar:
+
+- **Testes do banco**: `bun run test:db` roda um **Postgres real dentro do Node (PGlite)**, aplica todas as migrações de `supabase/migrations` e executa os testes de segurança (`supabase/tests/rls.test.mjs`): isolamento entre clínicas, funcionária sem financeiro, credenciais, RLS em todas as tabelas. Não precisa de Docker nem de internet.
+- **Aplicar no Supabase (staging)**: `bun run db:bundle` junta as migrações em `supabase/bundle.sql`; cole o conteúdo em **Supabase → SQL Editor → Run**. Em mudanças futuras, aplique **só as migrações novas**, na ordem.
+- **Cuidado com o Lovable**: com o Supabase conectado ao Lovable, ele pode sugerir ou aplicar SQL por conta própria. Recuse alterações de esquema que não venham de `supabase/migrations`.
+- Sem ambiente local, **todo teste de tela acontece no projeto de staging** (dados fictícios). O projeto de produção só recebe migrações depois de passarem no `test:db` e no staging.

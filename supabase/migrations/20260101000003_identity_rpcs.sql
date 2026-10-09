@@ -1,0 +1,367 @@
+-- Funções de identidade, credenciais e ações da cliente.
+-- Todas SECURITY DEFINER com search_path fixo; validam auth.uid(), papel e clínica DENTRO da função.
+-- Falhas esperadas voltam como {ok:false, reason} (e não como erro) para que o registro de tentativas não seja desfeito.
+
+-- ---------------------------------------------------------------- utilidades internas (schema app, não exposto)
+create function app.slugify(p text) returns text language sql immutable as $$
+  select trim(both '-' from regexp_replace(
+    translate(lower(coalesce(p, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'),
+    '[^a-z0-9]+', '-', 'g'))
+$$;
+
+create function app.hash_code(p_code text) returns text language sql stable security definer set search_path = app, pg_temp as $$
+  select encode(sha256(convert_to((select value from app.secrets where name = 'pepper') || upper(trim(p_code)), 'UTF8')), 'hex')
+$$;
+
+-- código legível (sem 0/O e 1/I/L), formato EB-XXXX-XXXX
+create function app.new_code() returns text language plpgsql as $$
+declare
+  alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  raw text := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+  out text := '';
+  i int;
+begin
+  for i in 0..7 loop
+    out := out || substr(alphabet, (('x' || substr(raw, i * 2 + 1, 2))::bit(8)::int % 31) + 1, 1);
+  end loop;
+  return 'EB-' || substr(out, 1, 4) || '-' || substr(out, 5, 4);
+end $$;
+
+create function app.log(p_clinic uuid, p_by text, p_actor uuid, p_kind text, p_client uuid, p_text text, p_sensitive boolean default false)
+returns void language sql security definer set search_path = public, pg_temp as $$
+  insert into public.activity (clinic_id, by_role, actor_id, kind, client_id, text, sensitive)
+  values (p_clinic, p_by, p_actor, p_kind, p_client, p_text, p_sensitive)
+$$;
+
+-- avisa as pessoas ativas da clínica com os papéis dados (um registro por destinatário; rule_key evita duplicar)
+create function app.notify_clinic(p_clinic uuid, p_roles text[], p_kind text, p_title text, p_body text, p_href text, p_rule text default null)
+returns void language sql security definer set search_path = public, pg_temp as $$
+  insert into public.notifications (clinic_id, recipient_id, rule_key, kind, title, body, href)
+  select p_clinic, id, coalesce(p_rule, gen_random_uuid()::text), p_kind, p_title, p_body, p_href
+  from public.profiles where clinic_id = p_clinic and active and role = any (p_roles)
+  on conflict (recipient_id, rule_key) do nothing
+$$;
+
+revoke all on function app.slugify(text), app.hash_code(text), app.new_code(),
+  app.log(uuid, text, uuid, text, uuid, text, boolean),
+  app.notify_clinic(uuid, text[], text, text, text, text, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- página pública do link (sem login)
+create function public.get_clinic_public(p_slug text) returns jsonb
+language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce((select jsonb_build_object('name', name) from public.clinics where slug = p_slug), jsonb_build_object())
+$$;
+
+-- ---------------------------------------------------------------- criar clínica (esteticista recém-cadastrada)
+create function public.create_clinic(p_name text, p_phone text, p_studio text, p_city text, p_document text, p_size text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  uid uuid := auth.uid();
+  mail text;
+  confirmed timestamptz;
+  existing public.profiles;
+  base text;
+  candidate text;
+  n int := 1;
+  cid uuid;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'login'); end if;
+  select * into existing from public.profiles where id = uid;
+  if found then return jsonb_build_object('ok', true, 'clinic_id', existing.clinic_id, 'already', true); end if;
+
+  select email, email_confirmed_at into mail, confirmed from auth.users where id = uid;
+  if confirmed is null then return jsonb_build_object('ok', false, 'reason', 'email_nao_confirmado'); end if;
+  if coalesce(trim(p_name), '') = '' or coalesce(trim(p_studio), '') = '' then
+    return jsonb_build_object('ok', false, 'reason', 'dados_incompletos');
+  end if;
+
+  base := coalesce(nullif(app.slugify(p_studio), ''), 'clinica');
+  candidate := base;
+  while exists (select 1 from public.clinics where slug = candidate) loop
+    n := n + 1;
+    candidate := base || '-' || n;
+  end loop;
+
+  insert into public.clinics (slug, name, owner_id, email, phone, city, document, size)
+  values (candidate, trim(p_studio), uid, lower(mail), nullif(trim(p_phone), ''), nullif(trim(p_city), ''), nullif(trim(p_document), ''),
+          case when p_size in ('autonoma', 'clinica') then p_size else 'autonoma' end)
+  returning id into cid;
+
+  insert into public.profiles (id, clinic_id, role, name, email, terms_accepted_at, terms_version)
+  values (uid, cid, 'gestor', trim(p_name), lower(mail), now(), 'v1');
+
+  insert into public.clinic_config (clinic_id, hours, settings)
+  values (cid,
+    '{"slot":30,"days":{"0":{"open":false,"start":"09:00","end":"13:00"},"1":{"open":true,"start":"09:00","end":"19:00"},"2":{"open":true,"start":"09:00","end":"19:00"},"3":{"open":true,"start":"09:00","end":"19:00"},"4":{"open":true,"start":"09:00","end":"19:00"},"5":{"open":true,"start":"09:00","end":"19:00"},"6":{"open":true,"start":"09:00","end":"13:00"}}}'::jsonb,
+    '{"questions":[{"id":"queixa","label":"Queixa principal"},{"id":"objetivo","label":"Objetivo com o tratamento"},{"id":"saude","label":"Saúde e doenças crônicas"},{"id":"medicamentos","label":"Medicamentos em uso"},{"id":"alergias","label":"Alergias"},{"id":"rotina","label":"Rotina de cuidados em casa"},{"id":"anteriores","label":"Procedimentos anteriores"}],"consentText":"Autorizo o registro e o uso interno de fotografias do meu rosto para acompanhar a evolução do tratamento. Posso revogar esta autorização a qualquer momento."}'::jsonb);
+
+  perform app.log(cid, 'gestor', uid, 'equipe', null, 'Clínica criada');
+  return jsonb_build_object('ok', true, 'clinic_id', cid, 'slug', candidate);
+end $$;
+
+-- ---------------------------------------------------------------- credenciais (só a gestora)
+create function public.create_invite(p_name text, p_phone text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  uid uuid := auth.uid();
+  cid uuid;
+  code text;
+  exp timestamptz := now() + interval '7 days';
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  cid := app.clinic_id();
+  if (select count(*) from public.invites where clinic_id = cid and used_at is null and not revoked and expires_at > now()) >= 50 then
+    return jsonb_build_object('ok', false, 'reason', 'limite_de_credenciais');
+  end if;
+  code := app.new_code();
+  insert into public.invites (code_hash, clinic_id, role, name_hint, phone_hint, expires_at, created_by)
+  values (app.hash_code(code), cid, 'cliente', nullif(trim(p_name), ''), nullif(trim(p_phone), ''), exp, uid);
+  return jsonb_build_object('ok', true, 'code', code, 'expires_at', exp);   -- o código só aparece agora
+end $$;
+
+create function public.create_staff_invite(p_name text, p_email text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  uid uuid := auth.uid();
+  cid uuid;
+  mail text := lower(trim(coalesce(p_email, '')));
+  code text;
+  exp timestamptz := now() + interval '48 hours';
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  if mail !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then return jsonb_build_object('ok', false, 'reason', 'email_invalido'); end if;
+  cid := app.clinic_id();
+  update public.invites set revoked = true
+   where clinic_id = cid and role = 'funcionario' and lower(email_hint) = mail and used_at is null and not revoked;
+  code := app.new_code();
+  insert into public.invites (code_hash, clinic_id, role, name_hint, email_hint, expires_at, created_by)
+  values (app.hash_code(code), cid, 'funcionario', nullif(trim(p_name), ''), mail, exp, uid);
+  return jsonb_build_object('ok', true, 'code', code, 'expires_at', exp);
+end $$;
+
+create function public.list_invites() returns table (id uuid, role text, name_hint text, phone_hint text, email_hint text, expires_at timestamptz, used_at timestamptz, revoked boolean, created_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.id, i.role, i.name_hint, i.phone_hint, i.email_hint, i.expires_at, i.used_at, i.revoked, i.created_at
+  from public.invites i
+  where app.is_gestor() and i.clinic_id = app.clinic_id()
+  order by i.created_at desc
+$$;
+
+create function public.revoke_invite(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  update public.invites set revoked = true where id = p_id and clinic_id = app.clinic_id() and used_at is null;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- cliente entra por credencial ou pelo link da clínica
+create function public.accept_invite(p_code text, p_slug text, p_name text, p_phone text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  uid uuid := auth.uid();
+  mail text;
+  confirmed timestamptz;
+  recent int;
+  inv public.invites;
+  cid uuid;
+  clid uuid;
+  display text := coalesce(nullif(trim(p_name), ''), 'Cliente');
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'login'); end if;
+  if exists (select 1 from public.profiles where id = uid) then return jsonb_build_object('ok', true, 'already', true); end if;
+  select email, email_confirmed_at into mail, confirmed from auth.users where id = uid;
+  if confirmed is null then return jsonb_build_object('ok', false, 'reason', 'email_nao_confirmado'); end if;
+
+  select count(*) into recent from public.invite_attempts where user_id = uid and at > now() - interval '1 hour' and not ok;
+  if recent >= 5 then return jsonb_build_object('ok', false, 'reason', 'bloqueado'); end if;
+
+  if coalesce(trim(p_code), '') <> '' then
+    select * into inv from public.invites where code_hash = app.hash_code(p_code) and role = 'cliente' for update;
+    if not found or inv.revoked or inv.used_at is not null or inv.expires_at < now() then
+      insert into public.invite_attempts (user_id, ok) values (uid, false);
+      return jsonb_build_object('ok', false, 'reason', 'invalido');
+    end if;
+    cid := inv.clinic_id;
+  else
+    select id into cid from public.clinics where slug = p_slug;
+    if cid is null then
+      insert into public.invite_attempts (user_id, ok) values (uid, false);
+      return jsonb_build_object('ok', false, 'reason', 'invalido');
+    end if;
+  end if;
+
+  -- se a gestora já cadastrou essa cliente (mesmo e-mail), vincula em vez de duplicar
+  select id into clid from public.clients where clinic_id = cid and lower(email) = lower(mail) and user_id is null limit 1;
+  if clid is null then
+    insert into public.clients (clinic_id, user_id, name, phone, email)
+    values (cid, uid, display, coalesce(trim(p_phone), ''), lower(mail)) returning id into clid;
+  else
+    update public.clients set user_id = uid, phone = coalesce(nullif(trim(p_phone), ''), phone) where id = clid;
+  end if;
+
+  insert into public.profiles (id, clinic_id, role, client_id, name, email, terms_accepted_at, terms_version)
+  values (uid, cid, 'cliente', clid, display, lower(mail), now(), 'v1');
+
+  if inv.code_hash is not null then
+    update public.invites set used_at = now(), used_by = uid where code_hash = inv.code_hash;
+  end if;
+  insert into public.invite_attempts (user_id, ok) values (uid, true);
+
+  perform app.notify_clinic(cid, array['gestor', 'funcionario'], 'followup', 'Nova cliente na carteira',
+    display || ' se cadastrou pelo link', '/clientes/' || clid, 'client:' || clid);
+  perform app.log(cid, 'cliente', uid, 'cadastro', clid, 'Se cadastrou pelo link da clínica');
+  return jsonb_build_object('ok', true, 'clinic_id', cid, 'client_id', clid);
+end $$;
+
+-- ---------------------------------------------------------------- funcionária entra por credencial de equipe
+create function public.accept_staff_invite(p_code text, p_name text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  uid uuid := auth.uid();
+  mail text;
+  confirmed timestamptz;
+  recent int;
+  inv public.invites;
+  display text := coalesce(nullif(trim(p_name), ''), 'Profissional');
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'login'); end if;
+  if exists (select 1 from public.profiles where id = uid) then return jsonb_build_object('ok', true, 'already', true); end if;
+  select email, email_confirmed_at into mail, confirmed from auth.users where id = uid;
+  if confirmed is null then return jsonb_build_object('ok', false, 'reason', 'email_nao_confirmado'); end if;
+
+  select count(*) into recent from public.invite_attempts where user_id = uid and at > now() - interval '1 hour' and not ok;
+  if recent >= 5 then return jsonb_build_object('ok', false, 'reason', 'bloqueado'); end if;
+
+  select * into inv from public.invites where code_hash = app.hash_code(coalesce(p_code, '')) and role = 'funcionario' for update;
+  if not found or inv.revoked or inv.used_at is not null or inv.expires_at < now() or lower(inv.email_hint) <> lower(mail) then
+    insert into public.invite_attempts (user_id, ok) values (uid, false);
+    return jsonb_build_object('ok', false, 'reason', 'invalido');
+  end if;
+
+  insert into public.profiles (id, clinic_id, role, name, email, terms_accepted_at, terms_version)
+  values (uid, inv.clinic_id, 'funcionario', display, lower(mail), now(), 'v1');
+  update public.invites set used_at = now(), used_by = uid where id = inv.id;
+  insert into public.invite_attempts (user_id, ok) values (uid, true);
+
+  perform app.notify_clinic(inv.clinic_id, array['gestor'], 'followup', 'Nova profissional na equipe', display || ' entrou na clínica', '/configuracoes', 'staff:' || uid);
+  perform app.log(inv.clinic_id, 'funcionario', uid, 'equipe', null, display || ' entrou na equipe');
+  return jsonb_build_object('ok', true, 'clinic_id', inv.clinic_id);
+end $$;
+
+-- ---------------------------------------------------------------- equipe: desativar e reativar (efeito imediato, o RLS consulta profiles.active)
+create function public.set_staff_active(p_staff_id uuid, p_active boolean) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare target public.profiles;
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into target from public.profiles where id = p_staff_id and clinic_id = app.clinic_id() and role = 'funcionario';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'nao_encontrada'); end if;
+  update public.profiles set active = p_active where id = p_staff_id;
+  perform app.log(target.clinic_id, 'gestor', auth.uid(), 'equipe', null, case when p_active then 'Reativou ' else 'Desativou ' end || target.name);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- ações da cliente (só os campos que ela pode mexer)
+create function public.update_my_profile(p_patch jsonb) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare me public.profiles;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  update public.clients c set
+    name = coalesce(nullif(trim(p_patch ->> 'name'), ''), c.name),
+    phone = case when p_patch ? 'phone' then coalesce(trim(p_patch ->> 'phone'), '') else c.phone end,
+    birth = case when p_patch ? 'birth' then nullif(p_patch ->> 'birth', '')::date else c.birth end,
+    address = case when p_patch ? 'address' then nullif(trim(p_patch ->> 'address'), '') else c.address end,
+    goal = case when p_patch ? 'goal' then nullif(trim(p_patch ->> 'goal'), '') else c.goal end,
+    allergies = case when p_patch ? 'allergies' then nullif(trim(p_patch ->> 'allergies'), '') else c.allergies end,
+    image_consent = case when p_patch ? 'image_consent' then (p_patch ->> 'image_consent')::boolean else c.image_consent end,
+    image_consent_at = case when p_patch ? 'image_consent' and (p_patch ->> 'image_consent')::boolean is distinct from c.image_consent then now() else c.image_consent_at end
+  where c.id = me.client_id;
+  if p_patch ? 'name' and nullif(trim(p_patch ->> 'name'), '') is not null then
+    update public.profiles set name = trim(p_patch ->> 'name') where id = me.id;
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+create function public.report_payment(p_entry_id uuid, p_method text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  entry public.ledger;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into entry from public.ledger where id = p_entry_id and clinic_id = me.clinic_id and client_id = me.client_id and kind = 'receber' for update;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'nao_encontrada'); end if;
+  if entry.reported is not null then return jsonb_build_object('ok', true, 'already', true); end if;
+  update public.ledger set method = coalesce(nullif(trim(p_method), ''), method),
+    reported = jsonb_build_object('at', now(), 'method', coalesce(nullif(trim(p_method), ''), entry.method))
+  where id = entry.id;
+  perform app.notify_clinic(me.clinic_id, array['gestor'], 'payment', me.name || ' informou um pagamento',
+    'R$ ' || entry.value || ' · ' || coalesce(nullif(trim(p_method), ''), entry.method) || ' · confirme o recebimento',
+    '/gestao?aba=receber', 'preport:' || entry.id);
+  perform app.log(me.clinic_id, 'cliente', me.id, 'pagamento', me.client_id, 'Informou pagamento de R$ ' || entry.value, true);
+  return jsonb_build_object('ok', true);
+end $$;
+
+create function public.request_cancel(p_appt_id uuid) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  a public.appointments;
+  immediate boolean;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into a from public.appointments where id = p_appt_id and clinic_id = me.clinic_id and client_id = me.client_id and not done and status <> 'cancelled' for update;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'nao_encontrado'); end if;
+  immediate := (a.date + a.time) at time zone 'America/Sao_Paulo' - now() >= interval '24 hours';
+  if immediate then
+    update public.appointments set status = 'cancelled' where id = a.id;
+    perform app.notify_clinic(me.clinic_id, array['gestor', 'funcionario'], 'reschedule', 'Horário cancelado', me.name || ' · ' || a.date || ' ' || to_char(a.time, 'HH24:MI'), '/agenda');
+    perform app.log(me.clinic_id, 'cliente', me.id, 'horario', me.client_id, 'Cancelou ' || a.procedure);
+  else
+    update public.appointments set cancel_request = true where id = a.id;
+    perform app.notify_clinic(me.clinic_id, array['gestor', 'funcionario'], 'reschedule', 'Pedido de cancelamento', me.name || ' · ' || a.date || ' ' || to_char(a.time, 'HH24:MI') || ' (menos de 24 h)', '/atendimentos/' || a.id);
+    perform app.log(me.clinic_id, 'cliente', me.id, 'horario', me.client_id, 'Pediu para cancelar ' || a.procedure || ' (menos de 24 h)');
+  end if;
+  return jsonb_build_object('ok', true, 'immediate', immediate);
+end $$;
+
+create function public.request_reschedule(p_appt_id uuid, p_date date, p_time time) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  a public.appointments;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into a from public.appointments where id = p_appt_id and clinic_id = me.clinic_id and client_id = me.client_id and not done and status <> 'cancelled' for update;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'nao_encontrado'); end if;
+  update public.appointments set reschedule = true, proposed_date = p_date, proposed_time = p_time where id = a.id;
+  perform app.notify_clinic(me.clinic_id, array['gestor', 'funcionario'], 'reschedule', 'Pedido de remarcação',
+    me.name || ' propõe ' || p_date || ' ' || to_char(p_time, 'HH24:MI'), '/atendimentos/' || a.id);
+  perform app.log(me.clinic_id, 'cliente', me.id, 'horario', me.client_id, 'Pediu remarcação para ' || p_date || ' às ' || to_char(p_time, 'HH24:MI'));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- permissões de execução: só usuários logados (e o link público)
+revoke execute on all functions in schema public from public, anon, authenticated;
+grant execute on function public.get_clinic_public(text) to anon, authenticated;
+grant execute on function
+  public.create_clinic(text, text, text, text, text, text),
+  public.create_invite(text, text),
+  public.create_staff_invite(text, text),
+  public.list_invites(),
+  public.revoke_invite(uuid),
+  public.accept_invite(text, text, text, text),
+  public.accept_staff_invite(text, text),
+  public.set_staff_active(uuid, boolean),
+  public.update_my_profile(jsonb),
+  public.report_payment(uuid, text),
+  public.request_cancel(uuid),
+  public.request_reschedule(uuid, date, time)
+to authenticated;
+alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
