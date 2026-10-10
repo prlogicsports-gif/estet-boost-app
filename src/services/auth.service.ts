@@ -1,4 +1,5 @@
 import type { AuthResult, Invite, SignupData, StudioSize } from "@/lib/auth.types";
+import { setAppBadge } from "@/lib/badge";
 import { wipeOfflineData } from "@/lib/remote-store";
 import { sessionStore } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
@@ -193,6 +194,7 @@ export const authService = {
         ? (sessionStore.get() as { session: { uid: string } }).session.uid
         : null;
     await unregisterPush().catch(() => {});
+    setAppBadge(0);
     if (uid) await wipeOfflineData(uid); // dados de saúde não ficam no aparelho depois de sair
     await supabase.auth.signOut();
   },

@@ -18,7 +18,6 @@ import type {
 } from "@/lib/models";
 import { createRemoteDoc, createRemoteStore, type Row, type SyncCtx } from "@/lib/remote-store";
 import { supabase } from "@/lib/supabase";
-import { showPush } from "@/services/push.service";
 
 /**
  * Coleções do app, todas no Supabase e compartilhadas entre as pessoas da clínica (cada uma vê só o que
@@ -292,10 +291,12 @@ export const notificationsDb = createRemoteStore<NotificationRec>({
     if (error) throw error;
   },
   onLoaded: (prev, next) => {
-    // aviso novo com o app aberto: mostra também como notificação do aparelho
-    if (!prev.length) return;
+    // aviso novo com o app aberto: o banner do app mostra por cima da tela (ver NotificationBanner)
+    if (!prev.length || typeof window === "undefined") return;
     const known = new Set(prev.map((item) => item.id));
-    for (const item of next) if (!item.read && !known.has(item.id)) showPush(item);
+    for (const item of next)
+      if (!item.read && !known.has(item.id))
+        window.dispatchEvent(new CustomEvent("eb:notification", { detail: item }));
   },
 });
 

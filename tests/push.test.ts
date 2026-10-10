@@ -5,6 +5,7 @@ import {
   categoryOf,
   fcmMessage,
   handle,
+  labelOf,
   resetTokenCache,
   wantsPush,
   type Env,
@@ -122,10 +123,11 @@ describe("send-push", () => {
     expect(await response.json()).toEqual({ sent: 2 });
     expect(sends.map((s) => s.token)).toEqual(["t-celular", "t-notebook"]);
     expect(sends[0]!.body["data"]).toEqual({
-      title: "Maria informou um pagamento",
+      title: "Financeiro · Maria informou um pagamento",
       body: "R$ 180 · Pix",
       href: "/gestao?aba=receber",
       tag: NID,
+      unread: "1",
     });
     expect(sends[0]!.body["notification"]).toBeUndefined(); // só dados: quem desenha é o service worker
   });
@@ -176,6 +178,16 @@ describe("regras puras", () => {
     expect(categoryOf("stock")).toBe("stock");
     expect(categoryOf("recommendation")).toBe("recommendations");
     expect(categoryOf("request")).toBe("appointments");
+  });
+  test("o título do push começa pelo tipo do aviso, diferente para a cliente", () => {
+    expect(labelOf("request", "gestor")).toBe("Agenda");
+    expect(labelOf("reminder", "cliente")).toBe("Agenda");
+    expect(labelOf("bill", "gestor")).toBe("Financeiro");
+    expect(labelOf("bill", "cliente")).toBe("Pagamento");
+    expect(labelOf("stock", "funcionario")).toBe("Estoque");
+    expect(labelOf("recommendation", "cliente")).toBe("Cuidados");
+    expect(labelOf("followup", "cliente")).toBe("Seu cuidado");
+    expect(labelOf("followup", "gestor")).toBe("Clientes");
   });
   test("padrão é receber", () => {
     expect(wantsPush(undefined, "gestor", "stock")).toBe(true);

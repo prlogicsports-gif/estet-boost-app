@@ -3,8 +3,8 @@
  * e recebe o push do Firebase com o app fechado. Os DADOS não passam por aqui: ficam no IndexedDB do app
  * (cópia + fila de alterações) e a comunicação com o Supabase nunca é interceptada.
  */
-const PAGES = "eb-pages-v1";
-const ASSETS = "eb-assets-v1";
+const PAGES = "eb-pages-v2";
+const ASSETS = "eb-assets-v2";
 const KEEP = [PAGES, ASSETS];
 const SHELL_ROUTES = [
   "/",
@@ -26,6 +26,7 @@ const STATIC = [
   "/favicon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  "/icons/badge-96.png",
   "/icons/apple-touch-icon.png",
 ];
 
@@ -143,15 +144,27 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "",
     tag: data.tag || undefined,
+    // ícone colorido (aparece dentro do aviso) e ícone pequeno branco da barra de status do Android
     icon: "/icons/icon-192.png",
-    badge: "/icons/favicon-32.png",
+    badge: "/icons/badge-96.png",
+    vibrate: [160, 80, 160],
+    timestamp: Date.now(),
     data: { href: data.href || "/" },
   };
+  const unread = Number(data.unread);
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
-      // com o app aberto e visível, o próprio app avisa por dentro: não duplica
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windows) => {
+      // com o app aberto e visível, o próprio app mostra o banner por dentro: não duplica
       const visible = windows.some((client) => client.visibilityState === "visible");
-      return visible ? undefined : self.registration.showNotification(title, options);
+      if (visible) return;
+      // número no ícone do app (Android e iPhone com o app instalado)
+      try {
+        if (Number.isFinite(unread) && unread > 0 && self.navigator.setAppBadge)
+          await self.navigator.setAppBadge(unread);
+      } catch {
+        /* sem suporte */
+      }
+      await self.registration.showNotification(title, options);
     }),
   );
 });
@@ -161,9 +174,10 @@ self.addEventListener("notificationclick", (event) => {
   const href = (event.notification.data && event.notification.data.href) || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      // app já aberto: foca e pede para ele navegar sem recarregar (evita tela em branco e perda de estado)
       for (const client of windows) {
         if ("focus" in client) {
-          client.navigate(href).catch(() => {});
+          client.postMessage({ type: "eb:open", href });
           return client.focus();
         }
       }

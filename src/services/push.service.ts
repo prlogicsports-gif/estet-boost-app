@@ -1,5 +1,4 @@
 import { firebaseConfig, vapidKey } from "@/lib/firebase";
-import type { NotificationRec } from "@/lib/models";
 import { sessionStore } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 
@@ -89,16 +88,4 @@ export async function unregisterPush() {
   }
   if (!token) return;
   await supabase.from("push_tokens").delete().eq("token", token);
-}
-
-/** Mostra a notificação no aparelho com o app aberto (com o app fechado, quem mostra é o service worker). */
-export function showPush(rec: NotificationRec) {
-  if (pushStatus() !== "granted") return;
-  const auth = sessionStore.get();
-  if (auth.status !== "in") return;
-  try {
-    new Notification(rec.title, { body: rec.body, tag: rec.id, icon: "/favicon.svg" });
-  } catch {
-    /* alguns navegadores móveis só aceitam via service worker */
-  }
 }

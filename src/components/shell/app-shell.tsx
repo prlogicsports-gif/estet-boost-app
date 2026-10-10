@@ -3,6 +3,7 @@ import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 
 import { RoleGate } from "@/components/auth/role-gate";
 import { NotificationsPanel } from "@/components/eb/notifications-panel";
+import { NotificationBanner } from "@/components/eb/notification-banner";
 import { PushPrompt } from "@/components/eb/push-prompt";
 import { BottomSheet, Drawer } from "@/components/eb/overlays";
 import { DesktopSidebar } from "@/components/shell/desktop-sidebar";
@@ -18,6 +19,7 @@ import { useSyncReady } from "@/lib/remote-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { useSession } from "@/lib/session";
 import { syncPushToken } from "@/services/push.service";
+import { setAppBadge } from "@/lib/badge";
 import { notificationsFor } from "@/services/notify";
 
 /**
@@ -38,6 +40,23 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
     [all, nav.role, session?.clientId],
   );
   const unread = items.filter((item) => !item.read).length;
+
+  // número no ícone do app = avisos não lidos
+  useEffect(() => {
+    setAppBadge(unread);
+  }, [unread]);
+
+  // toque numa notificação do aparelho com o app já aberto: o service worker pede para navegar aqui
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; href?: string } | null;
+      if (data?.type === "eb:open" && typeof data.href === "string" && data.href.startsWith("/"))
+        navigate({ to: data.href });
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [navigate]);
   const ready = useSyncReady();
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -161,6 +180,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
         )}
       </ShellContext.Provider>
       <SyncStatusBar />
+      <NotificationBanner audience={nav.role} onOpen={(href) => navigate({ to: href })} />
       <PushPrompt audience={nav.role} ready={ready} />
       <ToastHost toast={syncError ? { message: syncError } : null} />
     </RoleGate>

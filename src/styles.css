@@ -278,6 +278,16 @@
     opacity: 1;
   }
 }
+@keyframes banner-in {
+  from {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 @keyframes fade-up {
   from {
     transform: translateY(10px);

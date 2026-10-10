@@ -5,7 +5,8 @@ import { Icon } from "@/components/eb/icon";
 import { NOTIFICATION_KINDS } from "@/components/eb/notification-center";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { defaultPrefs, prefsDb } from "@/data/db";
-import { relativeDay, timeAgo, toISO } from "@/lib/dates";
+import { daysBetween, timeAgo, todayISO, toISO } from "@/lib/dates";
+import { kindLabel } from "@/lib/notification-labels";
 import type { Audience, NotificationPrefs, NotificationRec } from "@/lib/models";
 import { markAllRead, markRead, setPrefs } from "@/services/notify";
 import { supabase } from "@/lib/supabase";
@@ -172,9 +173,14 @@ export function NotificationsPanel({
   const visible = filter === "novas" ? items.filter((item) => !item.read) : items;
 
   const groups = useMemo(() => {
+    const today = todayISO();
+    const bucket = (iso: string) => {
+      const days = daysBetween(toISO(new Date(iso)), today);
+      return days <= 0 ? "Hoje" : days === 1 ? "Ontem" : days <= 7 ? "Esta semana" : "Anteriores";
+    };
     const map = new Map<string, NotificationRec[]>();
     for (const item of visible) {
-      const label = relativeDay(toISO(new Date(item.createdAt)));
+      const label = bucket(item.createdAt);
       map.set(label, [...(map.get(label) ?? []), item]);
     }
     return [...map.entries()];
@@ -219,10 +225,15 @@ export function NotificationsPanel({
         </div>
       ) : (
         groups.map(([label, list]) => (
-          <section key={label} className="flex flex-col gap-1.5">
-            <span className="px-0.5 text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-              {label}
-            </span>
+          <section key={label} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <span className="text-[11px] font-semibold uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+                {label}
+              </span>
+              <span className="rounded-full bg-[var(--eb-ivory-a06)] px-1.5 text-[10.5px] leading-[18px] text-muted-foreground">
+                {list.length}
+              </span>
+            </div>
             {list.map((item) => {
               const kind = NOTIFICATION_KINDS[item.kind] ?? NOTIFICATION_KINDS.reminder;
               return (
@@ -234,39 +245,62 @@ export function NotificationsPanel({
                     if (item.href) onOpen(item.href);
                   }}
                   className={cn(
-                    "flex min-h-[68px] w-full items-start gap-3 rounded-[var(--radius-md)] border p-3 text-left transition-colors active:bg-[var(--eb-ivory-a10)]",
+                    "relative flex min-h-[76px] w-full items-start gap-3 overflow-hidden rounded-[18px] border p-3.5 text-left transition-[background,transform] duration-150 active:scale-[0.99]",
                     item.read
                       ? "border-[var(--border-hairline)] bg-transparent"
-                      : "border-[var(--border-card)] bg-[var(--eb-ivory-a06)]",
+                      : "border-[var(--border-card)] bg-[var(--surface-card)]",
                   )}
+                  style={item.read ? undefined : { boxShadow: "var(--shadow-card)" }}
                 >
+                  {item.read ? null : (
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-3 left-0 w-[3px] rounded-r-full"
+                      style={{ background: kind.fg }}
+                    />
+                  )}
                   <span
-                    className="grid size-10 flex-none place-items-center rounded-full bg-[var(--eb-ivory-a06)]"
-                    style={{ color: kind.fg }}
+                    className="grid size-11 flex-none place-items-center rounded-[14px]"
+                    style={{
+                      color: kind.fg,
+                      background: `color-mix(in srgb, ${kind.fg} ${item.read ? 10 : 18}%, transparent)`,
+                    }}
                   >
-                    <Icon name={kind.icon} size={18} />
+                    <Icon name={kind.icon} size={20} />
                   </span>
                   <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="text-[10.5px] font-semibold uppercase leading-none tracking-[0.12em]"
+                        style={{ color: kind.fg, opacity: item.read ? 0.75 : 1 }}
+                      >
+                        {kindLabel(item.kind, audience)}
+                      </span>
+                      <span className="ml-auto flex items-center gap-1.5 text-[11.5px] leading-none text-muted-foreground">
+                        {timeAgo(item.createdAt)}
+                        {item.read ? null : (
+                          <span
+                            className="size-2 rounded-full bg-[var(--eb-teal-500)]"
+                            aria-label="Não lida"
+                          />
+                        )}
+                      </span>
+                    </span>
                     <span
-                      className="block text-[14px] leading-[1.3]"
-                      style={{ fontWeight: item.read ? 400 : 500 }}
+                      className={cn(
+                        "mt-1.5 block text-[14.5px] leading-[1.3]",
+                        item.read
+                          ? "font-normal text-[var(--text-secondary)]"
+                          : "font-semibold text-foreground",
+                      )}
                     >
                       {item.title}
                     </span>
-                    <span className="mt-0.5 block text-[12.5px] leading-[1.4] text-[var(--text-secondary)]">
-                      {item.body}
-                    </span>
-                  </span>
-                  <span className="flex flex-none flex-col items-end gap-1.5">
-                    <span className="text-[11.5px] text-muted-foreground">
-                      {timeAgo(item.createdAt)}
-                    </span>
-                    {item.read ? null : (
-                      <span
-                        className="size-2 rounded-full bg-[var(--eb-teal-500)]"
-                        aria-label="Não lida"
-                      />
-                    )}
+                    {item.body ? (
+                      <span className="mt-0.5 line-clamp-2 block text-[13px] leading-[1.4] text-[var(--text-secondary)]">
+                        {item.body}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );

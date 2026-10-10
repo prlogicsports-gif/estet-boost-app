@@ -27,6 +27,16 @@ export function categoryOf(
   return "appointments";
 }
 
+/** Nome do tipo de aviso que abre o título do push ("Agenda · Seu atendimento é hoje"). */
+export function labelOf(kind: string, role: string): string {
+  const client = role === "cliente";
+  if (kind === "bill" || kind === "payment") return client ? "Pagamento" : "Financeiro";
+  if (kind === "stock") return "Estoque";
+  if (kind === "recommendation") return client ? "Cuidados" : "Clientes";
+  if (kind === "followup") return client ? "Seu cuidado" : "Clientes";
+  return "Agenda";
+}
+
 /** A pessoa quer receber push deste aviso? (liga/desliga geral e por categoria; o padrão é receber) */
 export function wantsPush(prefs: Prefs | null | undefined, role: string, kind: string): boolean {
   const mine = prefs?.[role === "cliente" ? "cliente" : "gestor"];
@@ -95,19 +105,22 @@ export const resetTokenCache = () => {
   cached = null;
 };
 
-/** Mensagem só de dados: quem desenha a notificação é o service worker do app (`public/push-sw.js`). */
+/** Mensagem só de dados: quem desenha a notificação é o service worker do app (`public/sw.js`). */
 export function fcmMessage(
   token: string,
-  n: { id: string; title: string; body: string | null; href: string | null },
+  n: { id: string; title: string; body: string | null; href: string | null; kind?: string },
+  opts: { role?: string; unread?: number } = {},
 ) {
+  const label = n.kind ? labelOf(n.kind, opts.role ?? "gestor") : "";
   return {
     message: {
       token,
       data: {
-        title: n.title.slice(0, 120),
+        title: (label ? `${label} · ${n.title}` : n.title).slice(0, 120),
         body: (n.body ?? "").slice(0, 240),
         href: n.href ?? "/",
         tag: n.id,
+        unread: String(Math.max(0, opts.unread ?? 0)),
       },
       webpush: { headers: { Urgency: "high", TTL: "86400" } },
     },
@@ -159,6 +172,13 @@ export async function handle(req: Request, env: Env, doFetch: Fetch): Promise<Re
     `push_tokens?user_id=eq.${n.recipient_id}&select=token`,
   );
   if (!tokens.length) return json({ sent: 0, reason: "sem aparelhos" });
+  // quantos avisos não lidos a pessoa tem (vira o número no ícone do app)
+  const unread = (
+    await get<{ id: string }>(
+      `notifications?recipient_id=eq.${n.recipient_id}&read=eq.false&select=id&limit=99`,
+    )
+  ).length;
+  const opts = { role: profile?.role ?? "gestor", unread };
 
   const account = JSON.parse(env.serviceAccount) as ServiceAccount;
   const bearer = await accessToken(account, doFetch);
@@ -169,7 +189,7 @@ export async function handle(req: Request, env: Env, doFetch: Fetch): Promise<Re
       {
         method: "POST",
         headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
-        body: JSON.stringify(fcmMessage(token, n)),
+        body: JSON.stringify(fcmMessage(token, n, opts)),
       },
     );
     if (response.ok) {
