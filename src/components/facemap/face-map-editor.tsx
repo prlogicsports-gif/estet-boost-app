@@ -117,7 +117,7 @@ function Pill({
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-11 rounded-full px-2.5 text-[12.5px]",
+        "min-h-11 min-w-0 rounded-full px-2 text-[12.5px] leading-tight",
         on
           ? "bg-[var(--eb-ivory-a10)] font-medium text-foreground"
           : "text-[var(--text-secondary)]",
@@ -735,7 +735,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
   const parId = zonaEd ? layout.pairOf(zonaEd.id) : null;
 
   return (
-    <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 items-start gap-[18px] md:grid-cols-[minmax(0,340px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
       <div className="mx-auto w-full max-w-[420px]">
         <FaceMap
           layout={layout}
@@ -759,9 +759,9 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className={cn(label, "flex-1")}>Editar regiões</span>
-          <span className="font-mono text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <span className={cn(label, "min-w-0 flex-1")}>Editar regiões</span>
+          <span className="flex-none font-mono text-xs text-muted-foreground">
             {ajustadas.length === 0
               ? "nenhuma alterada"
               : ajustadas.length === 1
@@ -779,7 +779,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
           <Panel>
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-[17px] font-medium">Nova região</div>
+                <div className="break-words text-[17px] font-medium">Nova região</div>
                 <div className="text-xs leading-[1.4] text-muted-foreground">
                   {aviso ??
                     (modoDesenho === "auto"
@@ -831,13 +831,13 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
               <span className="mb-[7px] block text-[11.5px] text-[var(--text-secondary)]">
                 Moldes para os espaços livres
               </span>
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              <div className="flex flex-wrap gap-1.5">
                 {FACE_MOLDS.map((mold) => (
                   <button
                     key={mold.nome}
                     type="button"
                     onClick={() => criarRegiao(mold.d, nomeNova.trim() || mold.nome)}
-                    className="min-h-11 flex-none whitespace-nowrap rounded-full border border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] px-3 text-[12.5px] text-[var(--text-secondary)]"
+                    className="min-h-11 max-w-full break-words rounded-full border border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] px-3 text-[12.5px] leading-tight text-[var(--text-secondary)]"
                   >
                     {mold.nome}
                   </button>
@@ -846,7 +846,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
             </div>
 
             {rascunho.length >= 3 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
                 <Slider
                   label="Larg."
                   shown={`${Math.round(formaR.sx * 100)}%`}
@@ -939,7 +939,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
                   }}
                   className="w-full border-0 border-b border-[var(--border-hairline)] bg-transparent p-0 text-[17px] font-medium leading-normal text-foreground outline-none"
                 />
-                <div className="font-mono text-xs text-muted-foreground">
+                <div className="break-words font-mono text-xs text-muted-foreground">
                   x {Math.round(f.dx)} · y {Math.round(f.dy)} · {Math.round(Math.abs(f.sx) * 100)}%
                   × {Math.round(Math.abs(f.sy) * 100)}% · {f.rot}°
                 </div>
@@ -952,7 +952,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
               <Slider
                 label="Larg."
                 shown={`${Math.round(Math.abs(f.sx) * 100)}%`}
@@ -984,7 +984,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
 
             {sugestao && sugestao.id === zonaEd.id ? (
               <div className="flex items-center gap-2.5 rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--eb-nude-a08)] px-3 py-2.5">
-                <span className="min-w-0 flex-1 text-xs text-[var(--text-secondary)]">
+                <span className="min-w-0 flex-1 break-words text-xs text-[var(--text-secondary)]">
                   Agora sobre <span className="text-foreground">{sugestao.nome}</span>
                 </span>
                 <Button
@@ -1004,7 +1004,7 @@ export function FaceMapEditor({ onExit }: { onExit?: () => void }) {
 
             {perguntarPar === zonaEd.id && parId ? (
               <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a12)] px-3 py-2.5">
-                <span className="min-w-0 flex-1 text-[12.5px] text-[var(--text-secondary)]">
+                <span className="min-w-0 flex-1 break-words text-[12.5px] text-[var(--text-secondary)]">
                   Replicar em <span className="text-foreground">{layout.nameOf(parId)}</span>?
                 </span>
                 <Button

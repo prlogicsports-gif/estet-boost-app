@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
+  Camera,
   Check,
   ChevronRight,
   Hand,
@@ -12,7 +14,6 @@ import {
 
 import type { FaceZone } from "@/components/facemap/face-data";
 import { useFaceLayout } from "@/lib/face-layout";
-import { FaceZonePhotos, type ZonePhotos } from "@/components/eb/face-zone-photos";
 import { Button } from "@/components/ui/button";
 import { stockDb } from "@/data/db";
 import { emptyRecord, type FaceMark, type FaceRecord } from "@/lib/face-map-store";
@@ -62,7 +63,7 @@ function Row({
       <span className="min-w-0 flex-1">
         <span
           className={cn(
-            "block text-[15px]",
+            "block break-words text-[15px]",
             value ? "text-foreground" : "text-[var(--text-secondary)]",
           )}
         >
@@ -103,7 +104,7 @@ function Options({
             onClick={() => onPick(on ? "" : item)}
             aria-pressed={on}
             className={cn(
-              "min-h-[38px] rounded-full border px-3.5 text-left text-[13px] transition-colors",
+              "min-h-[38px] max-w-full break-words rounded-full border px-3.5 py-1.5 text-left text-[13px] leading-snug transition-colors",
               on
                 ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a24)] text-foreground"
                 : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] text-[var(--text-secondary)]",
@@ -137,8 +138,6 @@ export function FaceMapSheet({
   zone,
   pointCount,
   history,
-  photos,
-  onPhotosChange,
   inline = false,
   onClose,
   onSave,
@@ -149,8 +148,6 @@ export function FaceMapSheet({
   history: FaceMark[];
   /** Em tela larga o painel fica ao lado do mapa, sem cobrir o rosto. */
   inline?: boolean;
-  photos?: ZonePhotos | undefined;
-  onPhotosChange?: ((next: ZonePhotos) => void) | undefined;
   onClose: () => void;
   onSave: (record: FaceRecord, pairId: string | null) => void;
   onClear: () => void;
@@ -185,15 +182,16 @@ export function FaceMapSheet({
   const pair = pairId ? layout.zoneById(pairId) : null;
   const alreadySaved = history.length > 0;
 
-  return (
+  const dialog = (
     <div
       role="dialog"
+      aria-modal={inline ? undefined : true}
       aria-label={`Registro em ${zone.nome}`}
       className={cn(
-        "flex flex-col border border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
+        "relative flex min-w-0 flex-col border border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
         inline
-          ? "max-h-[calc(100vh-3rem)] rounded-[var(--radius-2xl)]"
-          : "absolute inset-x-0 bottom-0 z-10 max-h-[78%] rounded-t-[var(--radius-2xl)] border-b-0",
+          ? "max-h-[calc(100dvh-3rem)] rounded-[var(--radius-2xl)]"
+          : "max-h-[92dvh] w-full rounded-t-[var(--radius-2xl)] border-b-0 sm:max-h-[90dvh] sm:max-w-[700px] sm:rounded-[var(--radius-2xl)] sm:border-b",
       )}
       style={{
         boxShadow: inline
@@ -210,7 +208,7 @@ export function FaceMapSheet({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-3.5">
         <div className="flex items-start gap-3">
-          <h2 className="flex-1 text-[26px] font-medium leading-[1.2] tracking-[-0.015em] text-foreground">
+          <h2 className="min-w-0 flex-1 break-words text-[22px] font-medium leading-[1.2] tracking-[-0.015em] text-foreground sm:text-[26px]">
             {zone.nome}
           </h2>
           <button
@@ -307,23 +305,19 @@ export function FaceMapSheet({
               onChange={(event) => setMirror(event.target.checked)}
               className="mt-0.5 size-[18px] flex-none accent-[var(--teal)]"
             />
-            <span className="text-[13px] leading-[1.45] text-[var(--text-secondary)]">
+            <span className="min-w-0 flex-1 break-words text-[13px] leading-[1.45] text-[var(--text-secondary)]">
               Registrar também no lado oposto: {layout.nameOf(pair.id)}
             </span>
           </label>
         ) : null}
 
-        {onPhotosChange ? (
-          <Section title="Fotografias desta região">
-            <div className="mt-2">
-              <FaceZonePhotos
-                photos={photos ?? {}}
-                onChange={onPhotosChange}
-                zoneLabel={zone.nome}
-              />
-            </div>
-          </Section>
-        ) : null}
+        <p className="mt-[18px] flex items-start gap-2 text-[12.5px] leading-[1.45] text-muted-foreground">
+          <Camera className="mt-0.5 size-[14px] flex-none" aria-hidden />
+          <span className="min-w-0 flex-1">
+            As fotos ficam na aba <strong className="font-medium text-foreground">Fotos</strong> do
+            perfil da cliente.
+          </span>
+        </p>
 
         {history.length ? (
           <Section title={`Histórico desta região · ${history.length}`}>
@@ -334,7 +328,7 @@ export function FaceMapSheet({
                   className="flex items-start gap-2.5 rounded-[var(--radius-sm)] bg-[var(--eb-ivory-a06)] px-3 py-2.5 text-[12.5px]"
                 >
                   <span className="flex-none font-mono text-muted-foreground">{item.date}</span>
-                  <span className="min-w-0 flex-1 text-[var(--text-secondary)]">
+                  <span className="min-w-0 flex-1 break-words text-[var(--text-secondary)]">
                     {[item.procedimento, item.produto, item.acao].filter(Boolean).join(" · ") ||
                       item.observacao ||
                       "Registro"}
@@ -368,5 +362,19 @@ export function FaceMapSheet({
         ) : null}
       </div>
     </div>
+  );
+
+  if (inline || typeof document === "undefined") return dialog;
+  // Fora da tela larga o registro abre como janela: folha de baixo no celular, janela centralizada no tablet.
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-[rgba(20,14,17,.58)]"
+        style={{ animation: "fade-in 280ms cubic-bezier(.16,1,.3,1)" }}
+      />
+      {dialog}
+    </div>,
+    document.body,
   );
 }

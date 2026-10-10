@@ -7,7 +7,6 @@ import { FaceMap } from "@/components/facemap/face-map";
 import { FaceMapEditor } from "@/components/facemap/face-map-editor";
 import { FaceMapHistory } from "@/components/facemap/face-map-history";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
-import type { ZonePhotos } from "@/components/eb/face-zone-photos";
 import { FaceMapSheet } from "@/components/facemap/face-map-sheet";
 import { useFaceLayout } from "@/lib/face-layout";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -42,7 +41,8 @@ export function FaceMapPanel({
   const [applied, setApplied] = useState<Record<string, boolean>>({});
   const [mode, setMode] = useState<"registrar" | "editar">("registrar");
   const [notice, setNotice] = useState<string | null>(null);
-  const [zonePhotos, setZonePhotos] = useState<Record<string, ZonePhotos>>({});
+  // fora da tela larga o registro é uma janela: abre ao pousar o primeiro ponto (ou pelo botão da barra)
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -51,14 +51,19 @@ export function FaceMapPanel({
   }, [notice]);
 
   const layout = useFaceLayout();
-  const wide = useMediaQuery("(min-width: 1024px)");
+  const wide = useMediaQuery("(min-width: 1280px)");
   const base = selected ? layout.zoneById(selected) : null;
   const zone = base ? { ...base, nome: layout.nameOf(base.id) } : null;
   const pending = selected ? (points[selected] ?? []) : [];
 
-  const select = (next: FaceZone) => setSelected(next.id);
-  const addPoint = (zoneId: string, point: FacePoint) =>
+  const select = (next: FaceZone) => {
+    setSelected(next.id);
+    setSheetOpen(false);
+  };
+  const addPoint = (zoneId: string, point: FacePoint) => {
     setPoints((current) => ({ ...current, [zoneId]: [...(current[zoneId] ?? []), point] }));
+    setSheetOpen(true);
+  };
 
   const save = (record: FaceRecord, pairId: string | null) => {
     if (!zone) return;
@@ -66,6 +71,7 @@ export function FaceMapPanel({
     add(made);
     setPoints((current) => ({ ...current, [zone.id]: [] }));
     setSelected(null);
+    setSheetOpen(false);
     setNotice(made.length > 1 ? "Marcação salva nas duas regiões" : "Marcação salva");
   };
 
@@ -74,6 +80,7 @@ export function FaceMapPanel({
     removeZone(zone.id);
     setPoints((current) => ({ ...current, [zone.id]: [] }));
     setSelected(null);
+    setSheetOpen(false);
   };
 
   const sheet = (
@@ -82,11 +89,7 @@ export function FaceMapPanel({
       zone={zone}
       pointCount={pending.length}
       history={zone ? historyForZone(marks, zone.id) : []}
-      photos={zone ? zonePhotos[zone.id] : undefined}
-      onPhotosChange={(next) => {
-        if (zone) setZonePhotos((current) => ({ ...current, [zone.id]: next }));
-      }}
-      onClose={() => setSelected(null)}
+      onClose={() => (wide ? setSelected(null) : setSheetOpen(false))}
       onSave={save}
       onClear={clear}
     />
@@ -99,12 +102,13 @@ export function FaceMapPanel({
       onSelect={(next) => {
         setMode(next);
         setSelected(null);
+        setSheetOpen(false);
       }}
       tabs={[
         { id: "registrar", label: "Registrar" },
         { id: "editar", label: "Editar regiões" },
       ]}
-      className="mb-3.5 max-w-xs"
+      className="mb-3.5 max-w-sm"
     />
   );
 
@@ -120,7 +124,7 @@ export function FaceMapPanel({
   return (
     <div>
       {tabs}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className="relative mx-auto w-full max-w-[440px] overflow-hidden rounded-[var(--radius-xl)]">
           <FaceMap
             selected={selected}
@@ -142,9 +146,30 @@ export function FaceMapPanel({
               <Check className="size-4 text-[var(--teal)]" aria-hidden /> {notice}
             </div>
           ) : null}
-
-          {wide ? null : sheet}
         </div>
+        {wide || !sheetOpen ? null : sheet}
+
+        {wide || !zone || sheetOpen ? null : (
+          <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5 xl:col-span-2">
+            <span className="min-w-0 flex-1">
+              <span className="block break-words text-[14px] font-medium">{zone.nome}</span>
+              <span className="mt-0.5 block text-[12.5px] text-muted-foreground">
+                {pending.length
+                  ? pending.length === 1
+                    ? "1 ponto de ação"
+                    : `${pending.length} pontos de ação`
+                  : "Toque de novo dentro da região para pousar um ponto."}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              className="min-h-11 flex-none rounded-full border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-500)] px-4 text-[14px] font-medium text-[var(--eb-plum-900)]"
+            >
+              Registrar
+            </button>
+          </div>
+        )}
 
         <div className="flex min-w-0 flex-col gap-5">
           {wide && zone ? sheet : null}
