@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import {
   completeSession,
   MARGIN_ALERT,
+  addProductUse,
   mergeProducts,
   sessionTotals,
   updateSession,
@@ -104,6 +105,9 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
   const removeProcedure = (index: number) =>
     set({ procedures: s.procedures.filter((_, i) => i !== index) });
 
+  /** Produto marcado no mapa entra nos produtos do atendimento (sem duplicar; vale a maior quantidade). */
+  const addFromMap = (stockId: string, qty: number) =>
+    set({ products: addProductUse(s.products, stock, stockId, qty) });
   const qtyOf = (stockId: string) => s.products.find((item) => item.stockId === stockId)?.qty ?? 0;
   const setQty = (stockId: string, qty: number) => {
     const item = stock.find((entry) => entry.id === stockId);
@@ -303,7 +307,7 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
             </div>
           ) : null}
 
-          {step === 3 ? <FaceMapPanel clientId={s.clientId} /> : null}
+          {step === 3 ? <FaceMapPanel clientId={s.clientId} onProductUsed={addFromMap} /> : null}
 
           {step === 4 ? (
             <div className="flex flex-col gap-4">

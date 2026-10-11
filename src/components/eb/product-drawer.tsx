@@ -23,6 +23,7 @@ export function ProductDrawer({
   onClose,
   onSaved,
   onCreated,
+  layer,
 }: {
   open: boolean;
   item: StockRec | null;
@@ -31,6 +32,8 @@ export function ProductDrawer({
   onSaved: (text: string) => void;
   /** Produto novo salvo (não em edição nem reposição): quem abriu pode usá-lo na hora. */
   onCreated?: (item: StockRec) => void;
+  /** Abre acima de uma janela já aberta (ex.: dentro do registro do mapa). */
+  layer?: boolean;
 }) {
   const money = can(useSession(), "financeiro");
   const [name, setName] = useState("");
@@ -93,6 +96,7 @@ export function ProductDrawer({
 
   return (
     <Drawer
+      layer={layer ?? false}
       open={open}
       onClose={onClose}
       title={

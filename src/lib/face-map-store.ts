@@ -10,6 +10,11 @@ export type FaceRecord = {
   produto: string;
   acao: string;
   observacao: string;
+  /** Marcação nova: `false` = "não usou produto". Ausente (marcas antigas) = usou se `produto` não vazio. */
+  usouProduto?: boolean | undefined;
+  /** Produto do estoque usado (o nome fica em `produto`). */
+  produtoId?: string | undefined;
+  produtoQtd?: number | undefined;
 };
 export type FaceMark = FaceRecord & {
   id: string;
@@ -22,6 +27,21 @@ export type FaceMark = FaceRecord & {
 };
 
 export const emptyRecord: FaceRecord = { procedimento: "", produto: "", acao: "", observacao: "" };
+
+/** "Ácido ×2", "Sem produto" ou vazio (marcas antigas sem produto). */
+export function productLabel(
+  mark: Pick<FaceRecord, "produto" | "usouProduto" | "produtoQtd">,
+): string {
+  if (mark.usouProduto === false) return "Sem produto";
+  if (!mark.produto) return "";
+  return mark.produtoQtd && mark.produtoQtd > 1
+    ? `${mark.produto} ×${mark.produtoQtd}`
+    : mark.produto;
+}
+
+/** Resumo de uma marcação: procedimento · produto · ação. */
+export const summarizeMark = (mark: FaceRecord) =>
+  [mark.procedimento, productLabel(mark), mark.acao].filter(Boolean).join(" · ");
 
 export type FaceMapRec = { clientId: string; marks: FaceMark[] };
 

@@ -319,6 +319,31 @@ check(
   "cliente vê o mapa sem observações internas",
   mine.length === 1 && mine[0].observacao === undefined && mine[0].procedimento === "Peeling",
 );
+await db.query("update public.face_maps set marks = marks || $2::jsonb where client_id = $1", [
+  clientId,
+  JSON.stringify([
+    {
+      zoneId: "abdomen:flanco-dir",
+      procedimento: "Criolipólise",
+      produto: "Ácido",
+      usouProduto: true,
+      produtoId: stockId,
+      produtoQtd: 2,
+      observacao: "interno",
+    },
+  ]),
+]);
+const mine2 = R(await rpc(db, c, "select public.my_face_map() r"));
+const withProduct = mine2.find((m) => m.zoneId === "abdomen:flanco-dir");
+check(
+  "cliente vê o nome do produto, mas não o id do estoque, a quantidade nem a observação",
+  withProduct?.produto === "Ácido" &&
+    withProduct.usouProduto === true &&
+    withProduct.produtoId === undefined &&
+    withProduct.produtoQtd === undefined &&
+    withProduct.observacao === undefined,
+  JSON.stringify(withProduct),
+);
 check(
   "cliente não lê a tabela do mapa",
   await denied(() => as(db, c, () => q(db, "select * from public.face_maps"))),

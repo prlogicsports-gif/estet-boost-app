@@ -8,15 +8,28 @@ import {
   type LucideIcon,
   MessageCircle,
   Milk,
+  Minus,
+  Plus,
   Sparkles,
   X,
 } from "lucide-react";
 
 import type { FaceZone } from "@/components/facemap/face-data";
-import { useFaceLayout } from "@/lib/face-layout";
+import { ProductDrawer } from "@/components/eb/product-drawer";
+import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { Button } from "@/components/ui/button";
 import { proceduresDb, stockDb } from "@/data/db";
-import { emptyRecord, type FaceMark, type FaceRecord } from "@/lib/face-map-store";
+import { useFaceLayout } from "@/lib/face-layout";
+import {
+  emptyRecord,
+  productLabel,
+  summarizeMark,
+  type FaceMark,
+  type FaceRecord,
+} from "@/lib/face-map-store";
+import { can, usableProcedures } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
+import { daysToExpire } from "@/components/eb/stock-item";
 import { cn } from "@/lib/utils";
 
 const PROCEDIMENTOS = [
@@ -138,7 +151,6 @@ export function FaceMapSheet({
   zone,
   pointCount,
   history,
-  inline = false,
   pair: pairOverride,
   procedures,
   actions,
@@ -149,8 +161,6 @@ export function FaceMapSheet({
   zone: FaceZone | null;
   pointCount: number;
   history: FaceMark[];
-  /** Em tela larga o painel fica ao lado do mapa, sem cobrir o rosto. */
-  inline?: boolean;
   /** Mapas de corpo: a região do lado oposto (`null` = não tem). Sem isso vale o layout do rosto. */
   pair?: { id: string; nome: string } | null;
   /** Procedimentos e ações sugeridos para este mapa (os do catálogo entram primeiro). */
@@ -161,8 +171,14 @@ export function FaceMapSheet({
   onClear: () => void;
 }) {
   const layout = useFaceLayout();
-  const catalog = proceduresDb.use();
-  const stockNames = stockDb.use().map((item) => item.name);
+  const me = useSession();
+  const catalog = usableProcedures(me, proceduresDb.use());
+  const stock = stockDb.use();
+  const isGestor = me?.role === "gestor";
+  const canStock = can(me, "estoque");
+  const [creatingProc, setCreatingProc] = useState(false);
+  const [other, setOther] = useState("");
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const [row, setRow] = useState<RowKey | null>(null);
   const [form, setForm] = useState<FaceRecord>(emptyRecord);
   const [mirror, setMirror] = useState(false);
@@ -172,6 +188,9 @@ export function FaceMapSheet({
     setRow(null);
     setForm(emptyRecord);
     setMirror(false);
+    setCreatingProc(false);
+    setOther("");
+    setCreatingProduct(false);
   }, [zoneId]);
 
   useEffect(() => {
@@ -188,6 +207,26 @@ export function FaceMapSheet({
   const set = (key: RowKey, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const toggle = (key: RowKey) => setRow((current) => (current === key ? null : key));
   const ready = Boolean(form.procedimento || form.produto || form.acao || form.observacao);
+  const usesProduct = form.usouProduto === true;
+  const pickProduct = (item: { id: string; name: string }) =>
+    setForm((current) => ({
+      ...current,
+      usouProduto: true,
+      produto: item.name,
+      produtoId: item.id,
+      produtoQtd: current.produtoId === item.id ? (current.produtoQtd ?? 1) : 1,
+    }));
+  const setProductUse = (uses: boolean) =>
+    setForm((current) => ({
+      ...current,
+      usouProduto: uses,
+      ...(uses ? {} : { produto: "", produtoId: undefined, produtoQtd: undefined }),
+    }));
+  const changeQty = (by: number) =>
+    setForm((current) => ({
+      ...current,
+      produtoQtd: Math.max(1, (current.produtoQtd ?? 1) + by),
+    }));
   const pairId = pairOverride !== undefined ? (pairOverride?.id ?? null) : layout.pairOf(zone.id);
   const pairName =
     pairOverride !== undefined
@@ -204,28 +243,18 @@ export function FaceMapSheet({
   const dialog = (
     <div
       role="dialog"
-      aria-modal={inline ? undefined : true}
+      aria-modal="true"
       aria-label={`Registro em ${zone.nome}`}
       className={cn(
         "relative flex min-w-0 flex-col border border-[var(--glass-border)] bg-[var(--glass-bg-strong)] backdrop-blur-[22px] backdrop-saturate-[1.15]",
-        inline
-          ? "max-h-[calc(100dvh-3rem)] rounded-[var(--radius-2xl)]"
-          : "max-h-[92dvh] w-full rounded-t-[var(--radius-2xl)] border-b-0 sm:max-h-[90dvh] sm:max-w-[700px] sm:rounded-[var(--radius-2xl)] sm:border-b",
+        "max-h-[90dvh] w-full max-w-[700px] rounded-[var(--radius-2xl)]",
       )}
       style={{
-        boxShadow: inline
-          ? "var(--glass-shadow), var(--glass-highlight)"
-          : "var(--shadow-sheet), var(--glass-highlight)",
-        animation: "sheet-in 280ms cubic-bezier(.16,1,.3,1)",
+        boxShadow: "var(--glass-shadow), var(--glass-highlight)",
+        animation: "fade-up 280ms cubic-bezier(.16,1,.3,1)",
       }}
     >
-      {inline ? null : (
-        <div className="grid place-items-center pt-3">
-          <span className="h-[5px] w-[46px] rounded-full bg-[var(--eb-nude-a32)]" />
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-3.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 pt-5">
         <div className="flex items-start gap-3">
           <h2 className="min-w-0 flex-1 break-words text-[22px] font-medium leading-[1.2] tracking-[-0.015em] text-foreground sm:text-[26px]">
             {zone.nome}
@@ -265,21 +294,149 @@ export function FaceMapSheet({
             onClick={() => toggle("procedimento")}
           />
           {row === "procedimento" ? (
-            <Options
-              items={procedureOptions}
-              value={form.procedimento}
-              onPick={(v) => set("procedimento", v)}
-            />
+            <>
+              <Options
+                items={procedureOptions}
+                value={form.procedimento}
+                onPick={(v) => set("procedimento", v)}
+              />
+              <div className="flex flex-col gap-2.5 px-4 pb-4">
+                {isGestor ? (
+                  creatingProc ? (
+                    <NewProcedureForm
+                      onCancel={() => setCreatingProc(false)}
+                      onCreate={(rec) => {
+                        set("procedimento", rec.name);
+                        setCreatingProc(false);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCreatingProc(true)}
+                      className="inline-flex min-h-[38px] items-center gap-1.5 self-start rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13px] text-[var(--text-secondary)]"
+                    >
+                      <Plus className="size-3.5" aria-hidden /> Criar procedimento (fica no
+                      catálogo)
+                    </button>
+                  )
+                ) : (
+                  <label className="flex flex-col gap-1.5 text-[12.5px] text-[var(--text-secondary)]">
+                    Outro (só neste registro)
+                    <input
+                      value={other}
+                      placeholder="Nome do procedimento"
+                      onChange={(event) => {
+                        setOther(event.target.value);
+                        set("procedimento", event.target.value);
+                      }}
+                      className="min-h-11 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-field)] px-3.5 text-[14px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </label>
+                )}
+              </div>
+            </>
           ) : null}
           <Row
             icon={Milk}
             label="Produto"
-            value={form.produto}
+            value={productLabel(form)}
             open={row === "produto"}
             onClick={() => toggle("produto")}
           />
           {row === "produto" ? (
-            <Options items={stockNames} value={form.produto} onPick={(v) => set("produto", v)} />
+            <div className="flex flex-col gap-3 px-4 pb-4 pt-1">
+              <div role="group" aria-label="Usou produto?" className="flex items-center gap-2">
+                <span className="mr-1 text-[13px] text-[var(--text-secondary)]">Usou produto?</span>
+                {([true, false] as const).map((uses) => {
+                  const on = form.usouProduto === uses;
+                  return (
+                    <button
+                      key={String(uses)}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setProductUse(uses)}
+                      className={cn(
+                        "min-h-[38px] min-w-16 rounded-full border px-3.5 text-[13px] transition-colors",
+                        on
+                          ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a24)] text-foreground"
+                          : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] text-[var(--text-secondary)]",
+                      )}
+                    >
+                      {uses ? "Sim" : "Não"}
+                    </button>
+                  );
+                })}
+              </div>
+              {usesProduct ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {stock.map((item) => {
+                      const on = form.produtoId === item.id;
+                      const days = daysToExpire(item);
+                      const expired = days !== null && days < 0;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => pickProduct(item)}
+                          className={cn(
+                            "min-h-[38px] max-w-full break-words rounded-full border px-3.5 py-1.5 text-left text-[13px] leading-snug transition-colors",
+                            on
+                              ? "border-[var(--eb-teal-a40)] bg-[var(--eb-teal-a24)] text-foreground"
+                              : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] text-[var(--text-secondary)]",
+                          )}
+                        >
+                          {item.name}
+                          <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">
+                            {item.quantity} {item.unit}
+                            {expired ? " · vencido" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {canStock ? (
+                      <button
+                        type="button"
+                        onClick={() => setCreatingProduct(true)}
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13px] text-[var(--text-secondary)]"
+                      >
+                        <Plus className="size-3.5" aria-hidden /> Criar produto
+                      </button>
+                    ) : null}
+                  </div>
+                  {!stock.length ? (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum produto no estoque ainda.
+                      {canStock ? " Use “Criar produto”." : ""}
+                    </p>
+                  ) : null}
+                  {form.produtoId ? (
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <span className="text-[var(--text-secondary)]">Quantidade</span>
+                      <button
+                        type="button"
+                        aria-label="Menos"
+                        onClick={() => changeQty(-1)}
+                        className="grid size-9 place-items-center rounded-full border border-[var(--border-card)] bg-[var(--eb-ivory-a06)]"
+                      >
+                        <Minus className="size-4" aria-hidden />
+                      </button>
+                      <span className="w-6 text-center font-mono">{form.produtoQtd ?? 1}</span>
+                      <button
+                        type="button"
+                        aria-label="Mais"
+                        onClick={() => changeQty(1)}
+                        className="grid size-9 place-items-center rounded-full border border-[var(--border-card)] bg-[var(--eb-ivory-a06)]"
+                      >
+                        <Plus className="size-4" aria-hidden />
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           ) : null}
           <Row
             icon={Hand}
@@ -344,9 +501,7 @@ export function FaceMapSheet({
                 >
                   <span className="flex-none font-mono text-muted-foreground">{item.date}</span>
                   <span className="min-w-0 flex-1 break-words text-[var(--text-secondary)]">
-                    {[item.procedimento, item.produto, item.acao].filter(Boolean).join(" · ") ||
-                      item.observacao ||
-                      "Registro"}
+                    {summarizeMark(item) || item.observacao || "Registro"}
                   </span>
                   <Check className="mt-0.5 size-[13px] flex-none text-[var(--teal)]" aria-hidden />
                 </div>
@@ -379,17 +534,27 @@ export function FaceMapSheet({
     </div>
   );
 
-  if (inline || typeof document === "undefined") return dialog;
-  // Fora da tela larga o registro abre como janela: folha de baixo no celular, janela centralizada no tablet.
+  if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-[rgba(20,14,17,.58)]"
-        style={{ animation: "fade-in 280ms cubic-bezier(.16,1,.3,1)" }}
+    <>
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6">
+        <div
+          onClick={onClose}
+          className="absolute inset-0 bg-[rgba(20,14,17,.58)]"
+          style={{ animation: "fade-in 280ms cubic-bezier(.16,1,.3,1)" }}
+        />
+        {dialog}
+      </div>
+      <ProductDrawer
+        layer
+        open={creatingProduct}
+        item={null}
+        mode="novo"
+        onClose={() => setCreatingProduct(false)}
+        onCreated={pickProduct}
+        onSaved={() => setCreatingProduct(false)}
       />
-      {dialog}
-    </div>,
+    </>,
     document.body,
   );
 }

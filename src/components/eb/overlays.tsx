@@ -49,12 +49,13 @@ export function Drawer({
   children,
   footer,
   width = 440,
-}: SurfaceProps & { width?: number }) {
+  layer = false,
+}: SurfaceProps & { width?: number; layer?: boolean }) {
   useEscape(open, onClose);
   if (!open) return null;
   return (
     <Portal>
-      <div className="fixed inset-0 z-[65] flex justify-end">
+      <div className={cn("fixed inset-0 flex justify-end", layer ? "z-[80]" : "z-[65]")}>
         <Scrim onClick={onClose} />
         <div
           role="dialog"

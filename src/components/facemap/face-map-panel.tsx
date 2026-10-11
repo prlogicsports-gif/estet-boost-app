@@ -11,7 +11,6 @@ import { BodyMapPanel } from "@/components/facemap/body-map-panel";
 import { mapKindOf, MAP_LABELS, type MapKind } from "@/components/facemap/body-data";
 import { FaceMapSheet } from "@/components/facemap/face-map-sheet";
 import { useFaceLayout } from "@/lib/face-layout";
-import { useMediaQuery } from "@/lib/use-media-query";
 import { useGeneralActions } from "@/lib/face-general-actions";
 import {
   buildMarks,
@@ -32,9 +31,12 @@ const label =
 export function FaceMapPanel({
   clientId,
   showGeneralActions = true,
+  onProductUsed,
 }: {
   clientId: string;
   showGeneralActions?: boolean;
+  /** Dentro de um atendimento: o produto marcado no mapa entra nos produtos do atendimento. */
+  onProductUsed?: (stockId: string, qty: number) => void;
 }) {
   const { marks: allMarks, add, remove, removeZone } = useFaceMap(clientId);
   // as marcações do abdômen e do glúteo aparecem nos mapas de corpo; aqui só as do rosto
@@ -56,7 +58,6 @@ export function FaceMapPanel({
   }, [notice]);
 
   const layout = useFaceLayout();
-  const wide = useMediaQuery("(min-width: 1280px)");
   const base = selected ? layout.zoneById(selected) : null;
   const zone = base ? { ...base, nome: layout.nameOf(base.id) } : null;
   const pending = selected ? (points[selected] ?? []) : [];
@@ -74,6 +75,8 @@ export function FaceMapPanel({
     if (!zone) return;
     const made = buildMarks(zone.id, record, pending, pairId);
     add(made);
+    if (record.usouProduto && record.produtoId)
+      onProductUsed?.(record.produtoId, record.produtoQtd ?? 1);
     setPoints((current) => ({ ...current, [zone.id]: [] }));
     setSelected(null);
     setSheetOpen(false);
@@ -90,11 +93,10 @@ export function FaceMapPanel({
 
   const sheet = (
     <FaceMapSheet
-      inline={wide}
       zone={zone}
       pointCount={pending.length}
       history={zone ? historyForZone(marks, zone.id) : []}
-      onClose={() => (wide ? setSelected(null) : setSheetOpen(false))}
+      onClose={() => setSheetOpen(false)}
       onSave={save}
       onClear={clear}
     />
@@ -135,7 +137,7 @@ export function FaceMapPanel({
     return (
       <div>
         {mapTabs}
-        <BodyMapPanel clientId={clientId} kind={map} />
+        <BodyMapPanel clientId={clientId} kind={map} onProductUsed={onProductUsed} />
       </div>
     );
   }
@@ -177,9 +179,9 @@ export function FaceMapPanel({
             </div>
           ) : null}
         </div>
-        {wide || !sheetOpen ? null : sheet}
+        {sheetOpen ? sheet : null}
 
-        {wide || !zone || sheetOpen ? null : (
+        {!zone || sheetOpen ? null : (
           <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5 xl:col-span-2">
             <span className="min-w-0 flex-1">
               <span className="block break-words text-[14px] font-medium">{zone.nome}</span>
@@ -202,7 +204,6 @@ export function FaceMapPanel({
         )}
 
         <div className="flex min-w-0 flex-col gap-5">
-          {wide && zone ? sheet : null}
           <div className="flex flex-col gap-1.5">
             <span className={label}>Região selecionada</span>
             <span

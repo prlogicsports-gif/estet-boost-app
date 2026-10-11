@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 
 import { bodyName } from "@/components/facemap/body-data";
 import { useFaceLayout } from "@/lib/face-layout";
-import type { FaceMark } from "@/lib/face-map-store";
+import { summarizeMark, type FaceMark } from "@/lib/face-map-store";
 
 const dotColor = (state: FaceMark["state"]) =>
   state === "sensitive"
@@ -12,8 +12,7 @@ const dotColor = (state: FaceMark["state"]) =>
       ? "var(--eb-nude-500)"
       : "var(--eb-teal-500)";
 
-const summarize = (mark: FaceMark) =>
-  [mark.procedimento, mark.produto, mark.acao].filter(Boolean).join(" · ") || "—";
+const summarize = (mark: FaceMark) => summarizeMark(mark) || "—";
 
 /** Histórico de marcações da cliente, agrupado por data: o registro do que foi feito em cada região. */
 export function FaceMapHistory({

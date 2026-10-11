@@ -35,6 +35,23 @@ export function mergeProductLists(
   return add.length ? [...current, ...add] : current;
 }
 
+/** Marca o uso de um produto do estoque: novo item, ou a maior quantidade se já estava marcado. */
+export function addProductUse(
+  current: SessionProduct[],
+  stock: { id: string; name: string; cost: number }[],
+  stockId: string,
+  qty: number,
+): SessionProduct[] {
+  const item = stock.find((entry) => entry.id === stockId);
+  if (!item || qty <= 0) return current;
+  const existing = current.find((entry) => entry.stockId === stockId);
+  if (existing)
+    return existing.qty >= qty
+      ? current
+      : current.map((entry) => (entry.stockId === stockId ? { ...entry, qty } : entry));
+  return [...current, { stockId, name: item.name, qty, unitCost: item.cost }];
+}
+
 /** Produtos que o procedimento costuma usar, já com nome e custo do estoque. */
 export const productsOfProcedure = (procedure: ProcedureRec | undefined): SessionProduct[] =>
   productsFrom(stockDb.get(), procedure);

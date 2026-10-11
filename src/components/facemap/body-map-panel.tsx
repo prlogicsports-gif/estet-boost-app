@@ -14,7 +14,6 @@ import {
   type FaceRecord,
 } from "@/lib/face-map-store";
 import { mapKindOf } from "@/components/facemap/body-data";
-import { useMediaQuery } from "@/lib/use-media-query";
 
 const label =
   "text-[11px] font-medium uppercase leading-none tracking-[0.14em] text-muted-foreground";
@@ -23,7 +22,15 @@ const label =
  * Registro de procedimentos nos mapas de corpo (abdômen e glúteo): mesmo fluxo do mapa facial.
  * Toque numa região para selecionar, toque de novo para pousar um ponto e registre na janela.
  */
-export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyKind }) {
+export function BodyMapPanel({
+  clientId,
+  kind,
+  onProductUsed,
+}: {
+  clientId: string;
+  kind: BodyKind;
+  onProductUsed?: ((stockId: string, qty: number) => void) | undefined;
+}) {
   const def = BODY_MAPS[kind];
   const { marks: all, add, remove, removeZone } = useFaceMap(clientId);
   const marks = all.filter((mark) => mapKindOf(mark.zoneId) === kind);
@@ -31,7 +38,6 @@ export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyK
   const [points, setPoints] = useState<Record<string, FacePoint[]>>({});
   const [sheetOpen, setSheetOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const wide = useMediaQuery("(min-width: 1280px)");
 
   useEffect(() => {
     setSelected(null);
@@ -63,6 +69,8 @@ export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyK
     if (!zone) return;
     const made = buildMarks(zone.id, record, pending, mirrorId);
     add(made);
+    if (record.usouProduto && record.produtoId)
+      onProductUsed?.(record.produtoId, record.produtoQtd ?? 1);
     setPoints((current) => ({ ...current, [zone.id]: [] }));
     setSelected(null);
     setSheetOpen(false);
@@ -79,14 +87,13 @@ export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyK
 
   const sheet = (
     <FaceMapSheet
-      inline={wide}
       zone={zone}
       pointCount={pending.length}
       history={zone ? historyForZone(marks, zone.id) : []}
       pair={pairZone ? { id: pairZone.id, nome: pairZone.nome } : null}
       procedures={def.procedures}
       actions={def.actions}
-      onClose={() => (wide ? setSelected(null) : setSheetOpen(false))}
+      onClose={() => setSheetOpen(false)}
       onSave={save}
       onClear={clear}
     />
@@ -116,9 +123,9 @@ export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyK
           </div>
         ) : null}
       </div>
-      {wide || !sheetOpen ? null : sheet}
+      {sheetOpen ? sheet : null}
 
-      {wide || !zone || sheetOpen ? null : (
+      {!zone || sheetOpen ? null : (
         <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5 xl:col-span-2">
           <span className="min-w-0 flex-1">
             <span className="block break-words text-[14px] font-medium">{zone.nome}</span>
@@ -141,7 +148,6 @@ export function BodyMapPanel({ clientId, kind }: { clientId: string; kind: BodyK
       )}
 
       <div className="flex min-w-0 flex-col gap-5">
-        {wide && zone ? sheet : null}
         <div className="flex flex-col gap-1.5">
           <span className={label}>Região selecionada</span>
           <span
