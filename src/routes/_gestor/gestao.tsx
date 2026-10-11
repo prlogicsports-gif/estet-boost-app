@@ -18,7 +18,7 @@ import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { activityDb, billsDb, ledgerDb, stockDb } from "@/data/db";
+import { activityDb, billsDb, ledgerDb, settingsDb, stockDb } from "@/data/db";
 import type { LedgerEntry } from "@/lib/models";
 import { useClinicClients } from "@/lib/use-clinic";
 import { can } from "@/lib/permissions";
@@ -271,6 +271,8 @@ function GestaoPage() {
   const ledger = ledgerDb.use();
   const bills = billsDb.use();
   const stock = stockDb.use();
+  const settings = settingsDb.use();
+  const goal = settings.goal && settings.goal > 0 ? settings.goal : 6000;
   const { aba } = Route.useSearch();
   const session = useSession();
   const allowed: Tab[] = [
@@ -381,8 +383,8 @@ function GestaoPage() {
             income={brl(income)}
             expense={brl(expense)}
             receivable={brl(receivable)}
-            goal="R$ 6.000"
-            goalProgress={Math.min(1, income / 6000)}
+            goal={brl(goal)}
+            goalProgress={Math.min(1, income / goal)}
             onSelect={setDetail}
           />
           <div className="flex flex-col gap-2.5">

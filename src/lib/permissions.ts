@@ -43,6 +43,11 @@ export function requiredFor(pathname: string): PermissionKey[] | "gestor" {
   if (pathname.startsWith("/atendimento")) return ["atendimentos"];
   if (pathname.startsWith("/clientes")) return ["clientes"];
   if (pathname.startsWith("/gestao")) return ["financeiro", "estoque", "historico"];
-  if (pathname.startsWith("/credenciais") || pathname.startsWith("/catalogo")) return "gestor";
+  if (
+    pathname.startsWith("/credenciais") ||
+    pathname.startsWith("/catalogo") ||
+    pathname.startsWith("/dashboard")
+  )
+    return "gestor";
   return [];
 }

@@ -17,6 +17,7 @@ import { Route as GestorAgendaRouteImport } from './routes/_gestor/agenda'
 import { Route as GestorCatalogoRouteImport } from './routes/_gestor/catalogo'
 import { Route as GestorConfiguracoesRouteImport } from './routes/_gestor/configuracoes'
 import { Route as GestorCredenciaisRouteImport } from './routes/_gestor/credenciais'
+import { Route as GestorDashboardRouteImport } from './routes/_gestor/dashboard'
 import { Route as GestorGestaoRouteImport } from './routes/_gestor/gestao'
 import { Route as GestorHojeRouteImport } from './routes/_gestor/hoje'
 import { Route as GestorNotificacoesRouteImport } from './routes/_gestor/notificacoes'
@@ -67,6 +68,11 @@ const GestorConfiguracoesRoute = GestorConfiguracoesRouteImport.update({
 const GestorCredenciaisRoute = GestorCredenciaisRouteImport.update({
   id: '/credenciais',
   path: '/credenciais',
+  getParentRoute: () => GestorRoute,
+} as any)
+const GestorDashboardRoute = GestorDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => GestorRoute,
 } as any)
 const GestorGestaoRoute = GestorGestaoRouteImport.update({
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/catalogo': typeof GestorCatalogoRoute
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
+  '/dashboard': typeof GestorDashboardRoute
   '/gestao': typeof GestorGestaoRoute
   '/hoje': typeof GestorHojeRoute
   '/notificacoes': typeof GestorNotificacoesRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByTo {
   '/catalogo': typeof GestorCatalogoRoute
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
+  '/dashboard': typeof GestorDashboardRoute
   '/gestao': typeof GestorGestaoRoute
   '/hoje': typeof GestorHojeRoute
   '/notificacoes': typeof GestorNotificacoesRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/_gestor/catalogo': typeof GestorCatalogoRoute
   '/_gestor/configuracoes': typeof GestorConfiguracoesRoute
   '/_gestor/credenciais': typeof GestorCredenciaisRoute
+  '/_gestor/dashboard': typeof GestorDashboardRoute
   '/_gestor/gestao': typeof GestorGestaoRoute
   '/_gestor/hoje': typeof GestorHojeRoute
   '/_gestor/notificacoes': typeof GestorNotificacoesRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/catalogo'
     | '/configuracoes'
     | '/credenciais'
+    | '/dashboard'
     | '/gestao'
     | '/hoje'
     | '/notificacoes'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/catalogo'
     | '/configuracoes'
     | '/credenciais'
+    | '/dashboard'
     | '/gestao'
     | '/hoje'
     | '/notificacoes'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/_gestor/catalogo'
     | '/_gestor/configuracoes'
     | '/_gestor/credenciais'
+    | '/_gestor/dashboard'
     | '/_gestor/gestao'
     | '/_gestor/hoje'
     | '/_gestor/notificacoes'
@@ -326,6 +338,13 @@ declare module '@tanstack/react-router' {
       path: '/credenciais'
       fullPath: '/credenciais'
       preLoaderRoute: typeof GestorCredenciaisRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/dashboard': {
+      id: '/_gestor/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof GestorDashboardRouteImport
       parentRoute: typeof GestorRoute
     }
     '/_gestor/gestao': {
@@ -420,6 +439,7 @@ interface GestorRouteChildren {
   GestorCatalogoRoute: typeof GestorCatalogoRoute
   GestorConfiguracoesRoute: typeof GestorConfiguracoesRoute
   GestorCredenciaisRoute: typeof GestorCredenciaisRoute
+  GestorDashboardRoute: typeof GestorDashboardRoute
   GestorGestaoRoute: typeof GestorGestaoRoute
   GestorHojeRoute: typeof GestorHojeRoute
   GestorNotificacoesRoute: typeof GestorNotificacoesRoute
@@ -433,6 +453,7 @@ const GestorRouteChildren: GestorRouteChildren = {
   GestorCatalogoRoute: GestorCatalogoRoute,
   GestorConfiguracoesRoute: GestorConfiguracoesRoute,
   GestorCredenciaisRoute: GestorCredenciaisRoute,
+  GestorDashboardRoute: GestorDashboardRoute,
   GestorGestaoRoute: GestorGestaoRoute,
   GestorHojeRoute: GestorHojeRoute,
   GestorNotificacoesRoute: GestorNotificacoesRoute,

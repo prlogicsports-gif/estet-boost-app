@@ -16,6 +16,7 @@ const SHELL_ROUTES = [
   "/configuracoes",
   "/credenciais",
   "/catalogo",
+  "/dashboard",
   "/atendimento/novo",
   "/cliente",
   "/cliente/agenda",

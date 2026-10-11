@@ -50,6 +50,8 @@ export const defaultPrefs: NotificationPrefs = {
 export type Settings = {
   questions: Question[];
   consentText: string;
+  /** Meta de faturamento do mês, em reais (Dashboard e Gestão). */
+  goal?: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
