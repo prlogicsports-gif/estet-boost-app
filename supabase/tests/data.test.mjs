@@ -456,5 +456,99 @@ check(
   })(),
 );
 
+// conta da cliente criada pela gestora (a Edge Function chama client_access_event com a chave de serviço)
+const paulaId = (
+  await db.query(
+    "insert into public.clients (clinic_id, name, phone, email) values ($1,'Paula Andrade','11',null) returning id",
+    [cid],
+  )
+).rows[0].id;
+const paulaUser = await addUser(db, "paula@x.com");
+const linked = (
+  await q(db, "select public.client_access_event('create',$1,$2,'Paula@X.com',$3,'gestor') r", [
+    paulaUser,
+    paulaId,
+    g,
+  ])
+)[0].r;
+check("conta criada pela gestora é ligada à ficha", linked.ok === true, JSON.stringify(linked));
+const paulaProfile = (
+  await q(db, "select role, client_id, name, email from public.profiles where id=$1", [paulaUser])
+)[0];
+check(
+  "perfil nasce como cliente, com o nome da ficha e e-mail em minúsculas",
+  paulaProfile.role === "cliente" &&
+    paulaProfile.client_id === paulaId &&
+    paulaProfile.name === "Paula Andrade" &&
+    paulaProfile.email === "paula@x.com",
+  JSON.stringify(paulaProfile),
+);
+check(
+  "ficha passa a ter o login e o e-mail",
+  (await q(db, "select user_id, email from public.clients where id=$1", [paulaId]))[0].user_id ===
+    paulaUser,
+);
+check(
+  "a cliente já entra vendo só os próprios dados",
+  (await as(db, paulaUser, () => q(db, "select id from public.clients"))).length === 1,
+);
+check(
+  "cliente recebe o aviso de acesso pronto",
+  (await as(db, paulaUser, () => q(db, "select title from public.notifications"))).some(
+    (row) => row.title === "Seu acesso está pronto",
+  ),
+);
+check(
+  "segunda criação para a mesma ficha é recusada",
+  (
+    await q(db, "select public.client_access_event('create',$1,$2,'p2@x.com',$3,'gestor') r", [
+      await addUser(db, "p2@x.com"),
+      paulaId,
+      g,
+    ])
+  )[0].r.reason === "ja_tem_acesso",
+);
+check(
+  "o registro de atividade guarda o acesso criado, sem senha",
+  (
+    await q(
+      db,
+      "select text from public.activity where client_id=$1 and text like 'Acesso ao app%'",
+      [paulaId],
+    )
+  ).length === 1,
+);
+check(
+  "gestora e cliente não chamam a função direto pela API",
+  (await denied(() =>
+    as(db, g, () =>
+      q(db, "select public.client_access_event('create',$1,$2,'x@x.com',$1,'gestor')", [
+        g,
+        paulaId,
+      ]),
+    ),
+  )) &&
+    (await denied(() =>
+      as(db, paulaUser, () =>
+        q(db, "select public.client_access_event('reset',$1,$2,'x@x.com',$1,'gestor')", [
+          paulaUser,
+          paulaId,
+        ]),
+      ),
+    )),
+);
+
+check(
+  "conta criada pela gestora nasce sem aceite; a cliente aceita no primeiro acesso",
+  (await q(db, "select terms_accepted_at from public.profiles where id=$1", [paulaUser]))[0]
+    .terms_accepted_at === null &&
+    R(await rpc(db, paulaUser, "select public.accept_terms() r")).ok === true &&
+    (
+      await q(db, "select terms_accepted_at, terms_version from public.profiles where id=$1", [
+        paulaUser,
+      ])
+    )[0].terms_version === "v1",
+);
+
 console.log(`\n${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

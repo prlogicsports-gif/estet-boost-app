@@ -42,6 +42,8 @@ export type Session = {
   clinicId: string;
   clientId?: string | undefined;
   permissions: Permissions;
+  /** Conta criada pela gestora: ainda falta aceitar os termos no primeiro acesso. */
+  termsPending?: boolean | undefined;
 };
 
 export type AuthResult = { ok: true; needsEmail?: boolean } | { ok: false; message: string };

@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import { Icon } from "@/components/eb/icon";
 import { Input } from "@/components/eb/input";
+import { PasswordField } from "@/components/eb/client-access";
 import { Select } from "@/components/eb/select";
 import { Button } from "@/components/ui/button";
 import { proceduresDb, type ClientRec } from "@/data/db";
+import { generatePassword } from "@/lib/client-access";
 
 export type ClientFormValues = {
   name: string;
@@ -19,9 +21,13 @@ export type ClientFormValues = {
   contra: string;
   note: string;
   imageConsent: boolean;
+  /** Só no cadastro novo: cria e-mail + senha de acesso ao app junto com a ficha. */
+  createAccess: boolean;
+  password: string;
 };
 
-const NONE = "Definir depois";
+export const NONE = "Escolher depois";
+const LEGACY_NONE = "Definir depois";
 const label =
   "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
 
@@ -33,7 +39,9 @@ export const valuesOf = (client?: ClientRec): ClientFormValues => ({
   document: client?.document ?? "",
   address: client?.address ?? "",
   procedure:
-    client?.mainProcedure && client.mainProcedure !== "Sem procedimento definido"
+    client?.mainProcedure &&
+    client.mainProcedure !== "Sem procedimento definido" &&
+    client.mainProcedure !== LEGACY_NONE
       ? client.mainProcedure
       : NONE,
   goal: client?.goal ?? "",
@@ -41,6 +49,8 @@ export const valuesOf = (client?: ClientRec): ClientFormValues => ({
   contra: client?.contra ?? "",
   note: client?.note ?? "",
   imageConsent: client?.imageConsent ?? false,
+  createAccess: false,
+  password: "",
 });
 
 /** Cadastro completo da cliente: o mesmo formulário serve para cadastrar e para editar. */
@@ -48,12 +58,17 @@ export function ClientForm({
   initial,
   submitLabel,
   nameError,
+  withAccess = false,
+  busy = false,
   onSubmit,
 }: {
   initial: ClientFormValues;
   submitLabel: string;
   /** Erro vindo de fora (ex.: cliente duplicada); o de campo vazio é daqui. */
   nameError?: (name: string, email: string) => string | undefined;
+  /** Cadastro novo: mostra "Criar acesso ao app agora" (e-mail + senha). */
+  withAccess?: boolean;
+  busy?: boolean;
   onSubmit: (values: ClientFormValues) => void;
 }) {
   const [v, setV] = useState(initial);
@@ -62,9 +77,21 @@ export function ClientForm({
   const set = <K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) =>
     setV((current) => ({ ...current, [key]: value }));
   const error = !v.name.trim() ? "Escreva o nome da cliente." : nameError?.(v.name, v.email);
-  const options = Array.from(
-    new Set([NONE, ...catalog, ...(initial.procedure !== NONE ? [initial.procedure] : [])]),
-  );
+  // procedimentos do catálogo e, por último, "Escolher depois"
+  const options = [
+    ...Array.from(
+      new Set([...catalog, ...(initial.procedure !== NONE ? [initial.procedure] : [])]),
+    ),
+    NONE,
+  ];
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.email.trim());
+  const accessError = !v.createAccess
+    ? undefined
+    : !emailOk
+      ? "Informe um e-mail válido para criar o acesso."
+      : v.password.length < 8 || v.password.length > 72
+        ? "A senha precisa ter de 8 a 72 caracteres."
+        : undefined;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -101,6 +128,37 @@ export function ClientForm({
         value={v.email}
         onChange={(event) => set("email", event.target.value)}
       />
+      {withAccess ? (
+        <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5">
+          <label className="flex min-h-11 items-center gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium">Criar acesso ao app agora</span>
+              <span className="block text-[12px] text-muted-foreground">
+                Usa o e-mail acima. Quando a cliente abrir o link, a conta já existe.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={v.createAccess}
+              onChange={() =>
+                setV((current) => ({
+                  ...current,
+                  createAccess: !current.createAccess,
+                  password: current.password || generatePassword(),
+                }))
+              }
+              className="size-5 flex-none accent-[var(--teal)]"
+            />
+          </label>
+          {v.createAccess ? (
+            <PasswordField
+              value={v.password}
+              onChange={(next) => set("password", next)}
+              error={tried ? accessError : undefined}
+            />
+          ) : null}
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2.5">
         <Input
           label="CPF"
@@ -165,12 +223,13 @@ export function ClientForm({
       <Button
         type="button"
         variant="tech"
+        disabled={busy}
         onClick={() => {
           setTried(true);
-          if (!error) onSubmit(v);
+          if (!error && !accessError) onSubmit(v);
         }}
       >
-        <Icon name="Check" size={18} /> {submitLabel}
+        <Icon name="Check" size={18} /> {busy ? "Salvando…" : submitLabel}
       </Button>
     </div>
   );

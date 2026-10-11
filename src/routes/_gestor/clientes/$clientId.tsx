@@ -1,10 +1,12 @@
+import { useClinic } from "@/lib/use-clinic";
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { NewAppointmentDrawer } from "@/components/agenda/new-appointment-drawer";
 import { AlertCard } from "@/components/eb/alert-card";
 import { AnamnesisEditor } from "@/components/clients/anamnesis-editor";
-import { ClientForm, valuesOf } from "@/components/clients/client-form";
+import { ClientForm, NONE, valuesOf } from "@/components/clients/client-form";
+import { ClientAccessDrawer } from "@/components/eb/client-access";
 import { SessionEditor } from "@/components/clients/session-editor";
 import type { SessionRec } from "@/lib/models";
 import { Drawer } from "@/components/eb/overlays";
@@ -63,6 +65,8 @@ function ClientePage() {
   const [tab, setTab] = useState<Tab>("resumo");
   const [scheduling, setScheduling] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [access, setAccess] = useState(false);
+  const { clinic } = useClinic();
   const [fixing, setFixing] = useState<SessionRec | null>(null);
   const [anamnesing, setAnamnesing] = useState(false);
   const { questions } = settingsDb.use();
@@ -152,6 +156,12 @@ function ClientePage() {
             label="Ligar"
             tone="outline"
             onClick={() => digits && (window.location.href = `tel:${digits}`)}
+          />
+          <IconButton
+            icon="Smartphone"
+            label={client.hasAccess ? "Acesso ao app" : "Criar acesso ao app"}
+            tone="outline"
+            onClick={() => setAccess(true)}
           />
           <IconButton
             icon="PencilLine"
@@ -404,6 +414,12 @@ function ClientePage() {
         onClose={() => setAnamnesing(false)}
         onSaved={() => (setAnamnesing(false), setToast("Anamnese salva"))}
       />
+      <ClientAccessDrawer
+        open={access}
+        onClose={() => setAccess(false)}
+        client={client}
+        clinicName={clinic?.name ?? "sua clínica"}
+      />
       <Drawer
         open={editing}
         onClose={() => setEditing(false)}
@@ -427,7 +443,7 @@ function ClientePage() {
               contra: values.contra.trim() || undefined,
               note: values.note.trim() || undefined,
               imageConsent: values.imageConsent,
-              ...(values.procedure !== "Definir depois" ? { mainProcedure: values.procedure } : {}),
+              ...(values.procedure !== NONE ? { mainProcedure: values.procedure } : {}),
             });
             setEditing(false);
             setToast("Cadastro atualizado");

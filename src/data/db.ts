@@ -33,6 +33,8 @@ export type ClientRec = Client & {
   address?: string | undefined;
   /** Autorização de uso interno das fotografias. */
   imageConsent?: boolean | undefined;
+  /** A cliente já tem conta (login) ligada à ficha. */
+  hasAccess?: boolean | undefined;
 };
 
 export const defaultPrefs: NotificationPrefs = {
@@ -154,6 +156,7 @@ export const clientsDb = createRemoteStore<ClientRec>({
     document: opt(r.document),
     address: opt(r.address),
     imageConsent: r.image_consent,
+    hasAccess: Boolean(r.user_id),
   }),
   save: (rec, prev, ctx) =>
     write(
