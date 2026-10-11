@@ -9,6 +9,7 @@ import { Switch } from "@/components/eb/notifications-panel";
 import { Drawer } from "@/components/eb/overlays";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { Select } from "@/components/eb/select";
+import { CampaignsTab } from "@/components/loyalty/campaigns-tab";
 import { RewardsTab } from "@/components/loyalty/rewards-tab";
 import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
@@ -50,8 +51,8 @@ export const Route = createFileRoute("/_gestor/fidelidade")({
   component: FidelidadePage,
 });
 
-type Tab = "geral" | "programa" | "selos" | "premios";
-const TABS: Tab[] = ["geral", "programa", "selos", "premios"];
+type Tab = "geral" | "programa" | "selos" | "premios" | "campanhas";
+const TABS: Tab[] = ["geral", "programa", "selos", "premios", "campanhas"];
 const heading =
   "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
 const card =
@@ -131,12 +132,13 @@ function FidelidadePage() {
             active={tab}
             onSelect={setTab}
             tabs={[
-              { id: "geral", label: "Visão geral" },
+              { id: "geral", label: "Geral" },
               { id: "programa", label: "Programa" },
               { id: "selos", label: "Selos" },
               { id: "premios", label: "Prêmios" },
+              { id: "campanhas", label: "Campanhas" },
             ]}
-            className="max-w-lg"
+            className="max-w-xl"
           />
           {tab === "geral" ? (
             <Overview data={data} onToast={setToast} onChanged={() => void admin.reload()} />
@@ -145,6 +147,7 @@ function FidelidadePage() {
             <Program data={data} onToast={setToast} onSaved={() => void admin.reload()} />
           ) : null}
           {tab === "premios" ? <RewardsTab onToast={setToast} /> : null}
+          {tab === "campanhas" ? <CampaignsTab onToast={setToast} /> : null}
           {tab === "selos" ? (
             <Badges data={data} onToast={setToast} onChanged={() => void admin.reload()} />
           ) : null}

@@ -1,3 +1,4 @@
+import type { Segment } from "@/lib/campaign-templates";
 import { supabase } from "@/lib/supabase";
 
 export type LoyaltyLevel = { id: string; name: string; min: number };
@@ -90,6 +91,11 @@ const REASONS: Record<string, string> = {
   limite_de_premios: "Você chegou ao limite de prêmios.",
   tem_pedidos_abertos: "Há pedidos abertos desse prêmio. Resolva-os antes de excluir.",
   estado_invalido: "Esse pedido já foi resolvido.",
+  titulo_vazio: "Escreva o título do aviso.",
+  datas_invalidas: "A data final precisa ser depois da inicial.",
+  limite_de_campanhas: "Você chegou ao limite de campanhas.",
+  campanha_encerrada: "Essa campanha já foi encerrada.",
+  horario_invalido: "Confira o horário: o fim precisa ser depois do início.",
 };
 export type Result<T = unknown> = ({ ok: true } & T) | { ok: false; message: string };
 
@@ -275,3 +281,78 @@ export const decideRedeem = (
   id: string,
   decision: "aprovar" | "recusar" | "entregar" | "cancelar",
 ) => call("decide_redeem", { p_id: id, p_decision: decision });
+
+// ---------------------------------------------------------------- campanhas
+export type CampaignStatus = "rascunho" | "ativa" | "pausada" | "encerrada";
+export type AdminCampaign = {
+  id: string;
+  name: string;
+  template: string;
+  segment: Segment;
+  title: string;
+  body: string;
+  href: string;
+  status: CampaignStatus;
+  starts_on: string | null;
+  ends_on: string | null;
+  every_days: number;
+  audience: number;
+  sent: number;
+  read: number;
+  booked: number;
+};
+export type CampaignsAdmin = {
+  ok: true;
+  loyalty_enabled: boolean;
+  limits: { max_per_week: number; from: string; to: string };
+  campaigns: AdminCampaign[];
+};
+export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
+  rascunho: "Rascunho",
+  ativa: "Ativa",
+  pausada: "Pausada",
+  encerrada: "Encerrada",
+};
+
+export async function loadCampaignsAdmin(): Promise<CampaignsAdmin> {
+  const { data, error } = await supabase.rpc("campaigns_admin");
+  if (error) throw error;
+  return data as CampaignsAdmin;
+}
+export const saveCampaign = (campaign: {
+  id?: string | null;
+  name: string;
+  template: string;
+  segment: Segment;
+  title: string;
+  body: string;
+  href: string;
+  status: CampaignStatus;
+  starts_on: string | null;
+  ends_on: string | null;
+  every_days: number;
+}) =>
+  call("save_campaign", {
+    p_id: campaign.id ?? null,
+    p_name: campaign.name,
+    p_template: campaign.template,
+    p_segment: campaign.segment,
+    p_title: campaign.title,
+    p_body: campaign.body,
+    p_href: campaign.href,
+    p_status: campaign.status,
+    p_starts_on: campaign.starts_on,
+    p_ends_on: campaign.ends_on,
+    p_every_days: campaign.every_days,
+  });
+export const setCampaignStatus = (id: string, status: CampaignStatus) =>
+  call("set_campaign_status", { p_id: id, p_status: status });
+export const deleteCampaign = (id: string) => call("delete_campaign", { p_id: id });
+export const previewAudience = (segment: Segment) =>
+  call<{ count: number; blocked: number; sample: string[] }>("preview_campaign_audience", {
+    p_segment: segment,
+  });
+export const sendCampaignNow = (id: string) =>
+  call<{ sent: number }>("send_campaign_now", { p_id: id });
+export const saveCampaignLimits = (max: number, from: string, to: string) =>
+  call("save_campaign_limits", { p_max: max, p_from: from, p_to: to });
