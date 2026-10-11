@@ -349,7 +349,7 @@ function ClientePage() {
 
       {tab === "evolucao" ? (
         <div className="flex flex-col gap-7">
-          <span className={label}>Mapa facial</span>
+          <span className={label}>Mapa de regiões</span>
           <FaceMapPanel clientId={client.id} showGeneralActions={false} />
         </div>
       ) : null}

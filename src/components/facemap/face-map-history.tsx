@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 
+import { bodyName } from "@/components/facemap/body-data";
 import { useFaceLayout } from "@/lib/face-layout";
 import type { FaceMark } from "@/lib/face-map-store";
 
@@ -27,6 +28,7 @@ export function FaceMapHistory({
   emptyLabel?: string;
 }) {
   const layout = useFaceLayout();
+  const nameOf = (zoneId: string) => bodyName(zoneId) ?? layout.nameOf(zoneId);
   const groups = useMemo(() => {
     const buckets = new Map<string, FaceMark[]>();
     for (const mark of marks) buckets.set(mark.date, [...(buckets.get(mark.date) ?? []), mark]);
@@ -60,9 +62,7 @@ export function FaceMapHistory({
                 style={{ background: dotColor(mark.state) }}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">
-                  {layout.nameOf(mark.zoneId)}
-                </div>
+                <div className="text-sm font-medium text-foreground">{nameOf(mark.zoneId)}</div>
                 <div className="mt-0.5 text-[12.5px] text-[var(--text-secondary)]">
                   {summarize(mark)}
                 </div>
@@ -83,7 +83,7 @@ export function FaceMapHistory({
                 <button
                   type="button"
                   onClick={() => onRemove(mark)}
-                  aria-label={`Remover marcação de ${layout.nameOf(mark.zoneId)}`}
+                  aria-label={`Remover marcação de ${nameOf(mark.zoneId)}`}
                   className="grid size-11 flex-none place-items-center text-muted-foreground hover:text-foreground"
                 >
                   <Trash2 className="size-3.5" aria-hidden />

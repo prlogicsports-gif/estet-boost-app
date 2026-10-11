@@ -1,7 +1,6 @@
 import {
   useId,
   useState,
-  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
@@ -15,6 +14,7 @@ import {
   FACE_VIEWBOX,
   type FaceZone,
 } from "@/components/facemap/face-data";
+import { zoneStyle } from "@/components/facemap/zone-style";
 import { useFaceLayout, type ResolvedLayout } from "@/lib/face-layout";
 import type { FaceMark, FacePoint, MarkState } from "@/lib/face-map-store";
 import { cn } from "@/lib/utils";
@@ -24,32 +24,6 @@ import { cn } from "@/lib/utils";
  * usa a silhueta vetorial e continua inteiro.
  */
 export const FACE_IMAGE = "/face-front.jpg";
-
-function zoneStyle(selected: boolean, hovered: boolean, saved?: MarkState): CSSProperties {
-  let fill = "rgba(195,148,142,.06)";
-  let stroke = "rgba(195,148,142,.55)";
-  let width = 0.9;
-  if (selected) {
-    fill = "rgba(79,175,173,.42)";
-    stroke = "var(--eb-teal-500)";
-    width = 1.7;
-  } else if (saved) {
-    fill = saved === "sensitive" ? "rgba(201,109,109,.28)" : "rgba(79,175,173,.2)";
-    stroke = saved === "sensitive" ? "var(--eb-coral-500)" : "var(--eb-teal-a40)";
-  } else if (hovered) {
-    fill = "rgba(195,148,142,.16)";
-    stroke = "rgba(220,200,186,.85)";
-  }
-  return {
-    fill,
-    stroke,
-    strokeWidth: width,
-    strokeLinejoin: "round",
-    vectorEffect: "non-scaling-stroke",
-    pointerEvents: "none",
-    transition: "fill 200ms cubic-bezier(.32,.72,0,1), stroke 200ms cubic-bezier(.32,.72,0,1)",
-  };
-}
 
 export function FaceMap({
   selected,

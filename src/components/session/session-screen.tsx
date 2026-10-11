@@ -37,7 +37,7 @@ const STEPS = [
   { label: "Atualização de saúde" },
   { label: "Avaliação atual" },
   { label: "Foto inicial" },
-  { label: "Mapa facial" },
+  { label: "Mapa de regiões" },
   { label: "Procedimento realizado" },
   { label: "Produtos" },
   { label: "Antes e depois" },

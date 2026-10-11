@@ -6,6 +6,8 @@ import { ClientTimeline } from "@/components/eb/client-timeline";
 import { PhotoVault } from "@/components/eb/photo-vault";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { TopBar } from "@/components/eb/top-bar";
+import { bodyName, mapKindOf, MAP_LABELS, type MapKind } from "@/components/facemap/body-data";
+import { BodyMap } from "@/components/facemap/body-map";
 import { FaceMap } from "@/components/facemap/face-map";
 import { FaceMapHistory } from "@/components/facemap/face-map-history";
 import { useFaceLayout } from "@/lib/face-layout";
@@ -51,10 +53,19 @@ function EvolucaoPage() {
     [maps, clientId],
   );
   const [selected, setSelected] = useState<string | null>(null);
+  const [map, setMap] = useState<MapKind>("rosto");
 
   const layout = useFaceLayout();
-  const zone = selected ? layout.zoneById(selected) : null;
-  const list = selected ? historyForZone(marks, selected) : marks;
+  const mapMarks = useMemo(
+    () => marks.filter((mark) => mapKindOf(mark.zoneId) === map),
+    [marks, map],
+  );
+  const zoneName = selected
+    ? (bodyName(selected) ?? layout.zoneById(selected)?.nome ?? null)
+    : null;
+  const zone = zoneName ? { id: selected as string, nome: zoneName } : null;
+  const list = selected ? historyForZone(mapMarks, selected) : mapMarks;
+  const where = map === "rosto" ? "seu rosto" : map === "abdomen" ? "seu abdômen" : "seu glúteo";
 
   return (
     <div className="flex flex-col gap-4">
@@ -69,7 +80,7 @@ function EvolucaoPage() {
         active={tab}
         onSelect={setTab}
         tabs={[
-          { id: "mapa", label: "Mapa facial", short: "Mapa" },
+          { id: "mapa", label: "Mapas", short: "Mapas" },
           { id: "fotos", label: "Fotografias", short: "Fotos" },
           { id: "linha", label: "Linha do tempo", short: "Linha" },
           { id: "recom", label: "Recomendações", short: "Dicas" },
@@ -77,43 +88,70 @@ function EvolucaoPage() {
       />
 
       {tab === "mapa" ? (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-start gap-[18px]">
-          <div className="mx-auto w-full max-w-[320px]">
-            <FaceMap
-              selected={selected}
-              onSelectZone={(next) =>
-                setSelected((current) => (current === next.id ? null : next.id))
-              }
-              points={[]}
-              onAddPoint={() => {}}
-              marks={marks}
-              allowPoints={false}
-            />
-          </div>
-          <div className="flex min-w-0 flex-col gap-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="flex-1 text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
-                {zone ? layout.nameOf(zone.id) : "Registros no seu rosto"}
-              </span>
-              {zone ? (
-                <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
-                  Ver todos
-                </Button>
-              ) : null}
+        <div className="flex flex-col gap-3.5">
+          <SegmentedTabs<MapKind>
+            size="sm"
+            active={map}
+            onSelect={(next) => {
+              setMap(next);
+              setSelected(null);
+            }}
+            tabs={(Object.keys(MAP_LABELS) as MapKind[]).map((id) => ({
+              id,
+              label: MAP_LABELS[id],
+            }))}
+            className="max-w-sm"
+          />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-start gap-[18px]">
+            <div className="mx-auto w-full max-w-[320px]">
+              {map === "rosto" ? (
+                <FaceMap
+                  selected={selected}
+                  onSelectZone={(next) =>
+                    setSelected((current) => (current === next.id ? null : next.id))
+                  }
+                  points={[]}
+                  onAddPoint={() => {}}
+                  marks={mapMarks}
+                  allowPoints={false}
+                />
+              ) : (
+                <BodyMap
+                  kind={map}
+                  selected={selected}
+                  onSelectZone={(next) =>
+                    setSelected((current) => (current === next.id ? null : next.id))
+                  }
+                  points={[]}
+                  onAddPoint={() => {}}
+                  marks={mapMarks}
+                  allowPoints={false}
+                />
+              )}
             </div>
-            <FaceMapHistory
-              marks={list}
-              emptyLabel={
-                zone
-                  ? "Nenhum registro nesta região."
-                  : "Ainda não há registros no seu mapa facial."
-              }
-              onSelect={(mark) => setSelected(mark.zoneId)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Toque em uma região para ver o que foi feito nela. Observações internas da
-              profissional não aparecem aqui.
-            </p>
+            <div className="flex min-w-0 flex-col gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className="flex-1 text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground">
+                  {zone ? zone.nome : `Registros no ${where}`}
+                </span>
+                {zone ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+                    Ver todos
+                  </Button>
+                ) : null}
+              </div>
+              <FaceMapHistory
+                marks={list}
+                emptyLabel={
+                  zone ? "Nenhum registro nesta região." : `Ainda não há registros no ${where}.`
+                }
+                onSelect={(mark) => setSelected(mark.zoneId)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Toque em uma região para ver o que foi feito nela. Observações internas da
+                profissional não aparecem aqui.
+              </p>
+            </div>
           </div>
         </div>
       ) : null}

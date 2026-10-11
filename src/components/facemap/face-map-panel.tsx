@@ -7,6 +7,8 @@ import { FaceMap } from "@/components/facemap/face-map";
 import { FaceMapEditor } from "@/components/facemap/face-map-editor";
 import { FaceMapHistory } from "@/components/facemap/face-map-history";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
+import { BodyMapPanel } from "@/components/facemap/body-map-panel";
+import { mapKindOf, MAP_LABELS, type MapKind } from "@/components/facemap/body-data";
 import { FaceMapSheet } from "@/components/facemap/face-map-sheet";
 import { useFaceLayout } from "@/lib/face-layout";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -34,7 +36,10 @@ export function FaceMapPanel({
   clientId: string;
   showGeneralActions?: boolean;
 }) {
-  const { marks, add, remove, removeZone } = useFaceMap(clientId);
+  const { marks: allMarks, add, remove, removeZone } = useFaceMap(clientId);
+  // as marcações do abdômen e do glúteo aparecem nos mapas de corpo; aqui só as do rosto
+  const marks = allMarks.filter((mark) => mapKindOf(mark.zoneId) === "rosto");
+  const [map, setMap] = useState<MapKind>("rosto");
   const { actions, update } = useGeneralActions();
   const [selected, setSelected] = useState<string | null>(null);
   const [points, setPoints] = useState<Record<string, FacePoint[]>>({});
@@ -112,9 +117,33 @@ export function FaceMapPanel({
     />
   );
 
+  const mapTabs = (
+    <SegmentedTabs<MapKind>
+      size="sm"
+      active={map}
+      onSelect={(next) => {
+        setMap(next);
+        setSelected(null);
+        setSheetOpen(false);
+      }}
+      tabs={(Object.keys(MAP_LABELS) as MapKind[]).map((id) => ({ id, label: MAP_LABELS[id] }))}
+      className="mb-3.5 max-w-sm"
+    />
+  );
+
+  if (map !== "rosto") {
+    return (
+      <div>
+        {mapTabs}
+        <BodyMapPanel clientId={clientId} kind={map} />
+      </div>
+    );
+  }
+
   if (mode === "editar") {
     return (
       <div>
+        {mapTabs}
         {tabs}
         <FaceMapEditor onExit={() => setMode("registrar")} />
       </div>
@@ -123,6 +152,7 @@ export function FaceMapPanel({
 
   return (
     <div>
+      {mapTabs}
       {tabs}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className="relative mx-auto w-full max-w-[440px] overflow-hidden rounded-[var(--radius-xl)]">

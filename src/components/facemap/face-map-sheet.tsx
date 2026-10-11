@@ -15,7 +15,7 @@ import {
 import type { FaceZone } from "@/components/facemap/face-data";
 import { useFaceLayout } from "@/lib/face-layout";
 import { Button } from "@/components/ui/button";
-import { stockDb } from "@/data/db";
+import { proceduresDb, stockDb } from "@/data/db";
 import { emptyRecord, type FaceMark, type FaceRecord } from "@/lib/face-map-store";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +139,9 @@ export function FaceMapSheet({
   pointCount,
   history,
   inline = false,
+  pair: pairOverride,
+  procedures,
+  actions,
   onClose,
   onSave,
   onClear,
@@ -148,11 +151,18 @@ export function FaceMapSheet({
   history: FaceMark[];
   /** Em tela larga o painel fica ao lado do mapa, sem cobrir o rosto. */
   inline?: boolean;
+  /** Mapas de corpo: a região do lado oposto (`null` = não tem). Sem isso vale o layout do rosto. */
+  pair?: { id: string; nome: string } | null;
+  /** Procedimentos e ações sugeridos para este mapa (os do catálogo entram primeiro). */
+  procedures?: string[];
+  actions?: string[];
   onClose: () => void;
   onSave: (record: FaceRecord, pairId: string | null) => void;
   onClear: () => void;
 }) {
   const layout = useFaceLayout();
+  const catalog = proceduresDb.use();
+  const stockNames = stockDb.use().map((item) => item.name);
   const [row, setRow] = useState<RowKey | null>(null);
   const [form, setForm] = useState<FaceRecord>(emptyRecord);
   const [mirror, setMirror] = useState(false);
@@ -178,8 +188,17 @@ export function FaceMapSheet({
   const set = (key: RowKey, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const toggle = (key: RowKey) => setRow((current) => (current === key ? null : key));
   const ready = Boolean(form.procedimento || form.produto || form.acao || form.observacao);
-  const pairId = layout.pairOf(zone.id);
-  const pair = pairId ? layout.zoneById(pairId) : null;
+  const pairId = pairOverride !== undefined ? (pairOverride?.id ?? null) : layout.pairOf(zone.id);
+  const pairName =
+    pairOverride !== undefined
+      ? (pairOverride?.nome ?? null)
+      : pairId && layout.zoneById(pairId)
+        ? layout.nameOf(pairId)
+        : null;
+  const procedureOptions = Array.from(
+    new Set([...catalog.map((item) => item.name), ...(procedures ?? PROCEDIMENTOS)]),
+  );
+  const actionOptions = actions ?? ACOES;
   const alreadySaved = history.length > 0;
 
   const dialog = (
@@ -247,7 +266,7 @@ export function FaceMapSheet({
           />
           {row === "procedimento" ? (
             <Options
-              items={PROCEDIMENTOS}
+              items={procedureOptions}
               value={form.procedimento}
               onPick={(v) => set("procedimento", v)}
             />
@@ -260,11 +279,7 @@ export function FaceMapSheet({
             onClick={() => toggle("produto")}
           />
           {row === "produto" ? (
-            <Options
-              items={stockDb.use().map((p) => p.name)}
-              value={form.produto}
-              onPick={(v) => set("produto", v)}
-            />
+            <Options items={stockNames} value={form.produto} onPick={(v) => set("produto", v)} />
           ) : null}
           <Row
             icon={Hand}
@@ -274,7 +289,7 @@ export function FaceMapSheet({
             onClick={() => toggle("acao")}
           />
           {row === "acao" ? (
-            <Options items={ACOES} value={form.acao} onPick={(v) => set("acao", v)} />
+            <Options items={actionOptions} value={form.acao} onPick={(v) => set("acao", v)} />
           ) : null}
           <Row
             icon={MessageCircle}
@@ -297,7 +312,7 @@ export function FaceMapSheet({
           ) : null}
         </div>
 
-        {pair ? (
+        {pairName ? (
           <label className="mt-3.5 flex cursor-pointer items-start gap-2.5">
             <input
               type="checkbox"
@@ -306,7 +321,7 @@ export function FaceMapSheet({
               className="mt-0.5 size-[18px] flex-none accent-[var(--teal)]"
             />
             <span className="min-w-0 flex-1 break-words text-[13px] leading-[1.45] text-[var(--text-secondary)]">
-              Registrar também no lado oposto: {layout.nameOf(pair.id)}
+              Registrar também no lado oposto: {pairName}
             </span>
           </label>
         ) : null}
@@ -348,7 +363,7 @@ export function FaceMapSheet({
           onClick={() => onSave(form, mirror ? pairId : null)}
           className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-[var(--eb-teal-a40)] bg-[var(--eb-teal-500)] text-base font-medium text-[var(--eb-plum-900)] transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
         >
-          {mirror && pair ? "Salvar nas duas regiões" : "Salvar marcação"}
+          {mirror && pairName ? "Salvar nas duas regiões" : "Salvar marcação"}
         </button>
         {!ready ? (
           <p className="mt-2.5 text-center text-[11.5px] text-muted-foreground">
