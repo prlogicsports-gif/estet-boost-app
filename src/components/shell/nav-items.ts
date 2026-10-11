@@ -2,6 +2,7 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
+  History,
   House,
   KeyRound,
   LayoutDashboard,
@@ -10,6 +11,7 @@ import {
   Sun,
   User,
   Users,
+  Package,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -23,6 +25,10 @@ export type NavItem = {
   icon: LucideIcon;
   needs?: PermissionKey[];
   adminOnly?: boolean;
+  /** Rótulo curto para o dock do celular (o menu "Mais" e a barra lateral usam `label`). */
+  dockLabel?: string;
+  /** No menu "Mais": seção em que o item aparece. */
+  group?: "gestao" | "conta";
 };
 export type NavConfig = {
   role: Area;
@@ -45,14 +51,29 @@ export const gestorNav: NavConfig = {
       icon: Users,
       needs: ["clientes"],
     },
-    { to: "/gestao", label: "Gestão", icon: Wallet, needs: ["financeiro", "estoque", "historico"] },
+    { to: "/financeiro", label: "Financeiro", icon: Wallet, needs: ["financeiro"] },
   ],
   secondary: [
-    { to: "/notificacoes", label: "Notificações", icon: Bell },
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
-    { to: "/catalogo", label: "Catálogo", icon: BookOpen, adminOnly: true },
-    { to: "/credenciais", label: "Credenciais", icon: KeyRound, adminOnly: true },
-    { to: "/configuracoes", label: "Configurações", icon: Settings },
+    {
+      to: "/estoque",
+      label: "Produtos e estoque",
+      dockLabel: "Estoque",
+      icon: Package,
+      needs: ["estoque"],
+      group: "gestao",
+    },
+    { to: "/historico", label: "Histórico", icon: History, needs: ["historico"], group: "gestao" },
+    {
+      to: "/dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      adminOnly: true,
+      group: "gestao",
+    },
+    { to: "/catalogo", label: "Catálogo", icon: BookOpen, adminOnly: true, group: "gestao" },
+    { to: "/notificacoes", label: "Notificações", icon: Bell, group: "conta" },
+    { to: "/credenciais", label: "Credenciais", icon: KeyRound, adminOnly: true, group: "conta" },
+    { to: "/configuracoes", label: "Configurações", icon: Settings, group: "conta" },
   ],
   maxWidth: "var(--content-max, 1120px)",
 };

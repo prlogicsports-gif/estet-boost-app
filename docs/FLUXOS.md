@@ -171,11 +171,11 @@ flowchart LR
 
 ## 10. Mapa de telas por papel
 
-| Papel       | Rotas                                                                                                                                           | Dados lidos                  |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Visitante   | `/` (login, criar conta, link/credencial)                                                                                                       | Só o nome público da clínica |
-| Gestora     | `/hoje`, `/agenda`, `/clientes`, `/clientes/:id`, `/atendimento/*`, `/gestao`, `/notificacoes`, `/credenciais`, `/configuracoes` (incl. Equipe) | Toda a clínica               |
-| Funcionária | Igual, **sem** `/gestao` financeiro, `/credenciais` e a administração de `/configuracoes`                                                       | Clínica sem financeiro       |
-| Cliente     | `/cliente`, `/cliente/agenda`, `/cliente/evolucao`, `/cliente/perfil`                                                                           | Só os próprios dados         |
+| Papel       | Rotas                                                                                                                                                                                                                   | Dados lidos                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Visitante   | `/` (login, criar conta, link/credencial)                                                                                                                                                                               | Só o nome público da clínica |
+| Gestora     | `/hoje`, `/agenda`, `/clientes`, `/clientes/:id`, `/atendimento/*`, `/financeiro`, `/estoque`, `/historico`, `/dashboard`, `/catalogo`, `/fidelidade`, `/notificacoes`, `/credenciais`, `/configuracoes` (incl. Equipe) | Toda a clínica               |
+| Funcionária | Igual, **sem** `/financeiro`, `/credenciais` e a administração de `/configuracoes`                                                                                                                                      | Clínica sem financeiro       |
+| Cliente     | `/cliente`, `/cliente/agenda`, `/cliente/evolucao`, `/cliente/perfil`                                                                                                                                                   | Só os próprios dados         |
 
 `RoleGate` redireciona papel errado; o **RLS** garante que, mesmo burlando a tela, o dado não vem.

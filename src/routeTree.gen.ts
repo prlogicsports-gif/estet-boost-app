@@ -18,7 +18,10 @@ import { Route as GestorCatalogoRouteImport } from './routes/_gestor/catalogo'
 import { Route as GestorConfiguracoesRouteImport } from './routes/_gestor/configuracoes'
 import { Route as GestorCredenciaisRouteImport } from './routes/_gestor/credenciais'
 import { Route as GestorDashboardRouteImport } from './routes/_gestor/dashboard'
+import { Route as GestorEstoqueRouteImport } from './routes/_gestor/estoque'
+import { Route as GestorFinanceiroRouteImport } from './routes/_gestor/financeiro'
 import { Route as GestorGestaoRouteImport } from './routes/_gestor/gestao'
+import { Route as GestorHistoricoRouteImport } from './routes/_gestor/historico'
 import { Route as GestorHojeRouteImport } from './routes/_gestor/hoje'
 import { Route as GestorNotificacoesRouteImport } from './routes/_gestor/notificacoes'
 import { Route as AtendimentoSessionIdRouteImport } from './routes/atendimento.$sessionId'
@@ -75,9 +78,24 @@ const GestorDashboardRoute = GestorDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => GestorRoute,
 } as any)
+const GestorEstoqueRoute = GestorEstoqueRouteImport.update({
+  id: '/estoque',
+  path: '/estoque',
+  getParentRoute: () => GestorRoute,
+} as any)
+const GestorFinanceiroRoute = GestorFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => GestorRoute,
+} as any)
 const GestorGestaoRoute = GestorGestaoRouteImport.update({
   id: '/gestao',
   path: '/gestao',
+  getParentRoute: () => GestorRoute,
+} as any)
+const GestorHistoricoRoute = GestorHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
   getParentRoute: () => GestorRoute,
 } as any)
 const GestorHojeRoute = GestorHojeRouteImport.update({
@@ -146,7 +164,10 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
   '/dashboard': typeof GestorDashboardRoute
+  '/estoque': typeof GestorEstoqueRoute
+  '/financeiro': typeof GestorFinanceiroRoute
   '/gestao': typeof GestorGestaoRoute
+  '/historico': typeof GestorHistoricoRoute
   '/hoje': typeof GestorHojeRoute
   '/notificacoes': typeof GestorNotificacoesRoute
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
@@ -167,7 +188,10 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
   '/dashboard': typeof GestorDashboardRoute
+  '/estoque': typeof GestorEstoqueRoute
+  '/financeiro': typeof GestorFinanceiroRoute
   '/gestao': typeof GestorGestaoRoute
+  '/historico': typeof GestorHistoricoRoute
   '/hoje': typeof GestorHojeRoute
   '/notificacoes': typeof GestorNotificacoesRoute
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
@@ -191,7 +215,10 @@ export interface FileRoutesById {
   '/_gestor/configuracoes': typeof GestorConfiguracoesRoute
   '/_gestor/credenciais': typeof GestorCredenciaisRoute
   '/_gestor/dashboard': typeof GestorDashboardRoute
+  '/_gestor/estoque': typeof GestorEstoqueRoute
+  '/_gestor/financeiro': typeof GestorFinanceiroRoute
   '/_gestor/gestao': typeof GestorGestaoRoute
+  '/_gestor/historico': typeof GestorHistoricoRoute
   '/_gestor/hoje': typeof GestorHojeRoute
   '/_gestor/notificacoes': typeof GestorNotificacoesRoute
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
@@ -215,7 +242,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/credenciais'
     | '/dashboard'
+    | '/estoque'
+    | '/financeiro'
     | '/gestao'
+    | '/historico'
     | '/hoje'
     | '/notificacoes'
     | '/atendimento/$sessionId'
@@ -236,7 +266,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/credenciais'
     | '/dashboard'
+    | '/estoque'
+    | '/financeiro'
     | '/gestao'
+    | '/historico'
     | '/hoje'
     | '/notificacoes'
     | '/atendimento/$sessionId'
@@ -259,7 +292,10 @@ export interface FileRouteTypes {
     | '/_gestor/configuracoes'
     | '/_gestor/credenciais'
     | '/_gestor/dashboard'
+    | '/_gestor/estoque'
+    | '/_gestor/financeiro'
     | '/_gestor/gestao'
+    | '/_gestor/historico'
     | '/_gestor/hoje'
     | '/_gestor/notificacoes'
     | '/atendimento/$sessionId'
@@ -347,11 +383,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestorDashboardRouteImport
       parentRoute: typeof GestorRoute
     }
+    '/_gestor/estoque': {
+      id: '/_gestor/estoque'
+      path: '/estoque'
+      fullPath: '/estoque'
+      preLoaderRoute: typeof GestorEstoqueRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/financeiro': {
+      id: '/_gestor/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof GestorFinanceiroRouteImport
+      parentRoute: typeof GestorRoute
+    }
     '/_gestor/gestao': {
       id: '/_gestor/gestao'
       path: '/gestao'
       fullPath: '/gestao'
       preLoaderRoute: typeof GestorGestaoRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/historico': {
+      id: '/_gestor/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof GestorHistoricoRouteImport
       parentRoute: typeof GestorRoute
     }
     '/_gestor/hoje': {
@@ -440,7 +497,10 @@ interface GestorRouteChildren {
   GestorConfiguracoesRoute: typeof GestorConfiguracoesRoute
   GestorCredenciaisRoute: typeof GestorCredenciaisRoute
   GestorDashboardRoute: typeof GestorDashboardRoute
+  GestorEstoqueRoute: typeof GestorEstoqueRoute
+  GestorFinanceiroRoute: typeof GestorFinanceiroRoute
   GestorGestaoRoute: typeof GestorGestaoRoute
+  GestorHistoricoRoute: typeof GestorHistoricoRoute
   GestorHojeRoute: typeof GestorHojeRoute
   GestorNotificacoesRoute: typeof GestorNotificacoesRoute
   GestorAtendimentosAppointmentIdRoute: typeof GestorAtendimentosAppointmentIdRoute
@@ -454,7 +514,10 @@ const GestorRouteChildren: GestorRouteChildren = {
   GestorConfiguracoesRoute: GestorConfiguracoesRoute,
   GestorCredenciaisRoute: GestorCredenciaisRoute,
   GestorDashboardRoute: GestorDashboardRoute,
+  GestorEstoqueRoute: GestorEstoqueRoute,
+  GestorFinanceiroRoute: GestorFinanceiroRoute,
   GestorGestaoRoute: GestorGestaoRoute,
+  GestorHistoricoRoute: GestorHistoricoRoute,
   GestorHojeRoute: GestorHojeRoute,
   GestorNotificacoesRoute: GestorNotificacoesRoute,
   GestorAtendimentosAppointmentIdRoute: GestorAtendimentosAppointmentIdRoute,

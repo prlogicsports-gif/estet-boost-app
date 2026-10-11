@@ -3,8 +3,8 @@
  * e recebe o push do Firebase com o app fechado. Os DADOS não passam por aqui: ficam no IndexedDB do app
  * (cópia + fila de alterações) e a comunicação com o Supabase nunca é interceptada.
  */
-const PAGES = "eb-pages-v2";
-const ASSETS = "eb-assets-v2";
+const PAGES = "eb-pages-v3";
+const ASSETS = "eb-assets-v3";
 const KEEP = [PAGES, ASSETS];
 const SHELL_ROUTES = [
   "/",
@@ -12,6 +12,10 @@ const SHELL_ROUTES = [
   "/agenda",
   "/clientes",
   "/gestao",
+  "/financeiro",
+  "/estoque",
+  "/historico",
+  "/fidelidade",
   "/notificacoes",
   "/configuracoes",
   "/credenciais",

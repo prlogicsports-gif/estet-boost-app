@@ -27,24 +27,35 @@ export function MobileDock({ nav }: { nav: NavConfig }) {
             style={{ animation: "fade-in 200ms ease-out" }}
           />
           <div
-            className="glass-dock absolute left-1/2 w-[min(320px,calc(100%-32px))] -translate-x-1/2 rounded-[var(--radius-xl)] p-2"
+            className="glass-dock absolute left-1/2 max-h-[min(70dvh,560px)] w-[min(320px,calc(100%-32px))] -translate-x-1/2 overflow-y-auto rounded-[var(--radius-xl)] p-2"
             style={{
               bottom: "calc(env(safe-area-inset-bottom) + 92px)",
               animation: "sheet-in 240ms cubic-bezier(.16,1,.3,1)",
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            {secondary.map((entry) => (
-              <Link
-                key={entry.to}
-                to={entry.to}
-                onClick={() => setOpen(false)}
-                className="flex min-h-12 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-foreground"
-                activeProps={{ className: "bg-[var(--eb-ivory-a10)] text-foreground" }}
-              >
-                <entry.icon className="size-[18px]" aria-hidden />
-                {entry.label}
-              </Link>
+            {secondary.map((entry, index) => (
+              <div key={entry.to}>
+                {entry.group && entry.group !== secondary[index - 1]?.group ? (
+                  <span
+                    className={cn(
+                      "block px-3 pb-1 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground",
+                      index === 0 ? "pt-1.5" : "pt-3",
+                    )}
+                  >
+                    {entry.group === "gestao" ? "Gestão" : "Conta"}
+                  </span>
+                ) : null}
+                <Link
+                  to={entry.to}
+                  onClick={() => setOpen(false)}
+                  className="flex min-h-12 items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--accent)] hover:text-foreground"
+                  activeProps={{ className: "bg-[var(--eb-ivory-a10)] text-foreground" }}
+                >
+                  <entry.icon className="size-[18px]" aria-hidden />
+                  {entry.label}
+                </Link>
+              </div>
             ))}
             <button
               type="button"
@@ -78,7 +89,7 @@ export function MobileDock({ nav }: { nav: NavConfig }) {
               <>
                 <entry.icon className="size-5" strokeWidth={isActive ? 1.9 : 1.6} aria-hidden />
                 <span className={cn("text-[10.5px] tracking-[0.01em]", isActive && "font-medium")}>
-                  {entry.label}
+                  {entry.dockLabel ?? entry.label}
                 </span>
                 {isActive ? (
                   <span className="absolute bottom-[3px] size-1 rounded-full bg-[var(--eb-teal-500)]" />

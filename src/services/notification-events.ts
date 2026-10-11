@@ -74,7 +74,7 @@ export const events = {
       kind: "payment",
       title: `${first(entry.label)} informou um pagamento`,
       body: `${brl(entry.value)} · ${method} · confirme o recebimento`,
-      href: "/gestao?aba=receber",
+      href: "/financeiro?aba=receber",
       ruleKey: `preport:${entry.id}:${method}`,
     }),
   stockLow: (item: StockRec) =>
@@ -82,7 +82,7 @@ export const events = {
       kind: "stock",
       title: "Estoque baixo",
       body: `${item.name} · ${item.quantity} ${item.unit} (mínimo ${item.min})`,
-      href: "/gestao?aba=estoque",
+      href: "/estoque",
       ruleKey: `stock:${item.id}:${item.quantity}`,
     }),
   stockExpiring: (item: StockRec, days: number) =>
@@ -90,7 +90,7 @@ export const events = {
       kind: "stock",
       title: `${item.name} ${dueText(days).replace("vence", "vence")}`,
       body: `Validade de ${item.quantity} ${item.unit} · use primeiro`,
-      href: "/gestao?aba=estoque",
+      href: "/estoque",
       ruleKey: `expiring:${item.id}:${item.expiry}`,
     }),
   stockExpired: (item: StockRec) =>
@@ -98,7 +98,7 @@ export const events = {
       kind: "stock",
       title: `${item.name} está vencido`,
       body: `${item.quantity} ${item.unit} não devem ser usados`,
-      href: "/gestao?aba=estoque",
+      href: "/estoque",
       ruleKey: `expired:${item.id}:${item.expiry}`,
     }),
   billDue: (bill: BillRec, days: number, today: string) =>
@@ -106,7 +106,7 @@ export const events = {
       kind: "bill",
       title: `${bill.name} ${dueText(days)}`,
       body: `${brl(bill.value)} · ${bill.recurrence.toLowerCase()}`,
-      href: "/gestao?aba=contas",
+      href: "/financeiro?aba=contas",
       ruleKey: `bill:${bill.id}:${today}`,
     }),
   billLate: (bill: BillRec, daysLate: number, today: string) =>
@@ -114,7 +114,7 @@ export const events = {
       kind: "bill",
       title: `${bill.name} está atrasada`,
       body: `${brl(bill.value)} · venceu há ${daysLate} ${daysLate === 1 ? "dia" : "dias"}`,
-      href: "/gestao?aba=contas",
+      href: "/financeiro?aba=contas",
       ruleKey: `bill-late:${bill.id}:${today}`,
     }),
   receivableDue: (entry: LedgerEntry, days: number, today: string) =>
@@ -122,7 +122,7 @@ export const events = {
       kind: "bill",
       title: `Cobrança de ${first(entry.label)} ${dueText(days)}`,
       body: `${brl(entry.value)} · ${entry.origin}`,
-      href: "/gestao?aba=receber",
+      href: "/financeiro?aba=receber",
       ruleKey: `recv:${entry.id}:${today}`,
     }),
   unconfirmed: (a: AppointmentRec, today: string) =>
@@ -154,7 +154,7 @@ export const events = {
       kind: "stock",
       title: "Produtos pesaram no atendimento",
       body: `${first(clientName)} · ${procedure}: ${Math.round(costShare * 100)}% do valor foi custo de produto`,
-      href: "/gestao",
+      href: "/financeiro",
       ruleKey: `margin:${sessionId}`,
     }),
 

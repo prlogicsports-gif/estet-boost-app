@@ -177,7 +177,7 @@ function HojePage() {
             title={`${lowStock[0].name} acabando`}
             description={`${lowStock[0].quantity} ${lowStock[0].unit} · mínimo ${lowStock[0].min}`}
             actionLabel="Ver estoque"
-            onAction={() => navigate({ to: "/gestao" })}
+            onAction={() => navigate({ to: "/estoque" })}
           />
         ) : null}
         {money && nextBill ? (
@@ -193,7 +193,7 @@ function HojePage() {
             }
             description={brl(nextBill.value)}
             actionLabel="Ver contas"
-            onAction={() => navigate({ to: "/gestao" })}
+            onAction={() => navigate({ to: "/financeiro", search: { aba: "contas" } })}
           />
         ) : null}
         {cold ? (

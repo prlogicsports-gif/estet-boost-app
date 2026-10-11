@@ -128,8 +128,7 @@ function DashboardPage() {
       icon: "PackageMinus",
       text: "Estoque baixo ou vencendo",
       value: String(lowStock + expiring),
-      to: "/gestao",
-      search: { aba: "estoque" },
+      to: "/estoque",
     },
     {
       icon: "Receipt",
@@ -137,14 +136,14 @@ function DashboardPage() {
       value: dueBills.length
         ? `${dueBills.length} · ${brl(dueBills.reduce((t, b) => t + b.value, 0))}`
         : "0",
-      to: "/gestao",
+      to: "/financeiro",
       search: { aba: "contas" },
     },
     {
       icon: "Hourglass",
       text: "A receber das clientes",
       value: brl(receivable),
-      to: "/gestao",
+      to: "/financeiro",
       search: { aba: "receber" },
     },
     {

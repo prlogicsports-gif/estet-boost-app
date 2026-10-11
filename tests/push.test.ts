@@ -108,7 +108,7 @@ beforeEach(() => {
         kind: "payment",
         title: "Maria informou um pagamento",
         body: "R$ 180 · Pix",
-        href: "/gestao?aba=receber",
+        href: "/financeiro?aba=receber",
       },
     ],
     profiles: [{ role: "gestor" }],
@@ -125,7 +125,7 @@ describe("send-push", () => {
     expect(sends[0]!.body["data"]).toEqual({
       title: "Financeiro · Maria informou um pagamento",
       body: "R$ 180 · Pix",
-      href: "/gestao?aba=receber",
+      href: "/financeiro?aba=receber",
       tag: NID,
       unread: "1",
     });

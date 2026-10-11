@@ -4,7 +4,7 @@ export const PERMISSION_INFO: Record<PermissionKey, { label: string; hint: strin
   clientes: { label: "Clientes", hint: "Ver e cadastrar clientes, fichas, anamnese e fotos" },
   agenda: { label: "Agenda", hint: "Ver e organizar horários, aprovar pedidos das clientes" },
   atendimentos: { label: "Atendimentos", hint: "Realizar e finalizar atendimentos" },
-  estoque: { label: "Estoque", hint: "Ver e atualizar produtos (sem ver custo)" },
+  estoque: { label: "Produtos e estoque", hint: "Ver e atualizar produtos (sem ver custo)" },
   financeiro: { label: "Financeiro", hint: "Caixa, contas, valores recebidos e custos" },
   historico: { label: "Histórico de eventos", hint: "Ver o que as clientes e a equipe fizeram" },
 };
@@ -42,11 +42,14 @@ export function requiredFor(pathname: string): PermissionKey[] | "gestor" {
   if (pathname.startsWith("/atendimentos")) return ["agenda", "atendimentos"];
   if (pathname.startsWith("/atendimento")) return ["atendimentos"];
   if (pathname.startsWith("/clientes")) return ["clientes"];
-  if (pathname.startsWith("/gestao")) return ["financeiro", "estoque", "historico"];
+  if (pathname.startsWith("/financeiro")) return ["financeiro"];
+  if (pathname.startsWith("/estoque")) return ["estoque"];
+  if (pathname.startsWith("/historico")) return ["historico"];
   if (
     pathname.startsWith("/credenciais") ||
     pathname.startsWith("/catalogo") ||
-    pathname.startsWith("/dashboard")
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/fidelidade")
   )
     return "gestor";
   return [];
