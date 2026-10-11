@@ -6,11 +6,15 @@ import { Input } from "@/components/eb/input";
 import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { Button } from "@/components/ui/button";
 import { proceduresDb, sessionsDb } from "@/data/db";
+import type { ProcedureRec } from "@/lib/models";
+import { usableProcedures } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { brl } from "@/lib/view";
 import {
   cancelSession,
   discardIfEmpty,
+  productsOfProcedure,
   startSession,
   updateSession,
 } from "@/services/sessions.service";
@@ -31,7 +35,9 @@ export function NewSessionStart({
   onCancel: () => void;
 }) {
   const clients = useClinicClients();
-  const procedures = proceduresDb.use();
+  const me = useSession();
+  const procedures = usableProcedures(me, proceduresDb.use());
+  const isGestor = me?.role === "gestor";
   const drafts = sessionsDb.use().filter((item) => item.status === "draft");
   const [query, setQuery] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -47,9 +53,12 @@ export function NewSessionStart({
     setDraftId(startSession({ clientId })?.id ?? null);
   };
 
-  const pickProcedure = (name: string, price: number) => {
+  const pickProcedure = (item: ProcedureRec) => {
     if (!draftId) return;
-    updateSession(draftId, { procedures: [{ name, price }] });
+    updateSession(draftId, {
+      procedures: [{ name: item.name, price: item.price }],
+      products: productsOfProcedure(item),
+    });
   };
 
   const cancel = () => {
@@ -152,7 +161,7 @@ export function NewSessionStart({
               key={item.id}
               type="button"
               disabled={!draft}
-              onClick={() => pickProcedure(item.name, item.price)}
+              onClick={() => pickProcedure(item)}
               aria-pressed={on}
               className={cn(
                 "min-h-11 rounded-full border px-3.5 text-[13.5px] disabled:opacity-50",
@@ -165,20 +174,22 @@ export function NewSessionStart({
             </button>
           );
         })}
-        <button
-          type="button"
-          disabled={!draft}
-          onClick={() => setCreating(true)}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13.5px] text-[var(--text-secondary)] disabled:opacity-50"
-        >
-          <Icon name="Plus" size={15} /> Criar procedimento
-        </button>
+        {isGestor ? (
+          <button
+            type="button"
+            disabled={!draft}
+            onClick={() => setCreating(true)}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13.5px] text-[var(--text-secondary)] disabled:opacity-50"
+          >
+            <Icon name="Plus" size={15} /> Criar procedimento
+          </button>
+        ) : null}
       </div>
       {creating ? (
         <NewProcedureForm
           onCancel={() => setCreating(false)}
           onCreate={(rec) => {
-            pickProcedure(rec.name, rec.price);
+            pickProcedure(rec);
             setCreating(false);
           }}
         />

@@ -6,6 +6,8 @@ import { Input } from "@/components/eb/input";
 import { Drawer } from "@/components/eb/overlays";
 import { StatusBadge } from "@/components/eb/status-badge";
 import { PermissionsEditor } from "@/components/team/permissions-editor";
+import { ProcedurePicker } from "@/components/team/procedure-picker";
+import { proceduresDb } from "@/data/db";
 import { Button } from "@/components/ui/button";
 import { PERMISSION_KEYS, type Permissions } from "@/lib/auth.types";
 import { DEFAULT_STAFF_PERMISSIONS, PERMISSION_INFO } from "@/lib/permissions";
@@ -17,8 +19,10 @@ import {
   listInvites,
   listStaff,
   revokeInvite,
+  setInviteProcedures,
   setStaffActive,
   setStaffPermissions,
+  setStaffProcedures,
   type StaffRow,
 } from "@/services/team.service";
 
@@ -45,6 +49,7 @@ export function TeamPanel({ onToast }: { onToast: (text: string) => void }) {
   const invites = useRemote(listInvites);
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<StaffRow | null>(null);
+  const catalogNames = new Map(proceduresDb.use().map((item) => [item.id, item.name]));
 
   const pending = (invites.data ?? []).filter(
     (item) => item.role === "funcionario" && inviteState(item) === "pendente",
@@ -88,6 +93,15 @@ export function TeamPanel({ onToast }: { onToast: (text: string) => void }) {
               {!PERMISSION_KEYS.some((key) => perms[key]) ? (
                 <span className="text-xs text-muted-foreground">Sem acesso a nada</span>
               ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Procedimentos:{" "}
+              {member.procedure_ids?.length
+                ? member.procedure_ids
+                    .map((id) => catalogNames.get(id))
+                    .filter(Boolean)
+                    .join(", ") || `${member.procedure_ids.length} marcados`
+                : "todos"}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -182,6 +196,7 @@ function InviteDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [perms, setPerms] = useState<Permissions>(DEFAULT_STAFF_PERMISSIONS);
+  const [procIds, setProcIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ code: string; link: string; email: string } | null>(
@@ -193,6 +208,7 @@ function InviteDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     setName("");
     setEmail("");
     setPerms(DEFAULT_STAFF_PERMISSIONS);
+    setProcIds([]);
     setError(null);
     setCreated(null);
     setCopied(false);
@@ -206,6 +222,7 @@ function InviteDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     setBusy(false);
     if (!result.ok) return setError(result.message);
     const code = result.code ?? "";
+    if (procIds.length) await setInviteProcedures(code, procIds);
     const link = `${window.location.origin}/?equipe=${encodeURIComponent(code)}&nome=${encodeURIComponent(clinic?.name ?? "")}`;
     setCreated({ code, link, email: email.trim().toLowerCase() });
   };
@@ -297,6 +314,8 @@ function InviteDrawer({ open, onClose }: { open: boolean; onClose: () => void })
           />
           <span className={label}>O que ela pode acessar</span>
           <PermissionsEditor value={perms} onChange={setPerms} />
+          <span className={label}>Procedimentos que ela realiza</span>
+          <ProcedurePicker value={procIds} onChange={setProcIds} />
         </div>
       )}
     </Drawer>
@@ -313,11 +332,13 @@ function PermissionsDrawer({
   onSaved: () => void;
 }) {
   const [perms, setPerms] = useState<Permissions>(DEFAULT_STAFF_PERMISSIONS);
+  const [procIds, setProcIds] = useState<string[]>([]);
   const [seen, setSeen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (member && seen !== member.id) {
     setSeen(member.id);
     setPerms(toPerms(member.permissions));
+    setProcIds(member.procedure_ids ?? []);
   }
   if (!member && seen) setSeen(null);
 
@@ -325,7 +346,7 @@ function PermissionsDrawer({
     <Drawer
       open={Boolean(member)}
       onClose={onClose}
-      title="Permissões"
+      title="Permissões e procedimentos"
       subtitle={member ? `${member.name} · vale na hora` : ""}
       width={520}
       footer={
@@ -340,8 +361,10 @@ function PermissionsDrawer({
             onClick={async () => {
               if (!member) return;
               const result = await setStaffPermissions(member.id, perms);
-              if (result.ok) onSaved();
-              else setError(result.message);
+              if (!result.ok) return setError(result.message);
+              const procs = await setStaffProcedures(member.id, procIds);
+              if (procs.ok) onSaved();
+              else setError(procs.message);
             }}
           >
             <Icon name="Check" size={18} /> Salvar permissões
@@ -350,6 +373,10 @@ function PermissionsDrawer({
       }
     >
       <PermissionsEditor value={perms} onChange={setPerms} />
+      <span className={`${label} mt-5 block`}>Procedimentos que ela realiza</span>
+      <div className="mt-2">
+        <ProcedurePicker value={procIds} onChange={setProcIds} />
+      </div>
       {error ? <p className="mt-3 text-[13px] text-[var(--eb-coral-500)]">{error}</p> : null}
     </Drawer>
   );

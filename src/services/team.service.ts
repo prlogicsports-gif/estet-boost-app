@@ -7,6 +7,8 @@ export type StaffRow = {
   email: string | null;
   active: boolean;
   permissions: Partial<Permissions> | null;
+  /** Procedimentos habilitados; vazio ou ausente = todos. */
+  procedure_ids?: string[] | null;
   created_at: string;
 };
 export type InviteRow = {
@@ -55,7 +57,7 @@ async function call(name: string, args: Record<string, unknown>) {
 export async function listStaff(): Promise<StaffRow[]> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, email, active, permissions, created_at")
+    .select("*")
     .eq("role", "funcionario")
     .order("created_at");
   if (error) throw error;
@@ -72,6 +74,10 @@ export const createClientInvite = (name: string, phone: string) =>
   call("create_invite", { p_name: name, p_phone: phone });
 export const createStaffInvite = (name: string, email: string, permissions: Permissions) =>
   call("create_staff_invite", { p_name: name, p_email: email, p_permissions: permissions });
+export const setStaffProcedures = (id: string, ids: string[]) =>
+  call("set_staff_procedures", { p_staff_id: id, p_ids: ids });
+export const setInviteProcedures = (code: string, ids: string[]) =>
+  call("set_invite_procedures", { p_code: code, p_ids: ids });
 export const revokeInvite = (id: string) => call("revoke_invite", { p_id: id });
 export const setStaffActive = (id: string, active: boolean) =>
   call("set_staff_active", { p_staff_id: id, p_active: active });

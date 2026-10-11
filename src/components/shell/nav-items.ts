@@ -1,5 +1,6 @@
 import {
   Bell,
+  BookOpen,
   CalendarDays,
   House,
   KeyRound,
@@ -47,6 +48,7 @@ export const gestorNav: NavConfig = {
   ],
   secondary: [
     { to: "/notificacoes", label: "Notificações", icon: Bell },
+    { to: "/catalogo", label: "Catálogo", icon: BookOpen, adminOnly: true },
     { to: "/credenciais", label: "Credenciais", icon: KeyRound, adminOnly: true },
     { to: "/configuracoes", label: "Configurações", icon: Settings },
   ],

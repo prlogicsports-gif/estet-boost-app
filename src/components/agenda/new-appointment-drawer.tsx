@@ -10,7 +10,7 @@ import { unavailableReason } from "@/lib/availability";
 import { formatWeekday } from "@/lib/dates";
 import { scheduleAppointment } from "@/services/appointments.service";
 import type { AppointmentRec, ProcedureRec } from "@/lib/models";
-import { can } from "@/lib/permissions";
+import { can, usableProcedures } from "@/lib/permissions";
 import { useSession } from "@/lib/session";
 import { useClinicAppointments, useClinicClients } from "@/lib/use-clinic";
 
@@ -62,8 +62,9 @@ export function NewAppointmentDrawer({
 }) {
   const clients = useClinicClients();
   const appointments = useClinicAppointments();
-  const procedures = proceduresDb.use();
-  const money = can(useSession(), "financeiro");
+  const session = useSession();
+  const procedures = usableProcedures(session, proceduresDb.use());
+  const money = can(session, "financeiro");
   const hours = hoursDb.use();
   const blocks = blocksDb.use();
   const preset = clients.find((client) => client.id === clientId);

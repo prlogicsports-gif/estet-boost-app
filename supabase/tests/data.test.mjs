@@ -550,5 +550,83 @@ check(
     )[0].terms_version === "v1",
 );
 
+// procedimentos habilitados por pessoa da equipe e produtos do procedimento
+const procA = (
+  await db.query(
+    "insert into public.procedures (clinic_id, name, price) values ($1,'Peeling',250) returning id",
+    [cid],
+  )
+).rows[0].id;
+const otherClinic = R(
+  await rpc(
+    db,
+    await addUser(db, "outra@x.com"),
+    "select public.create_clinic('Outra','1','Outro','SP','','autonoma') r",
+  ),
+);
+const procOther = (
+  await db.query(
+    "insert into public.procedures (clinic_id, name, price) values ($1,'Alheio',1) returning id",
+    [otherClinic.clinic_id],
+  )
+).rows[0].id;
+const procLimpeza = (
+  await q(db, "select id from public.procedures where clinic_id=$1 and name='Limpeza'", [cid])
+)[0].id;
+check(
+  "procedimento guarda os produtos usados",
+  (
+    await db.query(
+      "update public.procedures set products = $2::jsonb where id=$1 returning products",
+      [procA, JSON.stringify([{ stockId, qty: 2 }])],
+    )
+  ).rows[0].products[0].qty === 2,
+);
+check(
+  "gestora define os procedimentos da funcionária; id de outra clínica é descartado",
+  await (async () => {
+    const r = R(
+      await rpc(db, g, "select public.set_staff_procedures($1,$2::uuid[]) r", [
+        s,
+        [procA, procOther],
+      ]),
+    );
+    const ids = (await q(db, "select procedure_ids from public.profiles where id=$1", [s]))[0]
+      .procedure_ids;
+    return r.ok === true && ids.length === 1 && ids[0] === procA;
+  })(),
+);
+check(
+  "funcionária e cliente não alteram procedimentos de ninguém",
+  R(await rpc(db, s, "select public.set_staff_procedures($1,$2::uuid[]) r", [s, [procLimpeza]]))
+    .reason === "sem_permissao" &&
+    R(await rpc(db, c, "select public.set_staff_procedures($1,$2::uuid[]) r", [s, []])).reason ===
+      "sem_permissao",
+);
+check(
+  "lista vazia volta a valer 'todos'",
+  R(await rpc(db, g, "select public.set_staff_procedures($1,$2::uuid[]) r", [s, []])).ok === true &&
+    (await q(db, "select procedure_ids from public.profiles where id=$1", [s]))[0].procedure_ids
+      .length === 0,
+);
+const si2 = R(
+  await rpc(db, g, "select public.create_staff_invite('Nova','nova@x.com',$1::jsonb) r", [
+    JSON.stringify({ agenda: true }),
+  ]),
+);
+check(
+  "convite guarda os procedimentos e a funcionária já entra com eles",
+  R(await rpc(db, g, "select public.set_invite_procedures($1,$2::uuid[]) r", [si2.code, [procA]]))
+    .ok === true &&
+    (await (async () => {
+      const novaId = await addUser(db, "nova@x.com");
+      await rpc(db, novaId, "select public.accept_staff_invite($1,'Nova') r", [si2.code]);
+      const ids = (
+        await q(db, "select procedure_ids from public.profiles where id=$1", [novaId])
+      )[0].procedure_ids;
+      return ids.length === 1 && ids[0] === procA;
+    })()),
+);
+
 console.log(`\n${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

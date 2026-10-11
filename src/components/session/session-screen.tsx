@@ -18,7 +18,8 @@ import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { SessionPhotoSlot } from "@/components/session/session-photo-slot";
 import { Button } from "@/components/ui/button";
 import { clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
-import { can } from "@/lib/permissions";
+import { ProductDrawer } from "@/components/eb/product-drawer";
+import { can, usableProcedures } from "@/lib/permissions";
 import { photoUrl } from "@/lib/photo-store";
 import { useSession } from "@/lib/session";
 import type { SessionRec } from "@/lib/models";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 import {
   completeSession,
   MARGIN_ALERT,
+  mergeProducts,
   sessionTotals,
   updateSession,
 } from "@/services/sessions.service";
@@ -57,13 +59,16 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
   const setNote = (key: string, value: string) => set({ notes: { ...s.notes, [key]: value } });
   const client = clientsDb.use().find((item) => item.id === s.clientId);
   const stock = stockDb.use();
-  const catalog = proceduresDb.use();
+  const allProcedures = proceduresDb.use();
   const [closing, setClosing] = useState(false);
   const [done, setDone] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [queued, setQueued] = useState(false);
   const [saving, setSaving] = useState(false);
   const me = useSession();
+  const catalog = usableProcedures(me, allProcedures);
+  const isGestor = me?.role === "gestor";
+  const [addingProduct, setAddingProduct] = useState(false);
   const fin = can(me, "financeiro");
   const [summary, setSummary] = useState<WrapUpResult | null>(null);
   const [creating, setCreating] = useState(false);
@@ -87,7 +92,13 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
   }, [s.beforePhotoId, s.afterPhotoId]);
 
   const addProcedure = (name: string, price: number) =>
-    set({ procedures: [...s.procedures, { name, price }] });
+    set({
+      procedures: [...s.procedures, { name, price }],
+      products: mergeProducts(
+        s.products,
+        allProcedures.find((item) => item.name === name),
+      ),
+    });
   const setProcedurePrice = (index: number, price: number) =>
     set({ procedures: s.procedures.map((item, i) => (i === index ? { ...item, price } : item)) });
   const removeProcedure = (index: number) =>
@@ -346,13 +357,15 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
                       + {item.name} · {money(item.price)}
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setCreating(true)}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13.5px] text-[var(--text-secondary)]"
-                  >
-                    <Icon name="Plus" size={15} /> Criar procedimento
-                  </button>
+                  {isGestor ? (
+                    <button
+                      type="button"
+                      onClick={() => setCreating(true)}
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-dashed border-[var(--border-hairline)] px-3.5 text-[13.5px] text-[var(--text-secondary)]"
+                    >
+                      <Icon name="Plus" size={15} /> Criar procedimento
+                    </button>
+                  ) : null}
                 </div>
                 {creating ? (
                   <NewProcedureForm
@@ -378,7 +391,25 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           {step === 5 ? (
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
               <div className="flex flex-col gap-2.5">
-                <span className={label}>Produtos usados</span>
+                <div className="flex items-center gap-2">
+                  <span className={`${label} flex-1`}>Produtos usados</span>
+                  {can(me, "estoque") ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setAddingProduct(true)}
+                    >
+                      <Icon name="Plus" size={15} /> Adicionar produto
+                    </Button>
+                  ) : null}
+                </div>
+                {stock.length === 0 ? (
+                  <p className="text-[13px] text-muted-foreground">
+                    Nenhum produto no estoque ainda.
+                    {can(me, "estoque") ? " Use “Adicionar produto”." : ""}
+                  </p>
+                ) : null}
                 {stock.map((item) => {
                   const qty = qtyOf(item.id);
                   const days = daysToExpire(item);
@@ -612,6 +643,21 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
           </div>
         </div>
       </div>
+      <ProductDrawer
+        open={addingProduct}
+        item={null}
+        mode="novo"
+        onClose={() => setAddingProduct(false)}
+        onCreated={(item) =>
+          set({
+            products: [
+              ...s.products.filter((entry) => entry.stockId !== item.id),
+              { stockId: item.id, name: item.name, qty: 1, unitCost: item.cost },
+            ],
+          })
+        }
+        onSaved={() => setAddingProduct(false)}
+      />
     </div>
   );
 }

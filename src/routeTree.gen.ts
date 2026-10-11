@@ -14,6 +14,7 @@ import { Route as GestorRouteImport } from './routes/_gestor'
 import { Route as ClienteRouteImport } from './routes/cliente'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as GestorAgendaRouteImport } from './routes/_gestor/agenda'
+import { Route as GestorCatalogoRouteImport } from './routes/_gestor/catalogo'
 import { Route as GestorConfiguracoesRouteImport } from './routes/_gestor/configuracoes'
 import { Route as GestorCredenciaisRouteImport } from './routes/_gestor/credenciais'
 import { Route as GestorGestaoRouteImport } from './routes/_gestor/gestao'
@@ -51,6 +52,11 @@ const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
 const GestorAgendaRoute = GestorAgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => GestorRoute,
+} as any)
+const GestorCatalogoRoute = GestorCatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
   getParentRoute: () => GestorRoute,
 } as any)
 const GestorConfiguracoesRoute = GestorConfiguracoesRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/cliente': typeof ClienteRouteWithChildren
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/agenda': typeof GestorAgendaRoute
+  '/catalogo': typeof GestorCatalogoRoute
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
   '/gestao': typeof GestorGestaoRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/agenda': typeof GestorAgendaRoute
+  '/catalogo': typeof GestorCatalogoRoute
   '/configuracoes': typeof GestorConfiguracoesRoute
   '/credenciais': typeof GestorCredenciaisRoute
   '/gestao': typeof GestorGestaoRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/cliente': typeof ClienteRouteWithChildren
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/_gestor/agenda': typeof GestorAgendaRoute
+  '/_gestor/catalogo': typeof GestorCatalogoRoute
   '/_gestor/configuracoes': typeof GestorConfiguracoesRoute
   '/_gestor/credenciais': typeof GestorCredenciaisRoute
   '/_gestor/gestao': typeof GestorGestaoRoute
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
     | '/cliente'
     | '/redefinir-senha'
     | '/agenda'
+    | '/catalogo'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/'
     | '/redefinir-senha'
     | '/agenda'
+    | '/catalogo'
     | '/configuracoes'
     | '/credenciais'
     | '/gestao'
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | '/cliente'
     | '/redefinir-senha'
     | '/_gestor/agenda'
+    | '/_gestor/catalogo'
     | '/_gestor/configuracoes'
     | '/_gestor/credenciais'
     | '/_gestor/gestao'
@@ -293,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof GestorAgendaRouteImport
+      parentRoute: typeof GestorRoute
+    }
+    '/_gestor/catalogo': {
+      id: '/_gestor/catalogo'
+      path: '/catalogo'
+      fullPath: '/catalogo'
+      preLoaderRoute: typeof GestorCatalogoRouteImport
       parentRoute: typeof GestorRoute
     }
     '/_gestor/configuracoes': {
@@ -398,6 +417,7 @@ declare module '@tanstack/react-router' {
 
 interface GestorRouteChildren {
   GestorAgendaRoute: typeof GestorAgendaRoute
+  GestorCatalogoRoute: typeof GestorCatalogoRoute
   GestorConfiguracoesRoute: typeof GestorConfiguracoesRoute
   GestorCredenciaisRoute: typeof GestorCredenciaisRoute
   GestorGestaoRoute: typeof GestorGestaoRoute
@@ -410,6 +430,7 @@ interface GestorRouteChildren {
 
 const GestorRouteChildren: GestorRouteChildren = {
   GestorAgendaRoute: GestorAgendaRoute,
+  GestorCatalogoRoute: GestorCatalogoRoute,
   GestorConfiguracoesRoute: GestorConfiguracoesRoute,
   GestorCredenciaisRoute: GestorCredenciaisRoute,
   GestorGestaoRoute: GestorGestaoRoute,

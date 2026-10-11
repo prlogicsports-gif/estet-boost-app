@@ -42,6 +42,7 @@ type ProfileRow = {
   active: boolean;
   permissions: Partial<Record<string, boolean>> | null;
   terms_accepted_at?: string | null;
+  procedure_ids?: string[] | null;
 };
 
 // Última identidade conhecida: deixa o app abrir sem internet (a sessão do Supabase continua guardada no aparelho).
@@ -76,9 +77,7 @@ async function load(uid: string, email: string) {
       // O cliente do Supabase repete a consulta por ~7 s quando a rede cai; aqui espera no máximo 3 s se já conhecemos a pessoa.
       const query = supabase
         .from("profiles")
-        .select(
-          "id, clinic_id, role, client_id, name, email, active, permissions, terms_accepted_at",
-        )
+        .select("*") // "*": segue funcionando antes de a migração dos procedimentos por pessoa rodar
         .eq("id", uid)
         .maybeSingle();
       const result = known
@@ -145,6 +144,9 @@ async function load(uid: string, email: string) {
     ...(row.client_id ? { clientId: row.client_id } : {}),
     permissions,
     ...(row.role === "cliente" && !row.terms_accepted_at ? { termsPending: true } : {}),
+    ...(row.role === "funcionario" && row.procedure_ids?.length
+      ? { procedureIds: row.procedure_ids }
+      : {}),
   };
   writeIdentity(session);
   set({ status: "in", session });

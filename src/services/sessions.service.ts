@@ -1,6 +1,6 @@
 import { appointmentsDb, clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
 import { addDays, todayISO } from "@/lib/dates";
-import type { ProcedureRec, SessionRec } from "@/lib/models";
+import type { ProcedureRec, SessionProduct, SessionRec } from "@/lib/models";
 import { reloadAll, runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
 
@@ -14,6 +14,36 @@ export const sessionTotals = (session: Pick<SessionRec, "procedures" | "products
   const cost = session.products.reduce((sum, item) => sum + item.qty * item.unitCost, 0);
   return { price, cost, profit: price - cost, share: price > 0 ? cost / price : 0 };
 };
+
+/** Produtos do procedimento com nome e custo do estoque (itens que não existem mais são ignorados). */
+export function productsFrom(
+  stock: { id: string; name: string; cost: number }[],
+  procedure: Pick<ProcedureRec, "products"> | undefined,
+): SessionProduct[] {
+  return (procedure?.products ?? []).flatMap(({ stockId, qty }) => {
+    const item = stock.find((entry) => entry.id === stockId);
+    return item && qty > 0 ? [{ stockId, name: item.name, qty, unitCost: item.cost }] : [];
+  });
+}
+
+/** Soma `extra` aos produtos já marcados, sem duplicar (a quantidade já marcada vale). */
+export function mergeProductLists(
+  current: SessionProduct[],
+  extra: SessionProduct[],
+): SessionProduct[] {
+  const add = extra.filter((item) => !current.some((entry) => entry.stockId === item.stockId));
+  return add.length ? [...current, ...add] : current;
+}
+
+/** Produtos que o procedimento costuma usar, já com nome e custo do estoque. */
+export const productsOfProcedure = (procedure: ProcedureRec | undefined): SessionProduct[] =>
+  productsFrom(stockDb.get(), procedure);
+
+/** Soma os produtos do procedimento aos já marcados no atendimento. */
+export const mergeProducts = (
+  current: SessionProduct[],
+  procedure: ProcedureRec | undefined,
+): SessionProduct[] => mergeProductLists(current, productsOfProcedure(procedure));
 
 /** Cadastra um procedimento no catálogo (também usado na hora, dentro do atendimento). */
 export function saveProcedure(input: Omit<ProcedureRec, "id"> & { id?: string }): ProcedureRec {
@@ -72,7 +102,7 @@ export function startSession(input: {
     procedure: name,
     step: 0,
     procedures: name ? [{ name, price: appt?.price || known?.price || 0 }] : [],
-    products: [],
+    products: productsOfProcedure(known),
     notes: {},
     payment: appt?.payment && appt.payment !== "A definir" ? appt.payment : "Pix",
     paidNow: true,

@@ -1,6 +1,6 @@
 import { BlockTimeDrawer } from "@/components/agenda/block-time-drawer";
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { QuestionsDrawer } from "@/components/clients/questions-drawer";
 import { ClientInvite } from "@/components/eb/client-invite";
@@ -12,9 +12,8 @@ import { Drawer } from "@/components/eb/overlays";
 import { TopBar } from "@/components/eb/top-bar";
 import { NotificationPrefsEditor } from "@/components/eb/notifications-panel";
 import { ToastHost } from "@/components/eb/toast";
-import { NewProcedureForm } from "@/components/session/new-procedure-form";
 import { Button } from "@/components/ui/button";
-import { blocksDb, hoursDb, proceduresDb, settingsDb } from "@/data/db";
+import { blocksDb, hoursDb, settingsDb } from "@/data/db";
 import { formatShort, todayISO } from "@/lib/dates";
 import { sessionStore, useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
@@ -22,7 +21,6 @@ import { refreshClinic, useClinic } from "@/lib/use-clinic";
 import { usePro } from "@/lib/use-pro";
 import { useSignOut } from "@/lib/use-sign-out";
 import { TeamPanel } from "@/components/team/team-panel";
-import { removeProcedure, saveProcedure } from "@/services/sessions.service";
 import { brl } from "@/lib/view";
 
 export const Route = createFileRoute("/_gestor/configuracoes")({
@@ -63,7 +61,12 @@ const ITEMS: [Sheet & string, string, string, string][] = [
   ["link", "Link", "Link e credenciais de cadastro", "Como as clientes se filiam à sua clínica"],
   ["horarios", "Clock", "Horários de atendimento", "Dias e horários livres na agenda"],
   ["bloqueios", "CalendarX", "Bloqueios de agenda", "Folgas, férias e compromissos"],
-  ["procedimentos", "Sparkles", "Procedimentos e valores", "Duração, preço e retorno sugerido"],
+  [
+    "procedimentos",
+    "BookOpen",
+    "Catálogo de procedimentos",
+    "Valores, duração, retorno e produtos usados",
+  ],
   ["anamnese", "FileText", "Modelos de anamnese", "Perguntas de cada etapa"],
   [
     "consentimento",
@@ -89,6 +92,7 @@ function ConfiguracoesPage() {
   const { clinic } = useClinic();
   const signOut = useSignOut();
   const isGestor = session?.role === "gestor";
+  const navigate = useNavigate();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -132,7 +136,12 @@ function ConfiguracoesPage() {
       <span className={`${heading} mt-2`}>{isGestor ? "Estúdio" : "Conta"}</span>
       <div className="flex flex-col gap-2">
         {(isGestor ? ITEMS : []).map(([id, icon, title, detail]) => (
-          <button key={id} type="button" className={row} onClick={() => setSheet(id)}>
+          <button
+            key={id}
+            type="button"
+            className={row}
+            onClick={() => (id === "procedimentos" ? navigate({ to: "/catalogo" }) : setSheet(id))}
+          >
             <Icon name={icon} size={18} color="var(--eb-nude-300)" />
             <span className="min-w-0 flex-1">
               <span className="block text-[14.5px]">{title}</span>
@@ -163,7 +172,6 @@ function ConfiguracoesPage() {
       </Drawer>
       <HoursDrawer open={sheet === "horarios"} onClose={close} />
       <BlockTimeDrawer open={sheet === "bloqueios"} onClose={close} />
-      <ProceduresDrawer open={sheet === "procedimentos"} onClose={close} />
       <QuestionsDrawer open={sheet === "anamnese"} onClose={close} />
       <ConsentDrawer open={sheet === "consentimento"} onClose={close} />
       <ToastHost toast={toast ? { message: toast } : null} />
@@ -382,97 +390,6 @@ function HoursDrawer({ open, onClose }: { open: boolean; onClose: (message?: str
             setHours((c) => ({ ...c, slot: Math.max(10, Number(event.target.value) || 30) }))
           }
         />
-      </div>
-    </Drawer>
-  );
-}
-
-function ProceduresDrawer({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: (message?: string) => void;
-}) {
-  const list = proceduresDb.use();
-  const [adding, setAdding] = useState(false);
-  return (
-    <Drawer
-      open={open}
-      onClose={() => onClose()}
-      title="Procedimentos e valores"
-      subtitle="Usados na agenda, no atendimento e no cálculo de resultado"
-      width={520}
-    >
-      <div className="flex flex-col gap-2.5">
-        {list.map((item) => (
-          <div
-            key={item.id}
-            className="flex flex-col gap-2.5 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5"
-          >
-            <div className="flex items-center gap-2">
-              <Input
-                aria-label="Nome"
-                className="flex-1"
-                value={item.name}
-                onChange={(event) => saveProcedure({ ...item, name: event.target.value })}
-              />
-              <IconButton
-                icon="Trash2"
-                label={`Remover ${item.name}`}
-                onClick={() => removeProcedure(item.id)}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              <Input
-                label="Valor"
-                trailing="R$"
-                inputMode="decimal"
-                value={String(item.price)}
-                onChange={(event) =>
-                  saveProcedure({
-                    ...item,
-                    price: Number(event.target.value.replace(",", ".")) || 0,
-                  })
-                }
-              />
-              <Input
-                label="Duração"
-                trailing="min"
-                inputMode="numeric"
-                value={String(item.duration)}
-                onChange={(event) =>
-                  saveProcedure({ ...item, duration: Number(event.target.value) || 0 })
-                }
-              />
-              <Input
-                label="Retorno"
-                trailing="dias"
-                inputMode="numeric"
-                value={String(item.returnDays)}
-                onChange={(event) =>
-                  saveProcedure({ ...item, returnDays: Number(event.target.value) || 0 })
-                }
-              />
-            </div>
-          </div>
-        ))}
-        {adding ? (
-          <NewProcedureForm onCancel={() => setAdding(false)} onCreate={() => setAdding(false)} />
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            className="self-start"
-            onClick={() => setAdding(true)}
-          >
-            <Icon name="Plus" size={16} /> Novo procedimento
-          </Button>
-        )}
-        <p className="text-xs text-muted-foreground">
-          {list.length} procedimentos · ticket médio{" "}
-          {brl(list.length ? list.reduce((sum, item) => sum + item.price, 0) / list.length : 0)}
-        </p>
       </div>
     </Drawer>
   );

@@ -109,6 +109,8 @@ export type ProcedureRec = {
   price: number;
   duration: number;
   returnDays: number;
+  /** Produtos que o procedimento costuma usar: pré-preenchem a etapa de produtos do atendimento. */
+  products?: { stockId: string; qty: number }[] | undefined;
 };
 
 export type AnamnesisRec = {

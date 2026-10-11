@@ -27,6 +27,15 @@ export const can = (session: Session | null | undefined, permission: PermissionK
 export const canAny = (session: Session | null | undefined, ...permissions: PermissionKey[]) =>
   permissions.some((permission) => can(session, permission));
 
+/** Procedimentos que a pessoa pode usar: a gestora todos; a funcionária os habilitados (vazio = todos). */
+export function usableProcedures<T extends { id: string }>(
+  session: Session | null | undefined,
+  list: T[],
+): T[] {
+  const ids = session?.role === "funcionario" ? session.procedureIds : undefined;
+  return ids?.length ? list.filter((item) => ids.includes(item.id)) : list;
+}
+
 /** O que cada página da equipe exige (qualquer uma das permissões listadas). `[]` = qualquer pessoa da equipe. */
 export function requiredFor(pathname: string): PermissionKey[] | "gestor" {
   if (pathname.startsWith("/agenda")) return ["agenda"];
@@ -34,6 +43,6 @@ export function requiredFor(pathname: string): PermissionKey[] | "gestor" {
   if (pathname.startsWith("/atendimento")) return ["atendimentos"];
   if (pathname.startsWith("/clientes")) return ["clientes"];
   if (pathname.startsWith("/gestao")) return ["financeiro", "estoque", "historico"];
-  if (pathname.startsWith("/credenciais")) return "gestor";
+  if (pathname.startsWith("/credenciais") || pathname.startsWith("/catalogo")) return "gestor";
   return [];
 }

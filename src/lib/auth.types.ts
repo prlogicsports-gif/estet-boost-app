@@ -44,6 +44,8 @@ export type Session = {
   permissions: Permissions;
   /** Conta criada pela gestora: ainda falta aceitar os termos no primeiro acesso. */
   termsPending?: boolean | undefined;
+  /** Equipe: procedimentos que a gestora habilitou. Vazio = todos. */
+  procedureIds?: string[] | undefined;
 };
 
 export type AuthResult = { ok: true; needsEmail?: boolean } | { ok: false; message: string };

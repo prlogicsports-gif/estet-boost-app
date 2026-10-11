@@ -7,6 +7,8 @@ import { Select } from "@/components/eb/select";
 import { Button } from "@/components/ui/button";
 import { proceduresDb, type ClientRec } from "@/data/db";
 import { generatePassword } from "@/lib/client-access";
+import { usableProcedures } from "@/lib/permissions";
+import { useSession } from "@/lib/session";
 
 export type ClientFormValues = {
   name: string;
@@ -73,7 +75,8 @@ export function ClientForm({
 }) {
   const [v, setV] = useState(initial);
   const [tried, setTried] = useState(false);
-  const catalog = proceduresDb.use().map((item) => item.name);
+  const session = useSession();
+  const catalog = usableProcedures(session, proceduresDb.use()).map((item) => item.name);
   const set = <K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) =>
     setV((current) => ({ ...current, [key]: value }));
   const error = !v.name.trim() ? "Escreva o nome da cliente." : nameError?.(v.name, v.email);

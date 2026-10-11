@@ -487,6 +487,11 @@ export const proceduresDb = createRemoteStore<ProcedureRec>({
     price: num(r.price),
     duration: r.duration,
     returnDays: r.return_days,
+    products: Array.isArray(r.products)
+      ? (r.products as { stockId: string; qty: number }[]).filter(
+          (item) => item && typeof item.stockId === "string" && Number(item.qty) > 0,
+        )
+      : [],
   }),
   save: (rec, prev, ctx) =>
     write(
@@ -498,6 +503,7 @@ export const proceduresDb = createRemoteStore<ProcedureRec>({
         price: rec.price,
         duration: rec.duration,
         return_days: rec.returnDays,
+        products: rec.products ?? [],
       },
       prev,
     ),

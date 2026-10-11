@@ -90,6 +90,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
             { to: "/gestao" },
             { to: "/notificacoes" },
             { to: "/credenciais" },
+            { to: "/catalogo" },
             { to: "/configuracoes" },
             { to: "/atendimento/novo" },
             { to: "/clientes/$clientId", params: { clientId: "x" } },
