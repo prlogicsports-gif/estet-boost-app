@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "test:db": "bun supabase/tests/rls.test.mjs && bun supabase/tests/data.test.mjs && bun supabase/tests/reminders.test.mjs",
     "db:bundle": "cat supabase/migrations/*.sql > supabase/bundle.sql",
-    "test": "bun run test:db && bun test tests/sync.test.ts && bun test tests/push.test.ts && bun test tests/availability.test.ts && bun test tests/client-account.test.ts"
+    "test": "bun run test:db && bun test tests/sync.test.ts && bun test tests/push.test.ts && bun test tests/availability.test.ts && bun test tests/client-account.test.ts && bun test tests/anamnesis.test.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"

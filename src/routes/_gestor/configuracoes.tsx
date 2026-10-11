@@ -2,6 +2,7 @@ import { BlockTimeDrawer } from "@/components/agenda/block-time-drawer";
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { QuestionsDrawer } from "@/components/clients/questions-drawer";
 import { ClientInvite } from "@/components/eb/client-invite";
 import { InstallCard } from "@/components/eb/install-app";
 import { Icon } from "@/components/eb/icon";
@@ -472,68 +473,6 @@ function ProceduresDrawer({
           {list.length} procedimentos · ticket médio{" "}
           {brl(list.length ? list.reduce((sum, item) => sum + item.price, 0) / list.length : 0)}
         </p>
-      </div>
-    </Drawer>
-  );
-}
-
-function QuestionsDrawer({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: (message?: string) => void;
-}) {
-  const stored = settingsDb.use();
-  const [questions, setQuestions] = useState(stored.questions);
-  useEffect(() => {
-    if (open) setQuestions(settingsDb.get().questions);
-  }, [open]);
-  return (
-    <Drawer
-      open={open}
-      onClose={() => onClose()}
-      title="Modelos de anamnese"
-      subtitle="Estas perguntas aparecem na ficha de cada cliente"
-      footer={footer(
-        () => onClose(),
-        () => (
-          settingsDb.set((c) => ({ ...c, questions: questions.filter((q) => q.label.trim()) })),
-          onClose("Perguntas salvas")
-        ),
-        "Salvar perguntas",
-      )}
-    >
-      <div className="flex flex-col gap-2.5">
-        {questions.map((question, index) => (
-          <div key={question.id} className="flex items-center gap-2">
-            <Input
-              aria-label={`Pergunta ${index + 1}`}
-              className="flex-1"
-              value={question.label}
-              onChange={(event) =>
-                setQuestions((list) =>
-                  list.map((item) =>
-                    item.id === question.id ? { ...item, label: event.target.value } : item,
-                  ),
-                )
-              }
-            />
-            <IconButton
-              icon="Trash2"
-              label="Remover pergunta"
-              onClick={() => setQuestions((list) => list.filter((item) => item.id !== question.id))}
-            />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="secondary"
-          className="self-start"
-          onClick={() => setQuestions((list) => [...list, { id: `q-${Date.now()}`, label: "" }])}
-        >
-          <Icon name="Plus" size={16} /> Nova pergunta
-        </Button>
       </div>
     </Drawer>
   );

@@ -6,6 +6,7 @@ import {
   settingsDb,
   type ClientRec,
 } from "@/data/db";
+import { formatAnswer, normalizeQuestions } from "@/lib/anamnesis";
 import { brl } from "@/lib/view";
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
@@ -39,7 +40,10 @@ export function exportRecord(client: ClientRec) {
     "",
     "ANAMNESE",
     ...(anamnese
-      ? questions.map((question) => `${question.label}: ${anamnese.answers[question.id] || "—"}`)
+      ? normalizeQuestions(questions).map(
+          (question) =>
+            `${question.label}: ${formatAnswer(question, anamnese.answers[question.id])}`,
+        )
       : ["Não preenchida"]),
     "",
     "ATENDIMENTOS",

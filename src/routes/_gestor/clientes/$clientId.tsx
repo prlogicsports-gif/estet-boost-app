@@ -1,3 +1,4 @@
+import { formatAnswer, hasAnswer, normalizeQuestions } from "@/lib/anamnesis";
 import { useClinic } from "@/lib/use-clinic";
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -305,12 +306,12 @@ function ClientePage() {
         <div className="flex flex-col gap-4">
           {anamnese ? (
             <div className={panel}>
-              {questions.map((question) => (
+              {normalizeQuestions(questions).map((question) => (
                 <InfoRow
                   key={question.id}
                   label={question.label}
-                  value={anamnese.answers[question.id] || "—"}
-                  warn={question.id === "alergias" && Boolean(anamnese.answers[question.id])}
+                  value={formatAnswer(question, anamnese.answers[question.id])}
+                  warn={Boolean(question.flag) && hasAnswer(anamnese.answers[question.id])}
                 />
               ))}
               <InfoRow

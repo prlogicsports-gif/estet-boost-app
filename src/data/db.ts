@@ -17,6 +17,7 @@ import type {
   StockRec,
 } from "@/lib/models";
 import { createRemoteDoc, createRemoteStore, type Row, type SyncCtx } from "@/lib/remote-store";
+import { DEFAULT_QUESTIONS, type Question } from "@/lib/anamnesis";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -46,19 +47,8 @@ export const defaultPrefs: NotificationPrefs = {
   whatsapp: false,
 };
 
-/** Perguntas da anamnese: a clínica pode editar o modelo em Configurações. */
-export const DEFAULT_QUESTIONS = [
-  { id: "queixa", label: "Queixa principal" },
-  { id: "objetivo", label: "Objetivo com o tratamento" },
-  { id: "saude", label: "Saúde e doenças crônicas" },
-  { id: "medicamentos", label: "Medicamentos em uso" },
-  { id: "alergias", label: "Alergias" },
-  { id: "rotina", label: "Rotina de cuidados em casa" },
-  { id: "anteriores", label: "Procedimentos anteriores" },
-];
-
 export type Settings = {
-  questions: { id: string; label: string }[];
+  questions: Question[];
   consentText: string;
 };
 

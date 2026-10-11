@@ -113,7 +113,7 @@ export type ProcedureRec = {
 
 export type AnamnesisRec = {
   clientId: string;
-  answers: Record<string, string>;
+  answers: Record<string, string | string[]>;
   consent: boolean;
   updatedAt: string;
 };
