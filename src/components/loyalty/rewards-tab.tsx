@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/eb/icon";
 import { Input } from "@/components/eb/input";
 import { Drawer } from "@/components/eb/overlays";
+import { card, heading } from "@/components/loyalty/styles";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/dates";
 import { useRemote } from "@/lib/use-remote";
@@ -16,11 +17,6 @@ import {
   type AdminReward,
   type RedeemStatus,
 } from "@/services/loyalty.service";
-
-const heading =
-  "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
-const card =
-  "flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-4";
 
 const statusColor: Record<RedeemStatus, string> = {
   pendente: "text-[var(--eb-amber-500)]",

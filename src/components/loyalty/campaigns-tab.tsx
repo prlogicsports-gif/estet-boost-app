@@ -4,6 +4,7 @@ import { Icon } from "@/components/eb/icon";
 import { Input } from "@/components/eb/input";
 import { Drawer } from "@/components/eb/overlays";
 import { Select } from "@/components/eb/select";
+import { card, heading } from "@/components/loyalty/styles";
 import { Button } from "@/components/ui/button";
 import {
   CAMPAIGN_TEMPLATES,
@@ -32,11 +33,6 @@ import {
   type AdminCampaign,
   type CampaignStatus,
 } from "@/services/loyalty.service";
-
-const heading =
-  "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
-const card =
-  "flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-4";
 
 const HREF_LABEL: Record<CampaignHref, string> = {
   "/cliente": "Início do app",

@@ -1,41 +1,63 @@
-# EstetBoost: Cuidado Organizado
+# EstetBoost.
 
-Vou construir a EstetBoost: um app web mobile-first para esteticistas autônomas e pequenos centros de estética. Frase de posicionamento: "Cuidado organizado. Negócio em evolução."
+**Cuidado organizado. Negócio em evolução.**
 
-Anexei dois protótipos HTML funcionais (app da esteticista e app da cliente) e o readme do design system. Eles são a REFERÊNCIA VISUAL E DE FLUXO OBRIGATÓRIA. Não reinvente o visual: recrie fielmente telas, textos, cores, espaçamentos, raios, estados e comportamentos.
+EstetBoost é um aplicativo para esteticistas autônomas e pequenas clínicas de estética. Ele reúne agenda, ficha das clientes, atendimentos, fotos de evolução, produtos, financeiro e um programa de fidelidade em um só lugar, no celular. A cliente tem o próprio acesso para ver horários, confirmar presença, acompanhar a evolução e juntar pontos.
 
-Stack: React + TypeScript + Vite + Tailwind + shadcn/ui (Radix) + lucide-react + framer-motion. Rotas com react-router. Nada de backend ainda: dados mockados locais atrás de uma camada de serviço, prontos para trocar por Supabase depois.
+Funciona como app instalável na tela inicial (PWA), em português do Brasil, inclusive sem internet: o que for feito offline é guardado e enviado quando a conexão volta.
 
-Identidade (não alterar):
-- Nome sempre "EstetBoost." — "Estet" em Geist Light marfim, "Boost" em Geist Medium nude mineral, ponto final teal.
-- Fonte: Geist em tudo; Geist Mono para números (horários, valores, sessões).
-- Paleta como tokens CSS em :root e mapeada no tailwind.config: fundo #241C20, superfície #382B31, nude mineral #C3948E, nude areia #DCC8BA, marfim #F7F2EF, branco quente #FFFDFC, texto escuro #2B2729, teal #4FAFAD, teal claro #DCEFED, âmbar #D8A653, coral #C96D6D, texto secundário #857B7F.
-- Glass SÓ em: login, navegação (dock/sidebar), bottom sheets, modais, popovers, filtros flutuantes e painel do mapa facial. Fundo rgba(247,242,239,.14), borda rgba(255,255,255,.22), blur 20–24px, raio 24–28px.
-- Status nunca só por cor: cor + ícone + palavra (Confirmado teal, Aguardando âmbar, Cancelado coral).
-- Toque mínimo 44px, safe-area iOS/Android, prefers-reduced-motion.
-- Português do Brasil, segunda pessoa, "cliente" (nunca "paciente"), sem emoji.
+## Quem usa
 
-Comece por: tokens + fontes, AppShell (dock glass flutuante no mobile, sidebar glass no desktop com Hoje, Agenda, Clientes, Gestão, Notificações, Credenciais, Configurações; no mobile os três últimos ficam em "Mais"), splash animada (EB. → EstetBoost., ~2,5s) e a tela de login com carrossel de fotos + abas Entrar / Criar conta (cadastro em 2 passos) + cadastro de cliente por convite (?p=<slug> ou ?convite=<código>).
+| Perfil          | O que faz                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Gestora**     | Controla tudo: agenda, clientes, financeiro, estoque, catálogo, equipe, fidelidade e campanhas.                 |
+| **Funcionária** | Atende e registra, dentro das permissões que a gestora liberar (agenda, estoque, financeiro, histórico…).       |
+| **Cliente**     | Vê e confirma horários, pede remarcação ou cancelamento, acompanha fotos e recomendações, ganha pontos e selos. |
 
-Depois me mostre a estrutura de pastas proposta antes de seguir para as outras telas.
+## O que o app faz
 
-This project was built with [Lovable](https://lovable.dev).
+- **Hoje e Agenda**: horários do dia e da semana, bloqueio de horários, confirmação de presença (pela cliente no app ou manual pela gestora), lembretes automáticos e mensagem de confirmação por WhatsApp.
+- **Clientes**: ficha com anamnese editável, procedimentos, fotos com guia oval na câmera (para fotos simétricas em momentos diferentes), pacotes e retornos.
+- **Atendimento**: passo a passo da sessão, mapas de ações no rosto, abdômen e glúteo, procedimento criado na hora, produtos usados com baixa automática no estoque.
+- **Financeiro**: caixa, valores a receber e contas.
+- **Produtos e estoque**: saldo, mínimo, validade e alertas.
+- **Catálogo e Dashboard**: procedimentos da clínica e indicadores do negócio.
+- **Acesso da cliente**: a gestora cria e-mail e senha no cadastro e envia o link do app pelo WhatsApp.
+- **Fidelidade**: pontos por atendimento e presença, níveis, selos, ranking opcional com apelido, prêmios com resgate aprovado pela gestora e **campanhas** (sugestões prontas que a gestora edita) com envio automático dentro de limites que ela define.
+- **Notificações**: avisos no app e push no celular, com central de notificações, banner e número no ícone.
 
-## Build with Lovable
+## Como funciona por dentro
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/1ad3066a-aa22-4447-a7a2-10cc22b3e892).
+- **Interface**: React 19, TanStack Start/Router, Tailwind 4 e TypeScript. Identidade visual e tokens em `src/styles.css`.
+- **Dados**: Supabase (Postgres com RLS em todas as tabelas, Auth, Storage, Realtime e pg_cron). Regras sensíveis ficam em funções do banco, não no aplicativo.
+- **Offline**: o app guarda uma cópia local e uma fila de envio (`src/lib/remote-store.ts`).
+- **Push**: Firebase Cloud Messaging por uma Edge Function (`supabase/functions/send-push`).
+- **Privacidade**: a cliente só enxerga os próprios dados; o ranking mostra apenas apelido, posição e pontos.
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+## Estrutura
 
-## Development
+| Pasta                     | Conteúdo                                                     |
+| ------------------------- | ------------------------------------------------------------ |
+| `src/routes`              | Telas (gestora em `_gestor`, cliente em `cliente`)           |
+| `src/components`          | Componentes por área (agenda, clientes, facemap, loyalty…)   |
+| `src/services`            | Regras de cada área, acima do armazenamento                  |
+| `src/lib`                 | Funções puras e utilitários                                  |
+| `supabase/migrations`     | Banco, em ordem numerada (`bundle.sql` reúne tudo)           |
+| `supabase/functions`      | Edge Functions                                               |
+| `supabase/tests`, `tests` | Testes de banco (PGlite) e de código                         |
+| `docs`                    | Guias: banco, push, acesso da cliente, fidelidade, segurança |
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Rodar localmente
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+bun run dev        # http://localhost:8080
+bun run test       # banco + código
+bun run build
 ```
+
+Configuração do Supabase, push e publicação: veja [docs/SUPABASE-CONSOLE-GUIA.md](docs/SUPABASE-CONSOLE-GUIA.md), [docs/PUSH-PASSO-A-PASSO.md](docs/PUSH-PASSO-A-PASSO.md) e [docs/FIDELIDADE-E-CAMPANHAS.md](docs/FIDELIDADE-E-CAMPANHAS.md). A integração contínua (`.github/workflows/ci.yml`) roda tipos, testes e build a cada envio.
+
+## Lovable
+
+Projeto conectado ao [Lovable](https://lovable.dev/projects/1ad3066a-aa22-4447-a7a2-10cc22b3e892): mudanças feitas lá chegam aqui e o que é enviado para `main` aparece no editor. Evite reescrever o histórico já publicado.
