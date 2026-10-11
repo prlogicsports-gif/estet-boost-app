@@ -2331,3 +2331,592 @@ language sql stable security definer set search_path = public, pg_temp as $$
     from public.face_maps f, jsonb_array_elements(f.marks) m
     where f.client_id = app.client_id() and f.clinic_id = app.clinic_id() and app.is_cliente()), '[]'::jsonb)
 $$;
+-- Fidelidade das clientes: pontos, níveis, selos e ranking opcional. Tudo controlado pela gestora.
+--  * A cliente nunca grava pontos: só lê o resultado por função (my_loyalty, loyalty_ranking) e escolhe entrar no ranking.
+--  * Os pontos são concedidos no servidor por gatilhos (atendimento finalizado, presença confirmada, cadastro),
+--    de forma idempotente (unique client_id + idem_key).
+--  * O ranking só mostra apelido, posição e pontos de quem entrou por vontade própria.
+-- Pode ser rodada mais de uma vez.
+
+-- ---------------------------------------------------------------- tabelas
+create table if not exists public.loyalty_config (
+  clinic_id uuid primary key references public.clinics (id) on delete cascade,
+  enabled boolean not null default false,
+  ranking_enabled boolean not null default false,
+  points jsonb not null default '{"session_done":10,"first_visit":20,"return_on_time":10,"confirmed":3,"signup":5,"return_days":45}',
+  levels jsonb not null default '[{"id":"bronze","name":"Bronze","min":0},{"id":"prata","name":"Prata","min":100},{"id":"ouro","name":"Ouro","min":300},{"id":"diamante","name":"Diamante","min":700}]',
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.loyalty_ledger (
+  id uuid primary key default gen_random_uuid(),
+  clinic_id uuid not null references public.clinics (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  event text not null,
+  points int not null,
+  ref_id uuid,
+  idem_key text not null,
+  note text,
+  created_at timestamptz not null default now(),
+  unique (client_id, idem_key)
+);
+create index if not exists loyalty_ledger_client on public.loyalty_ledger (client_id, created_at desc);
+create index if not exists loyalty_ledger_ref on public.loyalty_ledger (ref_id);
+
+create table if not exists public.badges (
+  id uuid primary key default gen_random_uuid(),
+  clinic_id uuid not null references public.clinics (id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 40),
+  icon text not null default 'Star',
+  criteria text not null check (criteria in ('sessions_count', 'confirmed_count', 'points_total', 'streak', 'manual')),
+  threshold int not null default 0 check (threshold >= 0),
+  active boolean not null default true,
+  builtin text,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists badges_builtin on public.badges (clinic_id, builtin) where builtin is not null;
+
+create table if not exists public.client_badges (
+  badge_id uuid not null references public.badges (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  earned_at timestamptz not null default now(),
+  primary key (badge_id, client_id)
+);
+
+create table if not exists public.ranking_members (
+  client_id uuid primary key references public.clients (id) on delete cascade,
+  clinic_id uuid not null references public.clinics (id) on delete cascade,
+  nickname text not null check (char_length(nickname) between 2 and 24),
+  opted_in_at timestamptz not null default now()
+);
+create unique index if not exists ranking_nickname on public.ranking_members (clinic_id, lower(nickname));
+
+-- ---------------------------------------------------------------- RLS: só a gestora lê as tabelas; a cliente usa funções
+alter table public.loyalty_config enable row level security;
+alter table public.loyalty_ledger enable row level security;
+alter table public.badges enable row level security;
+alter table public.client_badges enable row level security;
+alter table public.ranking_members enable row level security;
+grant select on public.loyalty_config, public.loyalty_ledger, public.badges, public.client_badges, public.ranking_members to authenticated;
+
+drop policy if exists loyalty_config_gestor on public.loyalty_config;
+create policy loyalty_config_gestor on public.loyalty_config for select to authenticated
+  using (clinic_id = app.clinic_id() and app.is_gestor());
+drop policy if exists loyalty_ledger_gestor on public.loyalty_ledger;
+create policy loyalty_ledger_gestor on public.loyalty_ledger for select to authenticated
+  using (clinic_id = app.clinic_id() and app.is_gestor());
+drop policy if exists badges_gestor on public.badges;
+create policy badges_gestor on public.badges for select to authenticated
+  using (clinic_id = app.clinic_id() and app.is_gestor());
+drop policy if exists client_badges_gestor on public.client_badges;
+create policy client_badges_gestor on public.client_badges for select to authenticated
+  using (app.is_gestor() and exists (select 1 from public.badges b where b.id = badge_id and b.clinic_id = app.clinic_id()));
+drop policy if exists ranking_members_gestor on public.ranking_members;
+create policy ranking_members_gestor on public.ranking_members for select to authenticated
+  using (clinic_id = app.clinic_id() and app.is_gestor());
+
+-- ---------------------------------------------------------------- regras (funções internas)
+create or replace function app.loyalty_level(p_levels jsonb, p_points int) returns jsonb
+language sql immutable as $$
+  select l from jsonb_array_elements(p_levels) l where (l ->> 'min')::int <= p_points order by (l ->> 'min')::int desc limit 1
+$$;
+
+create or replace function app.loyalty_next_level(p_levels jsonb, p_points int) returns jsonb
+language sql immutable as $$
+  select l from jsonb_array_elements(p_levels) l where (l ->> 'min')::int > p_points order by (l ->> 'min')::int asc limit 1
+$$;
+
+-- meses seguidos com atendimento (contando do mês atual ou do anterior)
+create or replace function app.client_streak(p_client uuid) returns int
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  cur date := date_trunc('month', now() at time zone 'America/Sao_Paulo')::date;
+  n int := 0;
+begin
+  if not exists (select 1 from public.sessions where client_id = p_client and status = 'done'
+                   and date_trunc('month', finished_at at time zone 'America/Sao_Paulo')::date = cur) then
+    cur := (cur - interval '1 month')::date;
+  end if;
+  loop
+    exit when not exists (select 1 from public.sessions where client_id = p_client and status = 'done'
+                            and date_trunc('month', finished_at at time zone 'America/Sao_Paulo')::date = cur);
+    n := n + 1;
+    cur := (cur - interval '1 month')::date;
+  end loop;
+  return n;
+end $$;
+
+create or replace function app.badge_value(p_client uuid, p_criteria text, p_total int) returns int
+language sql stable security definer set search_path = public, pg_temp as $$
+  select case p_criteria
+    when 'sessions_count' then (select count(*)::int from public.sessions where client_id = p_client and status = 'done')
+    when 'confirmed_count' then (select count(*)::int from public.loyalty_ledger where client_id = p_client and event = 'confirmed')
+    when 'points_total' then p_total
+    when 'streak' then app.client_streak(p_client)
+    else 0 end
+$$;
+
+-- selos padrão da clínica (a gestora edita, desliga ou cria outros)
+create or replace function app.loyalty_seed(p_clinic uuid) returns void
+language sql security definer set search_path = public, pg_temp as $$
+  insert into public.badges (clinic_id, name, icon, criteria, threshold, builtin, position)
+  select p_clinic, v.name, v.icon, v.criteria, v.threshold, v.builtin, v.pos
+  from (values
+    ('Primeira visita', 'Sparkles', 'sessions_count', 1, 'primeira', 1),
+    ('3 atendimentos', 'Star', 'sessions_count', 3, 'tres', 2),
+    ('10 atendimentos', 'Trophy', 'sessions_count', 10, 'dez', 3),
+    ('Presença certa', 'Medal', 'confirmed_count', 5, 'presenca', 4),
+    ('Fiel há 3 meses', 'Flame', 'streak', 3, 'fiel', 5),
+    ('Embaixadora', 'Crown', 'manual', 0, 'embaixadora', 6)
+  ) as v(name, icon, criteria, threshold, builtin, pos)
+  where not exists (select 1 from public.badges b where b.clinic_id = p_clinic and b.builtin = v.builtin)
+$$;
+
+-- confere selos e nível da cliente e avisa o que for novo (cada aviso sai uma vez: rule_key estável)
+create or replace function app.loyalty_refresh(p_clinic uuid, p_client uuid) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  cfg public.loyalty_config;
+  total int;
+  b record;
+  lvl jsonb;
+begin
+  select * into cfg from public.loyalty_config where clinic_id = p_clinic;
+  if not found or not cfg.enabled then return; end if;
+  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = p_client), 0);
+
+  for b in select * from public.badges
+            where clinic_id = p_clinic and active and criteria <> 'manual' and threshold > 0
+              and not exists (select 1 from public.client_badges cb where cb.badge_id = badges.id and cb.client_id = p_client) loop
+    if app.badge_value(p_client, b.criteria, total) >= b.threshold then
+      insert into public.client_badges (badge_id, client_id) values (b.id, p_client) on conflict do nothing;
+      perform app.notify_client(p_clinic, p_client, 'reward', 'Novo selo: ' || b.name,
+        'Você conquistou o selo ' || b.name || '. Veja suas conquistas.', '/cliente/conquistas', 'badge:' || b.id);
+    end if;
+  end loop;
+
+  lvl := app.loyalty_level(cfg.levels, total);
+  if lvl is not null and (lvl ->> 'min')::int > 0 then
+    perform app.notify_client(p_clinic, p_client, 'reward', 'Você subiu de nível: ' || (lvl ->> 'name'),
+      'Você chegou a ' || total || ' pontos. Continue assim!', '/cliente/conquistas', 'level:' || (lvl ->> 'id'));
+  end if;
+end $$;
+
+-- concede pontos (idempotente). Sem programa ligado, não faz nada.
+create or replace function app.award(
+  p_clinic uuid, p_client uuid, p_event text, p_points int, p_ref uuid, p_idem text, p_note text default null
+) returns boolean
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  cfg public.loyalty_config;
+  new_id uuid;
+  total int;
+begin
+  select * into cfg from public.loyalty_config where clinic_id = p_clinic;
+  if not found or not cfg.enabled or coalesce(p_points, 0) = 0 then return false; end if;
+  insert into public.loyalty_ledger (clinic_id, client_id, event, points, ref_id, idem_key, note)
+  values (p_clinic, p_client, p_event, p_points, p_ref, p_idem, p_note)
+  on conflict (client_id, idem_key) do nothing
+  returning id into new_id;
+  if new_id is null then return false; end if;
+  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = p_client), 0);
+  if p_points > 0 then
+    perform app.notify_client(p_clinic, p_client, 'reward', 'Você ganhou pontos',
+      '+' || p_points || ' pontos' || coalesce(' · ' || p_note, '') || '. Total: ' || total || '.',
+      '/cliente/conquistas', 'pts:' || to_char(now() at time zone 'America/Sao_Paulo', 'YYYY-MM-DD'));
+  end if;
+  perform app.loyalty_refresh(p_clinic, p_client);
+  return true;
+end $$;
+
+-- pontos de um atendimento finalizado: atendimento, 1ª visita e retorno no prazo
+create or replace function app.award_session(p_session uuid) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  s public.sessions;
+  cfg public.loyalty_config;
+  pts jsonb;
+  prev timestamptz;
+  at_ timestamptz;
+begin
+  select * into s from public.sessions where id = p_session and status = 'done';
+  if not found then return; end if;
+  select * into cfg from public.loyalty_config where clinic_id = s.clinic_id;
+  if not found or not cfg.enabled then return; end if;
+  pts := cfg.points;
+  at_ := coalesce(s.finished_at, now());
+  perform app.award(s.clinic_id, s.client_id, 'session_done', coalesce((pts ->> 'session_done')::int, 0), s.id, 'session:' || s.id, 'atendimento');
+  select max(o.finished_at) into prev from public.sessions o
+   where o.client_id = s.client_id and o.status = 'done' and (o.finished_at, o.id) < (at_, s.id);
+  if prev is null then
+    perform app.award(s.clinic_id, s.client_id, 'first_visit', coalesce((pts ->> 'first_visit')::int, 0), s.id, 'first:' || s.client_id, 'primeira visita');
+  elsif at_ - prev <= make_interval(days => coalesce((pts ->> 'return_days')::int, 45)) then
+    perform app.award(s.clinic_id, s.client_id, 'return_on_time', coalesce((pts ->> 'return_on_time')::int, 0), s.id, 'return:' || s.id, 'retorno no prazo');
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------- gatilhos (a cliente não escreve nada)
+create or replace function app.trg_loyalty_session() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  perform app.award_session(new.id);
+  return new;
+end $$;
+drop trigger if exists loyalty_session_done on public.sessions;
+create trigger loyalty_session_done after update of status on public.sessions
+  for each row when (new.status = 'done' and old.status is distinct from 'done')
+  execute function app.trg_loyalty_session();
+
+-- atendimento apagado: os pontos dele saem junto
+create or replace function app.trg_loyalty_session_delete() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  delete from public.loyalty_ledger
+   where ref_id = old.id and event in ('session_done', 'first_visit', 'return_on_time');
+  return old;
+end $$;
+drop trigger if exists loyalty_session_delete on public.sessions;
+create trigger loyalty_session_delete after delete on public.sessions
+  for each row execute function app.trg_loyalty_session_delete();
+
+-- presença confirmada (pela cliente ou pela gestora): pendente vira confirmado
+create or replace function app.trg_loyalty_confirm() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare cfg public.loyalty_config;
+begin
+  select * into cfg from public.loyalty_config where clinic_id = new.clinic_id;
+  if found and cfg.enabled then
+    perform app.award(new.clinic_id, new.client_id, 'confirmed', coalesce((cfg.points ->> 'confirmed')::int, 0), new.id, 'confirm:' || new.id, 'presença confirmada');
+  end if;
+  return new;
+end $$;
+drop trigger if exists loyalty_confirm on public.appointments;
+create trigger loyalty_confirm after update of status on public.appointments
+  for each row when (old.status = 'pending' and new.status = 'confirmed' and not new.done)
+  execute function app.trg_loyalty_confirm();
+
+-- cadastro da cliente
+create or replace function app.trg_loyalty_signup() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare cfg public.loyalty_config;
+begin
+  select * into cfg from public.loyalty_config where clinic_id = new.clinic_id;
+  if found and cfg.enabled and new.client_id is not null then
+    perform app.award(new.clinic_id, new.client_id, 'signup', coalesce((cfg.points ->> 'signup')::int, 0), null, 'signup', 'cadastro');
+  end if;
+  return new;
+end $$;
+drop trigger if exists loyalty_signup on public.profiles;
+create trigger loyalty_signup after insert on public.profiles
+  for each row when (new.role = 'cliente')
+  execute function app.trg_loyalty_signup();
+
+revoke all on function app.loyalty_level(jsonb, int), app.loyalty_next_level(jsonb, int), app.client_streak(uuid),
+  app.badge_value(uuid, text, int), app.loyalty_seed(uuid), app.loyalty_refresh(uuid, uuid),
+  app.award(uuid, uuid, text, int, uuid, text, text), app.award_session(uuid),
+  app.trg_loyalty_session(), app.trg_loyalty_session_delete(), app.trg_loyalty_confirm(), app.trg_loyalty_signup()
+  from public, anon, authenticated;
+-- Fidelidade: funções que o app chama.
+--  Cliente: my_loyalty, loyalty_ranking, set_ranking_optin (só lê o próprio resultado; ranking só com apelido e por opção dela).
+--  Gestora: loyalty_admin, save_loyalty_config, save_badge, delete_badge, grant_badge, award_manual, loyalty_backfill.
+-- Pode ser rodada mais de uma vez.
+
+-- níveis: até 8, nomes de 1 a 24 letras, o primeiro sempre começa em 0 pontos
+create or replace function app.clean_levels(p jsonb) returns jsonb
+language plpgsql immutable as $$
+declare
+  out_ jsonb;
+  first_min int;
+begin
+  select coalesce(jsonb_agg(jsonb_build_object('id', slug, 'name', nm, 'min', mn) order by mn, nm), '[]')
+    into out_
+    from (
+      select left(trim(l ->> 'name'), 24) as nm,
+             greatest(0, least(coalesce((l ->> 'min')::int, 0), 1000000)) as mn,
+             trim(both '-' from lower(regexp_replace(left(trim(l ->> 'name'), 24), '[^A-Za-z0-9]+', '-', 'g'))) as slug
+        from jsonb_array_elements(case when jsonb_typeof(p) = 'array' then p else '[]'::jsonb end) l
+       where trim(coalesce(l ->> 'name', '')) <> ''
+       limit 8
+    ) t;
+  if jsonb_array_length(out_) = 0 then
+    return '[{"id":"bronze","name":"Bronze","min":0}]'::jsonb;
+  end if;
+  first_min := (out_ -> 0 ->> 'min')::int;
+  if first_min > 0 then
+    out_ := jsonb_set(out_, '{0,min}', '0');
+  end if;
+  return out_;
+end $$;
+
+create or replace function app.clean_points(p jsonb) returns jsonb
+language sql immutable as $$
+  select jsonb_build_object(
+    'session_done', greatest(0, least(coalesce((p ->> 'session_done')::int, 10), 1000)),
+    'first_visit', greatest(0, least(coalesce((p ->> 'first_visit')::int, 20), 1000)),
+    'return_on_time', greatest(0, least(coalesce((p ->> 'return_on_time')::int, 10), 1000)),
+    'confirmed', greatest(0, least(coalesce((p ->> 'confirmed')::int, 3), 1000)),
+    'signup', greatest(0, least(coalesce((p ->> 'signup')::int, 5), 1000)),
+    'return_days', greatest(1, least(coalesce((p ->> 'return_days')::int, 45), 365)))
+$$;
+
+-- ---------------------------------------------------------------- cliente
+create or replace function public.my_loyalty() returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  cfg public.loyalty_config;
+  total int;
+  lvl jsonb;
+  nxt jsonb;
+  pos int;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente' and client_id is not null;
+  if not found then return jsonb_build_object('enabled', false); end if;
+  select * into cfg from public.loyalty_config where clinic_id = me.clinic_id;
+  if not found or not cfg.enabled then return jsonb_build_object('enabled', false); end if;
+
+  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = me.client_id), 0);
+  lvl := app.loyalty_level(cfg.levels, total);
+  nxt := app.loyalty_next_level(cfg.levels, total);
+
+  select r.pos into pos from (
+    select t.client_id, rank() over (order by t.pts desc) as pos from (
+      select rm.client_id, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = rm.client_id), 0) as pts
+        from public.ranking_members rm where rm.clinic_id = me.clinic_id) t) r
+   where r.client_id = me.client_id;
+
+  return jsonb_build_object(
+    'enabled', true,
+    'points', total,
+    'level', lvl,
+    'next', case when nxt is null then null
+                 else jsonb_build_object('name', nxt ->> 'name', 'min', (nxt ->> 'min')::int, 'remaining', (nxt ->> 'min')::int - total) end,
+    'levels', cfg.levels,
+    'badges', (select coalesce(jsonb_agg(jsonb_build_object(
+                 'id', b.id, 'name', b.name, 'icon', b.icon, 'criteria', b.criteria, 'threshold', b.threshold,
+                 'earned', cb.client_id is not null, 'earned_at', cb.earned_at,
+                 'progress', case when cb.client_id is not null or b.criteria = 'manual' then null
+                                  else least(app.badge_value(me.client_id, b.criteria, total), b.threshold) end)
+               order by b.position, b.created_at), '[]')
+                 from public.badges b
+                 left join public.client_badges cb on cb.badge_id = b.id and cb.client_id = me.client_id
+                where b.clinic_id = me.clinic_id and b.active),
+    'history', (select coalesce(jsonb_agg(jsonb_build_object('event', h.event, 'points', h.points, 'note', h.note, 'at', h.created_at)
+                 order by h.created_at desc), '[]')
+                  from (select event, points, note, created_at from public.loyalty_ledger
+                         where client_id = me.client_id order by created_at desc limit 30) h),
+    'ranking', jsonb_build_object(
+      'enabled', cfg.ranking_enabled,
+      'optin', exists (select 1 from public.ranking_members where client_id = me.client_id),
+      'nickname', (select nickname from public.ranking_members where client_id = me.client_id),
+      'position', pos));
+end $$;
+
+-- ranking da clínica: só apelido, posição e pontos; só para quem entrou nele
+create or replace function public.loyalty_ranking() returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  cfg public.loyalty_config;
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente' and client_id is not null;
+  if not found then return '[]'::jsonb; end if;
+  select * into cfg from public.loyalty_config where clinic_id = me.clinic_id;
+  if not found or not cfg.enabled or not cfg.ranking_enabled then return '[]'::jsonb; end if;
+  if not exists (select 1 from public.ranking_members where client_id = me.client_id) then return '[]'::jsonb; end if;
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object('position', r.pos, 'nickname', r.nickname, 'points', r.pts, 'me', r.client_id = me.client_id)
+             order by r.pos, r.nickname), '[]')
+      from (
+        select t.client_id, t.nickname, t.pts, rank() over (order by t.pts desc) as pos from (
+          select rm.client_id, rm.nickname, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = rm.client_id), 0) as pts
+            from public.ranking_members rm where rm.clinic_id = me.clinic_id) t) r
+       where r.pos <= 20 or r.client_id = me.client_id);
+end $$;
+
+create or replace function public.set_ranking_optin(p_optin boolean, p_nickname text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  me public.profiles;
+  cfg public.loyalty_config;
+  nick text := trim(coalesce(p_nickname, ''));
+begin
+  select * into me from public.profiles where id = auth.uid() and active and role = 'cliente' and client_id is not null;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  if not p_optin then
+    delete from public.ranking_members where client_id = me.client_id;
+    return jsonb_build_object('ok', true);
+  end if;
+  select * into cfg from public.loyalty_config where clinic_id = me.clinic_id;
+  if not found or not cfg.enabled or not cfg.ranking_enabled then return jsonb_build_object('ok', false, 'reason', 'ranking_desligado'); end if;
+  if nick !~ '^[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 ._-]{1,23}$' then return jsonb_build_object('ok', false, 'reason', 'apelido_invalido'); end if;
+  begin
+    insert into public.ranking_members (client_id, clinic_id, nickname) values (me.client_id, me.clinic_id, nick)
+    on conflict (client_id) do update set nickname = excluded.nickname;
+  exception when unique_violation then
+    return jsonb_build_object('ok', false, 'reason', 'apelido_em_uso');
+  end;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- gestora
+create or replace function public.loyalty_admin() returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  cfg public.loyalty_config;
+  clinic uuid := app.clinic_id();
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into cfg from public.loyalty_config where clinic_id = clinic;
+  return jsonb_build_object(
+    'ok', true,
+    'config', jsonb_build_object(
+      'enabled', coalesce(cfg.enabled, false),
+      'ranking_enabled', coalesce(cfg.ranking_enabled, false),
+      'points', coalesce(cfg.points, '{"session_done":10,"first_visit":20,"return_on_time":10,"confirmed":3,"signup":5,"return_days":45}'::jsonb),
+      'levels', coalesce(cfg.levels, '[{"id":"bronze","name":"Bronze","min":0},{"id":"prata","name":"Prata","min":100},{"id":"ouro","name":"Ouro","min":300},{"id":"diamante","name":"Diamante","min":700}]'::jsonb)),
+    'badges', (select coalesce(jsonb_agg(jsonb_build_object(
+                 'id', b.id, 'name', b.name, 'icon', b.icon, 'criteria', b.criteria, 'threshold', b.threshold, 'active', b.active,
+                 'earned_by', (select count(*) from public.client_badges cb where cb.badge_id = b.id))
+               order by b.position, b.created_at), '[]')
+                 from public.badges b where b.clinic_id = clinic),
+    'overview', (
+      with pts as (
+        select c.id as client_id, c.name, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = c.id), 0) as total
+          from public.clients c where c.clinic_id = clinic)
+      select jsonb_build_object(
+        'clients', (select count(*) from pts),
+        'participants', (select count(*) from pts where total > 0),
+        'points_issued', coalesce((select sum(points) from public.loyalty_ledger where clinic_id = clinic and points > 0), 0),
+        'ranking_members', (select count(*) from public.ranking_members where clinic_id = clinic),
+        'top', (select coalesce(jsonb_agg(jsonb_build_object('client_id', t.client_id, 'name', t.name, 'points', t.total)
+                  order by t.total desc, t.name), '[]')
+                  from (select * from pts where total > 0 order by total desc, name limit 10) t))));
+end $$;
+
+create or replace function public.save_loyalty_config(p_enabled boolean, p_ranking boolean, p_points jsonb, p_levels jsonb) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare clinic uuid := app.clinic_id();
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  insert into public.loyalty_config (clinic_id, enabled, ranking_enabled, points, levels)
+  values (clinic, coalesce(p_enabled, false), coalesce(p_ranking, false), app.clean_points(coalesce(p_points, '{}')), app.clean_levels(p_levels))
+  on conflict (clinic_id) do update set
+    enabled = excluded.enabled, ranking_enabled = excluded.ranking_enabled,
+    points = excluded.points, levels = excluded.levels, updated_at = now();
+  if coalesce(p_enabled, false) then perform app.loyalty_seed(clinic); end if;
+  if not coalesce(p_ranking, false) then
+    delete from public.ranking_members where clinic_id = clinic;
+  end if;
+  perform app.log(clinic, 'gestor', auth.uid(), 'cadastro', null, 'Alterou o programa de fidelidade');
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.save_badge(p_id uuid, p_name text, p_icon text, p_criteria text, p_threshold int, p_active boolean) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  clinic uuid := app.clinic_id();
+  nm text := left(trim(coalesce(p_name, '')), 40);
+  ic text := case when coalesce(p_icon, '') in ('Star','Trophy','Medal','Crown','Heart','Flame','Gift','Award','Sparkles','Gem') then p_icon else 'Star' end;
+  cr text := coalesce(p_criteria, 'manual');
+  th int := greatest(0, least(coalesce(p_threshold, 0), 100000));
+  new_id uuid;
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  if nm = '' then return jsonb_build_object('ok', false, 'reason', 'nome_vazio'); end if;
+  if cr not in ('sessions_count', 'confirmed_count', 'points_total', 'streak', 'manual') then return jsonb_build_object('ok', false, 'reason', 'criterio_invalido'); end if;
+  if cr <> 'manual' and th = 0 then return jsonb_build_object('ok', false, 'reason', 'limite_invalido'); end if;
+  if p_id is null then
+    if (select count(*) from public.badges where clinic_id = clinic) >= 30 then return jsonb_build_object('ok', false, 'reason', 'limite_de_selos'); end if;
+    insert into public.badges (clinic_id, name, icon, criteria, threshold, active, position)
+    values (clinic, nm, ic, cr, th, coalesce(p_active, true), coalesce((select max(position) from public.badges where clinic_id = clinic), 0) + 1)
+    returning id into new_id;
+  else
+    update public.badges set name = nm, icon = ic, criteria = cr, threshold = th, active = coalesce(p_active, true)
+     where id = p_id and clinic_id = clinic returning id into new_id;
+    if new_id is null then return jsonb_build_object('ok', false, 'reason', 'nao_encontrado'); end if;
+  end if;
+  return jsonb_build_object('ok', true, 'id', new_id);
+end $$;
+
+create or replace function public.delete_badge(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  delete from public.badges where id = p_id and clinic_id = app.clinic_id();
+  if not found then return jsonb_build_object('ok', false, 'reason', 'nao_encontrado'); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- entrega um selo "manual" (ex.: Embaixadora) a uma cliente
+create or replace function public.grant_badge(p_badge uuid, p_client uuid) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  clinic uuid := app.clinic_id();
+  b public.badges;
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into b from public.badges where id = p_badge and clinic_id = clinic;
+  if not found or not exists (select 1 from public.clients where id = p_client and clinic_id = clinic) then
+    return jsonb_build_object('ok', false, 'reason', 'nao_encontrado');
+  end if;
+  insert into public.client_badges (badge_id, client_id) values (b.id, p_client) on conflict do nothing;
+  perform app.notify_client(clinic, p_client, 'reward', 'Novo selo: ' || b.name,
+    'A clínica te deu o selo ' || b.name || '.', '/cliente/conquistas', 'badge:' || b.id);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ajuste manual de pontos (com motivo), registrado no histórico
+create or replace function public.award_manual(p_client uuid, p_points int, p_note text) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  clinic uuid := app.clinic_id();
+  note text := left(trim(coalesce(p_note, '')), 120);
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  if coalesce(p_points, 0) = 0 or abs(p_points) > 1000 then return jsonb_build_object('ok', false, 'reason', 'pontos_invalidos'); end if;
+  if not exists (select 1 from public.clients where id = p_client and clinic_id = clinic) then
+    return jsonb_build_object('ok', false, 'reason', 'nao_encontrado');
+  end if;
+  if not coalesce((select enabled from public.loyalty_config where clinic_id = clinic), false) then
+    return jsonb_build_object('ok', false, 'reason', 'programa_desligado');
+  end if;
+  perform app.award(clinic, p_client, 'manual', p_points, null, 'manual:' || gen_random_uuid(), nullif(note, ''));
+  perform app.log(clinic, 'gestor', auth.uid(), 'cadastro', p_client, 'Ajustou pontos de fidelidade: ' || p_points);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- calcula os pontos do que já aconteceu (atendimentos finalizados e cadastros), sem duplicar
+create or replace function public.loyalty_backfill() returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  clinic uuid := app.clinic_id();
+  cfg public.loyalty_config;
+  s record;
+  before_ int;
+  after_ int;
+begin
+  if not app.is_gestor() then return jsonb_build_object('ok', false, 'reason', 'sem_permissao'); end if;
+  select * into cfg from public.loyalty_config where clinic_id = clinic;
+  if not found or not cfg.enabled then return jsonb_build_object('ok', false, 'reason', 'programa_desligado'); end if;
+  before_ := (select count(*) from public.loyalty_ledger where clinic_id = clinic);
+  for s in select id from public.sessions where clinic_id = clinic and status = 'done' order by finished_at, id loop
+    perform app.award_session(s.id);
+  end loop;
+  for s in select p.clinic_id, p.client_id from public.profiles p where p.clinic_id = clinic and p.role = 'cliente' and p.client_id is not null loop
+    perform app.award(clinic, s.client_id, 'signup', coalesce((cfg.points ->> 'signup')::int, 0), null, 'signup', 'cadastro');
+  end loop;
+  after_ := (select count(*) from public.loyalty_ledger where clinic_id = clinic);
+  return jsonb_build_object('ok', true, 'created', after_ - before_);
+end $$;
+
+revoke all on function app.clean_levels(jsonb), app.clean_points(jsonb) from public, anon, authenticated;
+revoke execute on function public.my_loyalty(), public.loyalty_ranking(), public.set_ranking_optin(boolean, text),
+  public.loyalty_admin(), public.save_loyalty_config(boolean, boolean, jsonb, jsonb),
+  public.save_badge(uuid, text, text, text, int, boolean), public.delete_badge(uuid), public.grant_badge(uuid, uuid),
+  public.award_manual(uuid, int, text), public.loyalty_backfill() from public, anon;
+grant execute on function public.my_loyalty(), public.loyalty_ranking(), public.set_ranking_optin(boolean, text),
+  public.loyalty_admin(), public.save_loyalty_config(boolean, boolean, jsonb, jsonb),
+  public.save_badge(uuid, text, text, text, int, boolean), public.delete_badge(uuid), public.grant_badge(uuid, uuid),
+  public.award_manual(uuid, int, text), public.loyalty_backfill() to authenticated;

@@ -83,6 +83,10 @@ export type NotificationPrefs = {
   recommendations: boolean;
   push: boolean;
   whatsapp: boolean;
+  /** Campanhas e novidades da clínica (cliente). */
+  campaigns: boolean;
+  /** Pontos, selos, nível e prêmios (cliente). */
+  rewards: boolean;
 };
 
 /** Clínica: cada esteticista tem a sua, com um link e credenciais próprios para filiar clientes. */

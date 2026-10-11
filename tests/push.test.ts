@@ -178,6 +178,9 @@ describe("regras puras", () => {
     expect(categoryOf("stock")).toBe("stock");
     expect(categoryOf("recommendation")).toBe("recommendations");
     expect(categoryOf("request")).toBe("appointments");
+    expect(categoryOf("reward")).toBe("rewards");
+    expect(categoryOf("redeem")).toBe("rewards");
+    expect(categoryOf("campaign")).toBe("campaigns");
   });
   test("o título do push começa pelo tipo do aviso, diferente para a cliente", () => {
     expect(labelOf("request", "gestor")).toBe("Agenda");
@@ -188,6 +191,15 @@ describe("regras puras", () => {
     expect(labelOf("recommendation", "cliente")).toBe("Cuidados");
     expect(labelOf("followup", "cliente")).toBe("Seu cuidado");
     expect(labelOf("followup", "gestor")).toBe("Clientes");
+    expect(labelOf("reward", "cliente")).toBe("Conquista");
+    expect(labelOf("campaign", "cliente")).toBe("Novidade");
+    expect(labelOf("redeem", "gestor")).toBe("Resgate");
+  });
+  test("a cliente pode desligar campanhas e conquistas separadamente", () => {
+    const prefs = { cliente: { campaigns: false, rewards: true, push: true } };
+    expect(wantsPush(prefs, "cliente", "campaign")).toBe(false);
+    expect(wantsPush(prefs, "cliente", "reward")).toBe(true);
+    expect(wantsPush(prefs, "cliente", "reminder")).toBe(true);
   });
   test("padrão é receber", () => {
     expect(wantsPush(undefined, "gestor", "stock")).toBe(true);

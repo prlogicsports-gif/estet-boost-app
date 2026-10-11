@@ -46,6 +46,16 @@ const PREF_ROWS: Record<
     },
     { key: "payments", title: "Pagamentos", detail: "Todo dia, de 3 dias antes até o vencimento" },
     {
+      key: "rewards",
+      title: "Pontos, selos e prêmios",
+      detail: "Quando você ganha pontos, selos ou sobe de nível",
+    },
+    {
+      key: "campaigns",
+      title: "Campanhas e novidades",
+      detail: "Ofertas e lembretes da sua clínica",
+    },
+    {
       key: "push",
       title: "Notificações no aparelho",
       detail: "Push, quando o app estiver instalado",
@@ -54,7 +64,7 @@ const PREF_ROWS: Record<
   ],
 };
 
-function Switch({
+export function Switch({
   checked,
   onChange,
   label,

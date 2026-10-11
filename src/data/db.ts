@@ -45,6 +45,8 @@ export const defaultPrefs: NotificationPrefs = {
   recommendations: true,
   push: true,
   whatsapp: false,
+  campaigns: true,
+  rewards: true,
 };
 
 export type Settings = {

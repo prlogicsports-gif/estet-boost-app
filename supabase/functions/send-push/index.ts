@@ -20,10 +20,12 @@ type Prefs = Record<string, Record<string, boolean> | undefined>;
 /** Categoria de preferência de cada tipo de aviso (mesma lógica de Configurações → Avisos). */
 export function categoryOf(
   kind: string,
-): "appointments" | "payments" | "stock" | "recommendations" {
+): "appointments" | "payments" | "stock" | "recommendations" | "rewards" | "campaigns" {
   if (kind === "bill" || kind === "payment") return "payments";
   if (kind === "stock") return "stock";
   if (kind === "recommendation") return "recommendations";
+  if (kind === "reward" || kind === "redeem") return "rewards";
+  if (kind === "campaign") return "campaigns";
   return "appointments";
 }
 
@@ -34,6 +36,9 @@ export function labelOf(kind: string, role: string): string {
   if (kind === "stock") return "Estoque";
   if (kind === "recommendation") return client ? "Cuidados" : "Clientes";
   if (kind === "followup") return client ? "Seu cuidado" : "Clientes";
+  if (kind === "reward") return "Conquista";
+  if (kind === "campaign") return "Novidade";
+  if (kind === "redeem") return "Resgate";
   return "Agenda";
 }
 

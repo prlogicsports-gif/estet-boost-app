@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { AlertCard } from "@/components/eb/alert-card";
 import { Icon } from "@/components/eb/icon";
@@ -20,6 +20,8 @@ import { mapsUrl } from "@/lib/maps";
 import { brl, byDateTime } from "@/lib/view";
 import { confirmAppointment, requestReschedule } from "@/services/appointments.service";
 import { reportPayment } from "@/services/finance.service";
+import { loadMyLoyalty } from "@/services/loyalty.service";
+import { useRemote } from "@/lib/use-remote";
 
 export const Route = createFileRoute("/cliente/")({
   head: () => ({
@@ -44,6 +46,7 @@ function InicioPage() {
   const { openNotifications, unread } = useShell();
   const { clientId, client, profile } = useClient();
   const { clinic } = useClinic();
+  const loyalty = useRemote(loadMyLoyalty).data;
   const proName = clinic?.name ?? "sua clínica";
   const today = todayISO();
   const mine = appointmentsDb.use().filter((item) => item.clientId === clientId);
@@ -187,6 +190,29 @@ function InicioPage() {
           </>
         )}
       </section>
+
+      {loyalty && loyalty.enabled ? (
+        <Link
+          to="/cliente/conquistas"
+          className="flex items-center gap-3.5 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5"
+        >
+          <span className="grid size-12 flex-none place-items-center rounded-full bg-[color-mix(in_srgb,var(--eb-amber-500)_20%,transparent)] text-[var(--eb-amber-500)]">
+            <Icon name="Trophy" size={22} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">
+              {loyalty.level?.name ?? "Conquistas"} · {loyalty.points} pontos
+            </span>
+            <span className="block text-[12.5px] text-[var(--text-secondary)]">
+              {loyalty.next
+                ? `Faltam ${loyalty.next.remaining} para ${loyalty.next.name}`
+                : "Nível máximo"}{" "}
+              · {loyalty.badges.filter((badge) => badge.earned).length} selos
+            </span>
+          </span>
+          <Icon name="ChevronRight" size={18} color="var(--text-secondary)" />
+        </Link>
+      ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
         <MetricCard

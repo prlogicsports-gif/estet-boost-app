@@ -19,6 +19,7 @@ import { Route as GestorConfiguracoesRouteImport } from './routes/_gestor/config
 import { Route as GestorCredenciaisRouteImport } from './routes/_gestor/credenciais'
 import { Route as GestorDashboardRouteImport } from './routes/_gestor/dashboard'
 import { Route as GestorEstoqueRouteImport } from './routes/_gestor/estoque'
+import { Route as GestorFidelidadeRouteImport } from './routes/_gestor/fidelidade'
 import { Route as GestorFinanceiroRouteImport } from './routes/_gestor/financeiro'
 import { Route as GestorGestaoRouteImport } from './routes/_gestor/gestao'
 import { Route as GestorHistoricoRouteImport } from './routes/_gestor/historico'
@@ -28,6 +29,7 @@ import { Route as AtendimentoSessionIdRouteImport } from './routes/atendimento.$
 import { Route as AtendimentoNovoRouteImport } from './routes/atendimento.novo'
 import { Route as ClienteIndexRouteImport } from './routes/cliente/index'
 import { Route as ClienteAgendaRouteImport } from './routes/cliente/agenda'
+import { Route as ClienteConquistasRouteImport } from './routes/cliente/conquistas'
 import { Route as ClienteEvolucaoRouteImport } from './routes/cliente/evolucao'
 import { Route as ClientePerfilRouteImport } from './routes/cliente/perfil'
 import { Route as GestorAtendimentosAppointmentIdRouteImport } from './routes/_gestor/atendimentos.$appointmentId'
@@ -83,6 +85,11 @@ const GestorEstoqueRoute = GestorEstoqueRouteImport.update({
   path: '/estoque',
   getParentRoute: () => GestorRoute,
 } as any)
+const GestorFidelidadeRoute = GestorFidelidadeRouteImport.update({
+  id: '/fidelidade',
+  path: '/fidelidade',
+  getParentRoute: () => GestorRoute,
+} as any)
 const GestorFinanceiroRoute = GestorFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
@@ -128,6 +135,11 @@ const ClienteAgendaRoute = ClienteAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => ClienteRoute,
 } as any)
+const ClienteConquistasRoute = ClienteConquistasRouteImport.update({
+  id: '/conquistas',
+  path: '/conquistas',
+  getParentRoute: () => ClienteRoute,
+} as any)
 const ClienteEvolucaoRoute = ClienteEvolucaoRouteImport.update({
   id: '/evolucao',
   path: '/evolucao',
@@ -165,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/credenciais': typeof GestorCredenciaisRoute
   '/dashboard': typeof GestorDashboardRoute
   '/estoque': typeof GestorEstoqueRoute
+  '/fidelidade': typeof GestorFidelidadeRoute
   '/financeiro': typeof GestorFinanceiroRoute
   '/gestao': typeof GestorGestaoRoute
   '/historico': typeof GestorHistoricoRoute
@@ -173,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
   '/atendimento/novo': typeof AtendimentoNovoRoute
   '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/conquistas': typeof ClienteConquistasRoute
   '/cliente/evolucao': typeof ClienteEvolucaoRoute
   '/cliente/perfil': typeof ClientePerfilRoute
   '/cliente/': typeof ClienteIndexRoute
@@ -189,6 +203,7 @@ export interface FileRoutesByTo {
   '/credenciais': typeof GestorCredenciaisRoute
   '/dashboard': typeof GestorDashboardRoute
   '/estoque': typeof GestorEstoqueRoute
+  '/fidelidade': typeof GestorFidelidadeRoute
   '/financeiro': typeof GestorFinanceiroRoute
   '/gestao': typeof GestorGestaoRoute
   '/historico': typeof GestorHistoricoRoute
@@ -197,6 +212,7 @@ export interface FileRoutesByTo {
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
   '/atendimento/novo': typeof AtendimentoNovoRoute
   '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/conquistas': typeof ClienteConquistasRoute
   '/cliente/evolucao': typeof ClienteEvolucaoRoute
   '/cliente/perfil': typeof ClientePerfilRoute
   '/cliente': typeof ClienteIndexRoute
@@ -216,6 +232,7 @@ export interface FileRoutesById {
   '/_gestor/credenciais': typeof GestorCredenciaisRoute
   '/_gestor/dashboard': typeof GestorDashboardRoute
   '/_gestor/estoque': typeof GestorEstoqueRoute
+  '/_gestor/fidelidade': typeof GestorFidelidadeRoute
   '/_gestor/financeiro': typeof GestorFinanceiroRoute
   '/_gestor/gestao': typeof GestorGestaoRoute
   '/_gestor/historico': typeof GestorHistoricoRoute
@@ -224,6 +241,7 @@ export interface FileRoutesById {
   '/atendimento/$sessionId': typeof AtendimentoSessionIdRoute
   '/atendimento/novo': typeof AtendimentoNovoRoute
   '/cliente/agenda': typeof ClienteAgendaRoute
+  '/cliente/conquistas': typeof ClienteConquistasRoute
   '/cliente/evolucao': typeof ClienteEvolucaoRoute
   '/cliente/perfil': typeof ClientePerfilRoute
   '/cliente/': typeof ClienteIndexRoute
@@ -243,6 +261,7 @@ export interface FileRouteTypes {
     | '/credenciais'
     | '/dashboard'
     | '/estoque'
+    | '/fidelidade'
     | '/financeiro'
     | '/gestao'
     | '/historico'
@@ -251,6 +270,7 @@ export interface FileRouteTypes {
     | '/atendimento/$sessionId'
     | '/atendimento/novo'
     | '/cliente/agenda'
+    | '/cliente/conquistas'
     | '/cliente/evolucao'
     | '/cliente/perfil'
     | '/cliente/'
@@ -267,6 +287,7 @@ export interface FileRouteTypes {
     | '/credenciais'
     | '/dashboard'
     | '/estoque'
+    | '/fidelidade'
     | '/financeiro'
     | '/gestao'
     | '/historico'
@@ -275,6 +296,7 @@ export interface FileRouteTypes {
     | '/atendimento/$sessionId'
     | '/atendimento/novo'
     | '/cliente/agenda'
+    | '/cliente/conquistas'
     | '/cliente/evolucao'
     | '/cliente/perfil'
     | '/cliente'
@@ -293,6 +315,7 @@ export interface FileRouteTypes {
     | '/_gestor/credenciais'
     | '/_gestor/dashboard'
     | '/_gestor/estoque'
+    | '/_gestor/fidelidade'
     | '/_gestor/financeiro'
     | '/_gestor/gestao'
     | '/_gestor/historico'
@@ -301,6 +324,7 @@ export interface FileRouteTypes {
     | '/atendimento/$sessionId'
     | '/atendimento/novo'
     | '/cliente/agenda'
+    | '/cliente/conquistas'
     | '/cliente/evolucao'
     | '/cliente/perfil'
     | '/cliente/'
@@ -390,6 +414,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestorEstoqueRouteImport
       parentRoute: typeof GestorRoute
     }
+    '/_gestor/fidelidade': {
+      id: '/_gestor/fidelidade'
+      path: '/fidelidade'
+      fullPath: '/fidelidade'
+      preLoaderRoute: typeof GestorFidelidadeRouteImport
+      parentRoute: typeof GestorRoute
+    }
     '/_gestor/financeiro': {
       id: '/_gestor/financeiro'
       path: '/financeiro'
@@ -453,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClienteAgendaRouteImport
       parentRoute: typeof ClienteRoute
     }
+    '/cliente/conquistas': {
+      id: '/cliente/conquistas'
+      path: '/conquistas'
+      fullPath: '/cliente/conquistas'
+      preLoaderRoute: typeof ClienteConquistasRouteImport
+      parentRoute: typeof ClienteRoute
+    }
     '/cliente/evolucao': {
       id: '/cliente/evolucao'
       path: '/evolucao'
@@ -498,6 +536,7 @@ interface GestorRouteChildren {
   GestorCredenciaisRoute: typeof GestorCredenciaisRoute
   GestorDashboardRoute: typeof GestorDashboardRoute
   GestorEstoqueRoute: typeof GestorEstoqueRoute
+  GestorFidelidadeRoute: typeof GestorFidelidadeRoute
   GestorFinanceiroRoute: typeof GestorFinanceiroRoute
   GestorGestaoRoute: typeof GestorGestaoRoute
   GestorHistoricoRoute: typeof GestorHistoricoRoute
@@ -515,6 +554,7 @@ const GestorRouteChildren: GestorRouteChildren = {
   GestorCredenciaisRoute: GestorCredenciaisRoute,
   GestorDashboardRoute: GestorDashboardRoute,
   GestorEstoqueRoute: GestorEstoqueRoute,
+  GestorFidelidadeRoute: GestorFidelidadeRoute,
   GestorFinanceiroRoute: GestorFinanceiroRoute,
   GestorGestaoRoute: GestorGestaoRoute,
   GestorHistoricoRoute: GestorHistoricoRoute,
@@ -530,6 +570,7 @@ const GestorRouteWithChildren =
 
 interface ClienteRouteChildren {
   ClienteAgendaRoute: typeof ClienteAgendaRoute
+  ClienteConquistasRoute: typeof ClienteConquistasRoute
   ClienteEvolucaoRoute: typeof ClienteEvolucaoRoute
   ClientePerfilRoute: typeof ClientePerfilRoute
   ClienteIndexRoute: typeof ClienteIndexRoute
@@ -537,6 +578,7 @@ interface ClienteRouteChildren {
 
 const ClienteRouteChildren: ClienteRouteChildren = {
   ClienteAgendaRoute: ClienteAgendaRoute,
+  ClienteConquistasRoute: ClienteConquistasRoute,
   ClienteEvolucaoRoute: ClienteEvolucaoRoute,
   ClientePerfilRoute: ClientePerfilRoute,
   ClienteIndexRoute: ClienteIndexRoute,

@@ -90,6 +90,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
             { to: "/financeiro" },
             { to: "/estoque" },
             { to: "/historico" },
+            { to: "/fidelidade" },
             { to: "/notificacoes" },
             { to: "/credenciais" },
             { to: "/catalogo" },
@@ -104,6 +105,7 @@ export function AppShell({ nav: fullNav, children }: { nav: NavConfig; children:
             { to: "/cliente" },
             { to: "/cliente/agenda" },
             { to: "/cliente/evolucao" },
+            { to: "/cliente/conquistas" },
             { to: "/cliente/perfil" },
           ];
     const handle = window.setTimeout(async () => {

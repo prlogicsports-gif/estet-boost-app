@@ -237,6 +237,9 @@ Migrações em `supabase/migrations`, todas testadas com `bun run test` (91 veri
 | `…13_blocks_agenda.sql`       | Bloqueios de agenda também para equipe com permissão `agenda`; `accept_invite`: link fixo nunca bloqueia, credencial só após 20 erros/hora                                                                           |
 | `…14_catalog.sql`             | `procedures.products`, `profiles.procedure_ids` e `invites.procedure_ids` (vazio = todos), `set_staff_procedures`, `set_invite_procedures`                                                                           |
 | `…15_link_client_account.sql` | `client_access_event` (só a chave de serviço; liga a conta criada pela gestora à ficha) e `accept_terms`                                                                                                             |
+| `…16_face_product.sql`        | `my_face_map()` não entrega `produtoId`/`produtoQtd` à cliente                                                                                                                                                       |
+| `…17_loyalty_core.sql`        | Fidelidade: `loyalty_config`, `loyalty_ledger`, `badges`, `client_badges`, `ranking_members`; gatilhos que concedem pontos (atendimento, presença, cadastro)                                                         |
+| `…18_loyalty_rpcs.sql`        | `my_loyalty`, `loyalty_ranking`, `set_ranking_optin` (cliente); `loyalty_admin`, `save_loyalty_config`, `save_badge`, `delete_badge`, `grant_badge`, `award_manual`, `loyalty_backfill` (gestora)                    |
 
 No app, `src/lib/remote-store.ts` liga cada coleção à sua tabela (leitura, tempo real, gravação agrupada e na ordem certa) e `src/data/db.ts` define como cada registro vira linha e volta.
 

@@ -8,6 +8,9 @@ export function kindLabel(kind: NotificationKind | string, audience: Audience): 
   if (kind === "stock") return "Estoque";
   if (kind === "recommendation") return client ? "Cuidados" : "Clientes";
   if (kind === "followup") return client ? "Seu cuidado" : "Clientes";
+  if (kind === "reward") return "Conquista";
+  if (kind === "campaign") return "Novidade";
+  if (kind === "redeem") return "Resgate";
   return "Agenda";
 }
 
@@ -16,5 +19,7 @@ export function prefKeyOf(kind: NotificationKind | string): keyof NotificationPr
   if (kind === "bill" || kind === "payment") return "payments";
   if (kind === "stock") return "stock";
   if (kind === "recommendation") return "recommendations";
+  if (kind === "reward" || kind === "redeem") return "rewards";
+  if (kind === "campaign") return "campaigns";
   return "appointments";
 }

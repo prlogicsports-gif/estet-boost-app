@@ -25,6 +25,7 @@ const SHELL_ROUTES = [
   "/cliente",
   "/cliente/agenda",
   "/cliente/evolucao",
+  "/cliente/conquistas",
   "/cliente/perfil",
 ];
 const STATIC = [
