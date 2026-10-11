@@ -104,7 +104,7 @@ export function NewAppointmentDrawer({
       : clash
         ? `Já existe atendimento às ${form.time} (${clash.client}).`
         : form.date
-          ? unavailableReason(form.date, form.time, hours, blocks)
+          ? unavailableReason(form.date, form.time, hours, blocks, Number(form.duration) || 60)
           : undefined,
   };
   const valid = !errors.client && !errors.date && !errors.time;

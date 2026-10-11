@@ -65,7 +65,8 @@ function friendly(message: string): string {
 
 const REASONS: Record<string, string> = {
   invalido: "Credencial inválida, expirada ou já usada. Peça uma nova.",
-  bloqueado: "Muitas tentativas erradas. Aguarde uma hora e tente de novo.",
+  bloqueado:
+    "Muitas credenciais erradas. Aguarde uma hora ou entre pelo link da clínica, que não bloqueia.",
   email_nao_confirmado: "Confirme seu e-mail primeiro.",
   dados_incompletos: "Preencha o nome e o nome do estúdio.",
   sem_permissao: "Sem permissão para essa ação.",
@@ -168,7 +169,9 @@ export const authService = {
       return { ok: false, message: "Não foi possível concluir o cadastro. Tente de novo." };
     const result = data as { ok: boolean; reason?: string };
     if (!result?.ok) {
-      pendingStore.clear();
+      // a cliente pode tentar de novo sem refazer o cadastro: o pendente só some no sucesso ou no bloqueio
+      const keep = pending.type === "cliente" && result?.reason === "invalido";
+      if (!keep) pendingStore.clear();
       return { ok: false, message: reasonText(result?.reason) };
     }
     pendingStore.clear();

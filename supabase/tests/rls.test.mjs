@@ -133,12 +133,12 @@ const again = await rpc(db, c2, "select public.accept_invite($1,null,'Outra','11
 ]).then((x) => x.r);
 check("credencial de uso único", again.ok === false && again.reason === "invalido");
 let blocked = null;
-for (let i = 0; i < 6; i++)
+for (let i = 0; i < 21; i++)
   blocked = await rpc(db, c3, "select public.accept_invite('EB-AAAA-AAAA',null,'x','1') r").then(
     (x) => x.r,
   );
 check(
-  "5 tentativas erradas bloqueiam a conta",
+  "21 credenciais erradas bloqueiam a conta",
   blocked.reason === "bloqueado",
   JSON.stringify(blocked),
 );
@@ -203,6 +203,34 @@ check(
   "credencial de equipe é de uso único",
   (await rpc(db, f1, "select public.accept_staff_invite($1,'x') r", [si.code]).then((x) => x.r))
     .already === true,
+);
+
+// --- bloqueios de agenda: gestora e equipe com permissão de agenda gravam; cliente e outra clínica não
+check(
+  "funcionária com agenda cria bloqueio",
+  (
+    await as(db, f1, () =>
+      q(
+        db,
+        "insert into public.blocks (clinic_id, date, start, \"end\", reason) select clinic_id, current_date, '12:00', '13:00', 'Almoço' from public.profiles where id = auth.uid() returning id",
+      ),
+    )
+  ).length === 1,
+);
+check(
+  "cliente não cria bloqueio",
+  await denied(() =>
+    as(db, c1, () =>
+      q(
+        db,
+        "insert into public.blocks (clinic_id, date, start, \"end\") select clinic_id, current_date, '09:00', '10:00' from public.profiles where id = auth.uid() returning id",
+      ),
+    ),
+  ),
+);
+check(
+  "bloqueio não aparece para a gestora de outra clínica",
+  (await as(db, gY, () => q(db, "select * from public.blocks"))).length === 0,
 );
 
 // --- dados de teste (inseridos como dono do banco) e permissões por papel
@@ -588,6 +616,31 @@ const noRls = await q(
   "select tablename from pg_tables where schemaname='public' and not rowsecurity",
 );
 check("TODA tabela pública tem RLS ligado", noRls.length === 0, JSON.stringify(noRls));
+
+// o link fixo nunca bloqueia: muitas tentativas erradas e depois uma certa
+const retry = await addUser(db, "retry@x.com");
+let lastBad = null;
+for (let i = 0; i < 30; i++)
+  lastBad = await rpc(db, retry, "select public.accept_invite('', 'nao-existe', 'R','1') r").then(
+    (x) => x.r,
+  );
+check("link inexistente só devolve inválido, sem bloquear", lastBad.reason === "invalido");
+check(
+  "depois de muitos erros, o link certo ainda funciona",
+  (
+    await rpc(db, retry, "select public.accept_invite('', 'estudio-acao-x', 'Rita','1') r").then(
+      (x) => x.r,
+    )
+  ).ok === true,
+);
+check(
+  "quem errou muitas credenciais ainda entra pelo link da clínica",
+  (
+    await rpc(db, c3, "select public.accept_invite('', 'estudio-acao-x', 'Cris','1') r").then(
+      (x) => x.r,
+    )
+  ).ok === true,
+);
 
 console.log(`\n${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

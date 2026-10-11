@@ -15,7 +15,10 @@ type Mode = "clinica" | "cliente" | "equipe";
 export function FinishSignup({ email }: { email: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(() => pendingStore.get() !== null);
-  const [mode, setMode] = useState<Mode>("clinica");
+  const [mode, setMode] = useState<Mode>(() =>
+    pendingStore.get()?.type === "cliente" ? "cliente" : "clinica",
+  );
+  const [canRetry, setCanRetry] = useState(false);
   const ran = useRef(false);
 
   useEffect(() => {
@@ -23,6 +26,7 @@ export function FinishSignup({ email }: { email: string }) {
     ran.current = true;
     authService.finishPending().then((result) => {
       if (!result.ok) setMessage(result.message);
+      setCanRetry(pendingStore.get() !== null);
       setBusy(false);
     });
   }, []);
@@ -41,6 +45,15 @@ export function FinishSignup({ email }: { email: string }) {
     pendingStore.set(pending);
     const result = await authService.finishPending();
     if (!result.ok) setMessage(result.message);
+    setCanRetry(pendingStore.get() !== null);
+    setBusy(false);
+  };
+  const retry = async () => {
+    setBusy(true);
+    setMessage(null);
+    const result = await authService.finishPending();
+    if (!result.ok) setMessage(result.message);
+    setCanRetry(pendingStore.get() !== null);
     setBusy(false);
   };
 
@@ -140,6 +153,19 @@ export function FinishSignup({ email }: { email: string }) {
         <p role="alert" className="mt-4 text-[13px] text-[var(--eb-coral-500)]">
           {message}
         </p>
+      ) : null}
+
+      {canRetry ? (
+        <Button
+          type="button"
+          size="lg"
+          variant="secondary"
+          className="mt-4 w-full"
+          disabled={busy}
+          onClick={() => void retry()}
+        >
+          Tentar de novo com o mesmo link
+        </Button>
       ) : null}
 
       <Button type="submit" size="lg" className="mt-5 w-full" disabled={busy}>

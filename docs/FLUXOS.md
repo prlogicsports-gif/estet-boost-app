@@ -57,7 +57,7 @@ sequenceDiagram
   DB-->>App: ok, entra na área da cliente
 ```
 
-Regras: resposta **genérica** a código inválido; cadastro pelo link fixo não precisa de código, mas tem limite por conta e IP; a filiação vem do servidor. Se a cliente já foi cadastrada pela gestora (mesmo e-mail), `accept_invite` **vincula** ao registro existente em vez de duplicar.
+Regras: resposta **genérica** a código inválido; cadastro pelo link fixo não precisa de código e nunca bloqueia; a credencial errada bloqueia a conta só depois de 20 erros por hora, e o cadastro pendente é mantido para tentar de novo; a filiação vem do servidor. Se a cliente já foi cadastrada pela gestora (mesmo e-mail), `accept_invite` **vincula** ao registro existente em vez de duplicar.
 
 ## 2b. Entrada da funcionária (credencial de equipe)
 

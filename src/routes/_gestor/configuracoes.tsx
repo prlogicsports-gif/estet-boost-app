@@ -1,3 +1,4 @@
+import { BlockTimeDrawer } from "@/components/agenda/block-time-drawer";
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -160,7 +161,7 @@ function ConfiguracoesPage() {
         {clinic ? <ClientInvite clinic={clinic} compact /> : null}
       </Drawer>
       <HoursDrawer open={sheet === "horarios"} onClose={close} />
-      <BlocksDrawer open={sheet === "bloqueios"} onClose={close} />
+      <BlockTimeDrawer open={sheet === "bloqueios"} onClose={close} />
       <ProceduresDrawer open={sheet === "procedimentos"} onClose={close} />
       <QuestionsDrawer open={sheet === "anamnese"} onClose={close} />
       <ConsentDrawer open={sheet === "consentimento"} onClose={close} />
@@ -380,87 +381,6 @@ function HoursDrawer({ open, onClose }: { open: boolean; onClose: (message?: str
             setHours((c) => ({ ...c, slot: Math.max(10, Number(event.target.value) || 30) }))
           }
         />
-      </div>
-    </Drawer>
-  );
-}
-
-function BlocksDrawer({ open, onClose }: { open: boolean; onClose: (message?: string) => void }) {
-  const blocks = blocksDb.use().sort((a, b) => a.date.localeCompare(b.date));
-  const [f, setF] = useState({ date: todayISO(), start: "12:00", end: "13:00", reason: "" });
-  return (
-    <Drawer
-      open={open}
-      onClose={() => onClose()}
-      title="Bloqueios de agenda"
-      subtitle="Horários em que você não atende"
-    >
-      <div className="flex flex-col gap-3.5">
-        <div className="flex flex-col gap-2.5 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5">
-          <Input
-            label="Dia"
-            type="date"
-            value={f.date}
-            onChange={(event) => setF({ ...f, date: event.target.value })}
-          />
-          <div className="grid grid-cols-2 gap-2.5">
-            <Input
-              label="Das"
-              type="time"
-              value={f.start}
-              onChange={(event) => setF({ ...f, start: event.target.value })}
-            />
-            <Input
-              label="Às"
-              type="time"
-              value={f.end}
-              onChange={(event) => setF({ ...f, end: event.target.value })}
-            />
-          </div>
-          <Input
-            label="Motivo"
-            placeholder="Almoço, consulta, folga…"
-            value={f.reason}
-            onChange={(event) => setF({ ...f, reason: event.target.value })}
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="self-start"
-            disabled={!f.date || f.end <= f.start}
-            onClick={() => {
-              blocksDb.set((list) => [
-                ...list,
-                { id: `bl-${Date.now()}`, ...f, reason: f.reason.trim() },
-              ]);
-              setF({ ...f, reason: "" });
-            }}
-          >
-            <Icon name="Plus" size={15} /> Bloquear horário
-          </Button>
-        </div>
-        {blocks.map((block) => (
-          <div
-            key={block.id}
-            className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border-card)] bg-[var(--surface-card)] px-3.5 py-2.5"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-[14px]">{block.reason || "Bloqueio"}</div>
-              <div className="font-mono text-xs text-muted-foreground">
-                {formatShort(block.date)} · {block.start} às {block.end}
-              </div>
-            </div>
-            <IconButton
-              icon="Trash2"
-              label="Remover bloqueio"
-              onClick={() => blocksDb.set((list) => list.filter((item) => item.id !== block.id))}
-            />
-          </div>
-        ))}
-        {!blocks.length ? (
-          <p className="text-[13px] text-muted-foreground">Nenhum bloqueio.</p>
-        ) : null}
       </div>
     </Drawer>
   );

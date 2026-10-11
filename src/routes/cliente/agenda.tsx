@@ -44,7 +44,8 @@ function AgendaClientePage() {
   const all = useClinicAppointments();
   const hours = hoursDb.use();
   const blocks = blocksDb.use();
-  const SERVICES = proceduresDb.use().map((item) => item.name);
+  const procs = proceduresDb.use();
+  const SERVICES = procs.map((item) => item.name);
   const today = todayISO();
   const mine = all
     .filter(
@@ -92,8 +93,9 @@ function AgendaClientePage() {
     [all, date, busy.data],
   );
   const past = date < today;
-  const TIMES = slotsFor(date, hours, blocks);
   const chosenService = service || SERVICES[0] || "";
+  const serviceMinutes = procs.find((item) => item.name === chosenService)?.duration ?? 0;
+  const TIMES = slotsFor(date, hours, blocks, serviceMinutes);
 
   const open = (next: "novo" | "remarcar", appointment: AppointmentRec | null = null) => {
     setMode(next);
@@ -123,7 +125,7 @@ function AgendaClientePage() {
   const lastStep = mode === "remarcar" ? 2 : 3;
   const canGo =
     step === 1
-      ? !past && slotsFor(date, hours, blocks).length > 0
+      ? !past && slotsFor(date, hours, blocks, serviceMinutes).length > 0
       : step === 2
         ? TIMES.includes(time) && !taken.has(time)
         : true;

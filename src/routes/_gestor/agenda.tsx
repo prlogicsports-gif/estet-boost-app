@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
+import { BlockTimeDrawer } from "@/components/agenda/block-time-drawer";
 import { NewAppointmentDrawer } from "@/components/agenda/new-appointment-drawer";
-import { AlertCard } from "@/components/eb/alert-card";
 import { Calendar } from "@/components/eb/calendar";
 import { Icon } from "@/components/eb/icon";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
@@ -11,7 +11,7 @@ import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { useShell } from "@/components/shell/shell-context";
 import { Button } from "@/components/ui/button";
-import { appointmentsDb } from "@/data/db";
+import { appointmentsDb, blocksDb } from "@/data/db";
 import { usePro } from "@/lib/use-pro";
 import { addDays, formatWeekday, todayISO } from "@/lib/dates";
 import { byDateTime, eventsFrom } from "@/lib/view";
@@ -61,6 +61,9 @@ function AgendaPage() {
     month: new Date().getMonth(),
   }));
   const [open, setOpen] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockEdit, setBlockEdit] = useState<string | null>(null);
+  const allBlocks = blocksDb.use();
   const [toast, setToast] = useState<{ message: string; detail?: string } | null>(null);
   const all = useClinicAppointments();
 
@@ -274,16 +277,57 @@ function AgendaPage() {
             </button>
           </div>
         )}
-        <AlertCard
-          tone="info"
-          icon="Lock"
-          title="Bloqueio pessoal"
-          description="Reserve horários que não vão para a agenda das clientes"
-          actionLabel="Em breve"
-        />
+        {allBlocks
+          .filter((item) => item.date === date)
+          .sort((x, y) => x.start.localeCompare(y.start))
+          .map((block) => (
+            <button
+              key={block.id}
+              type="button"
+              onClick={() => {
+                setBlockEdit(block.id);
+                setBlockOpen(true);
+              }}
+              className="flex min-h-12 w-full items-center gap-3 rounded-[var(--radius-md)] border border-dashed border-[var(--border-card)] bg-[var(--eb-ivory-a06)] px-3.5 py-2.5 text-left"
+            >
+              <Icon name="Lock" size={16} color="var(--eb-nude-300)" />
+              <span className="font-mono text-[13px] text-[var(--text-secondary)]">
+                {block.start <= "00:00" && block.end >= "23:59"
+                  ? "Dia todo"
+                  : `${block.start}–${block.end}`}
+              </span>
+              <span className="min-w-0 flex-1 break-words text-[13.5px]">
+                {block.reason || "Bloqueado"}
+              </span>
+              <Icon name="PencilLine" size={15} color="var(--eb-nude-300)" />
+            </button>
+          ))}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="self-start"
+          onClick={() => {
+            setBlockEdit(null);
+            setBlockOpen(true);
+          }}
+        >
+          <Icon name="Lock" size={15} /> Bloquear horários
+        </Button>
       </section>
 
       <ToastHost toast={toast} />
+
+      <BlockTimeDrawer
+        open={blockOpen}
+        initialDate={date}
+        editId={blockEdit}
+        onClose={(message) => {
+          setBlockOpen(false);
+          setBlockEdit(null);
+          if (message) setToast({ message });
+        }}
+      />
 
       <NewAppointmentDrawer
         open={open}
