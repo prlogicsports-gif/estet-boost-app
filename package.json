@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:db": "bun supabase/tests/rls.test.mjs && bun supabase/tests/data.test.mjs && bun supabase/tests/reminders.test.mjs && bun supabase/tests/loyalty.test.mjs",
+    "test:db": "bun supabase/tests/rls.test.mjs && bun supabase/tests/data.test.mjs && bun supabase/tests/reminders.test.mjs && bun supabase/tests/loyalty.test.mjs && bun supabase/tests/rewards.test.mjs",
     "db:bundle": "cat supabase/migrations/*.sql > supabase/bundle.sql",
     "test": "bun run test:db && bun test tests/sync.test.ts && bun test tests/push.test.ts && bun test tests/availability.test.ts && bun test tests/client-account.test.ts && bun test tests/anamnesis.test.ts && bun test tests/session-products.test.ts && bun test tests/permissions.test.ts && bun test tests/metrics.test.ts && bun test tests/body-map.test.ts && bun test tests/face-record.test.ts && bun test tests/nav.test.ts"
   },

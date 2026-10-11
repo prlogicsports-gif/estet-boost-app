@@ -9,6 +9,7 @@ import { Switch } from "@/components/eb/notifications-panel";
 import { Drawer } from "@/components/eb/overlays";
 import { SegmentedTabs } from "@/components/eb/segmented-tabs";
 import { Select } from "@/components/eb/select";
+import { RewardsTab } from "@/components/loyalty/rewards-tab";
 import { ToastHost } from "@/components/eb/toast";
 import { TopBar } from "@/components/eb/top-bar";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,9 @@ import {
 } from "@/services/loyalty.service";
 
 export const Route = createFileRoute("/_gestor/fidelidade")({
+  validateSearch: (search): { aba?: Tab | undefined } => ({
+    aba: TABS.find((item) => item === search["aba"]),
+  }),
   head: () => ({
     meta: [
       { title: "Fidelidade — EstetBoost." },
@@ -46,7 +50,8 @@ export const Route = createFileRoute("/_gestor/fidelidade")({
   component: FidelidadePage,
 });
 
-type Tab = "geral" | "programa" | "selos";
+type Tab = "geral" | "programa" | "selos" | "premios";
+const TABS: Tab[] = ["geral", "programa", "selos", "premios"];
 const heading =
   "text-[11px] font-medium uppercase leading-[1.2] tracking-[0.14em] text-muted-foreground";
 const card =
@@ -83,7 +88,11 @@ const POINT_ROWS: { key: keyof LoyaltyPoints; label: string; hint: string; unit:
 function FidelidadePage() {
   const pro = usePro();
   const admin = useRemote(loadLoyaltyAdmin);
-  const [tab, setTab] = useState<Tab>("geral");
+  const { aba } = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(aba ?? "geral");
+  useEffect(() => {
+    if (aba) setTab(aba);
+  }, [aba]);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,8 +134,9 @@ function FidelidadePage() {
               { id: "geral", label: "Visão geral" },
               { id: "programa", label: "Programa" },
               { id: "selos", label: "Selos" },
+              { id: "premios", label: "Prêmios" },
             ]}
-            className="max-w-md"
+            className="max-w-lg"
           />
           {tab === "geral" ? (
             <Overview data={data} onToast={setToast} onChanged={() => void admin.reload()} />
@@ -134,6 +144,7 @@ function FidelidadePage() {
           {tab === "programa" ? (
             <Program data={data} onToast={setToast} onSaved={() => void admin.reload()} />
           ) : null}
+          {tab === "premios" ? <RewardsTab onToast={setToast} /> : null}
           {tab === "selos" ? (
             <Badges data={data} onToast={setToast} onChanged={() => void admin.reload()} />
           ) : null}

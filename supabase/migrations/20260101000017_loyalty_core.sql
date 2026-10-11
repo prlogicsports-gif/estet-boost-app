@@ -84,6 +84,17 @@ create policy ranking_members_gestor on public.ranking_members for select to aut
   using (clinic_id = app.clinic_id() and app.is_gestor());
 
 -- ---------------------------------------------------------------- regras (funções internas)
+-- "ganhos" = tudo menos os resgates (define nível, selos e ranking: gastar pontos não rebaixa a cliente)
+-- "saldo"  = ganhos menos o que foi resgatado (o que ela ainda pode gastar)
+create or replace function app.loyalty_earned(p_client uuid) returns int
+language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce(sum(points), 0)::int from public.loyalty_ledger where client_id = p_client and event <> 'redeem'
+$$;
+create or replace function app.loyalty_balance(p_client uuid) returns int
+language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce(sum(points), 0)::int from public.loyalty_ledger where client_id = p_client
+$$;
+
 create or replace function app.loyalty_level(p_levels jsonb, p_points int) returns jsonb
 language sql immutable as $$
   select l from jsonb_array_elements(p_levels) l where (l ->> 'min')::int <= p_points order by (l ->> 'min')::int desc limit 1
@@ -151,7 +162,7 @@ declare
 begin
   select * into cfg from public.loyalty_config where clinic_id = p_clinic;
   if not found or not cfg.enabled then return; end if;
-  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = p_client), 0);
+  total := app.loyalty_earned(p_client);
 
   for b in select * from public.badges
             where clinic_id = p_clinic and active and criteria <> 'manual' and threshold > 0
@@ -187,7 +198,7 @@ begin
   on conflict (client_id, idem_key) do nothing
   returning id into new_id;
   if new_id is null then return false; end if;
-  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = p_client), 0);
+  total := app.loyalty_balance(p_client);
   if p_points > 0 then
     perform app.notify_client(p_clinic, p_client, 'reward', 'Você ganhou pontos',
       '+' || p_points || ' pontos' || coalesce(' · ' || p_note, '') || '. Total: ' || total || '.',
@@ -279,7 +290,7 @@ create trigger loyalty_signup after insert on public.profiles
   for each row when (new.role = 'cliente')
   execute function app.trg_loyalty_signup();
 
-revoke all on function app.loyalty_level(jsonb, int), app.loyalty_next_level(jsonb, int), app.client_streak(uuid),
+revoke all on function app.loyalty_earned(uuid), app.loyalty_balance(uuid), app.loyalty_level(jsonb, int), app.loyalty_next_level(jsonb, int), app.client_streak(uuid),
   app.badge_value(uuid, text, int), app.loyalty_seed(uuid), app.loyalty_refresh(uuid, uuid),
   app.award(uuid, uuid, text, int, uuid, text, text), app.award_session(uuid),
   app.trg_loyalty_session(), app.trg_loyalty_session_delete(), app.trg_loyalty_confirm(), app.trg_loyalty_signup()

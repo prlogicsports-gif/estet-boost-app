@@ -26,7 +26,9 @@ export type MyLoyalty =
   | { enabled: false }
   | {
       enabled: true;
+      /** Saldo para gastar. O nível e o ranking usam `earned` (gastar não rebaixa). */
       points: number;
+      earned: number;
       level: LoyaltyLevel | null;
       next: { name: string; min: number; remaining: number } | null;
       levels: LoyaltyLevel[];
@@ -79,6 +81,15 @@ const REASONS: Record<string, string> = {
   nome_vazio: "Dê um nome ao selo.",
   limite_invalido: "Informe quanto é preciso para ganhar o selo.",
   limite_de_selos: "Você chegou ao limite de selos.",
+  premio_indisponivel: "Esse prêmio não está mais disponível.",
+  premio_esgotado: "Esse prêmio esgotou.",
+  pontos_insuficientes: "Pontos insuficientes.",
+  ja_pedido: "Você já pediu esse prêmio. Aguarde a resposta da clínica.",
+  custo_invalido: "Informe quantos pontos o prêmio custa.",
+  quantidade_invalida: "A quantidade não pode ser negativa.",
+  limite_de_premios: "Você chegou ao limite de prêmios.",
+  tem_pedidos_abertos: "Há pedidos abertos desse prêmio. Resolva-os antes de excluir.",
+  estado_invalido: "Esse pedido já foi resolvido.",
 };
 export type Result<T = unknown> = ({ ok: true } & T) | { ok: false; message: string };
 
@@ -176,3 +187,91 @@ export const BADGE_ICONS = [
   "Sparkles",
   "Gem",
 ] as const;
+
+// ---------------------------------------------------------------- prêmios
+export type MyReward = {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  valid_until: string | null;
+  remaining: number | null;
+  pending: boolean;
+  can_redeem: boolean;
+};
+export type RedeemStatus = "pendente" | "aprovado" | "recusado" | "entregue" | "cancelado";
+export type MyRewards =
+  | { enabled: false }
+  | {
+      enabled: true;
+      available: number;
+      rewards: MyReward[];
+      requests: { id: string; reward: string; cost: number; status: RedeemStatus; at: string }[];
+    };
+export const STATUS_LABEL: Record<RedeemStatus, string> = {
+  pendente: "Aguardando a clínica",
+  aprovado: "Aprovado",
+  recusado: "Não aprovado",
+  entregue: "Entregue",
+  cancelado: "Cancelado",
+};
+
+export async function loadMyRewards(): Promise<MyRewards> {
+  const { data, error } = await supabase.rpc("my_rewards");
+  if (error) throw error;
+  return data as MyRewards;
+}
+export const requestRedeem = (rewardId: string) => call("request_redeem", { p_reward: rewardId });
+export const cancelMyRedeem = (id: string) => call("cancel_my_redeem", { p_id: id });
+
+export type AdminReward = {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  valid_until: string | null;
+  quantity: number | null;
+  active: boolean;
+  used: number;
+};
+export type AdminRedemption = {
+  id: string;
+  client_id: string;
+  client: string;
+  reward: string;
+  cost: number;
+  status: RedeemStatus;
+  at: string;
+  decided_at: string | null;
+  balance: number;
+};
+export type RewardsAdmin = { ok: true; rewards: AdminReward[]; redemptions: AdminRedemption[] };
+
+export async function loadRewardsAdmin(): Promise<RewardsAdmin> {
+  const { data, error } = await supabase.rpc("rewards_admin");
+  if (error) throw error;
+  return data as RewardsAdmin;
+}
+export const saveReward = (reward: {
+  id?: string | null;
+  name: string;
+  description: string;
+  cost: number;
+  valid_until: string | null;
+  quantity: number | null;
+  active: boolean;
+}) =>
+  call("save_reward", {
+    p_id: reward.id ?? null,
+    p_name: reward.name,
+    p_description: reward.description,
+    p_cost: reward.cost,
+    p_valid_until: reward.valid_until,
+    p_quantity: reward.quantity,
+    p_active: reward.active,
+  });
+export const deleteReward = (id: string) => call("delete_reward", { p_id: id });
+export const decideRedeem = (
+  id: string,
+  decision: "aprovar" | "recusar" | "entregar" | "cancelar",
+) => call("decide_redeem", { p_id: id, p_decision: decision });

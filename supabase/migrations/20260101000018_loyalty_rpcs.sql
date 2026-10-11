@@ -57,19 +57,20 @@ begin
   select * into cfg from public.loyalty_config where clinic_id = me.clinic_id;
   if not found or not cfg.enabled then return jsonb_build_object('enabled', false); end if;
 
-  total := coalesce((select sum(points) from public.loyalty_ledger where client_id = me.client_id), 0);
+  total := app.loyalty_earned(me.client_id);
   lvl := app.loyalty_level(cfg.levels, total);
   nxt := app.loyalty_next_level(cfg.levels, total);
 
   select r.pos into pos from (
     select t.client_id, rank() over (order by t.pts desc) as pos from (
-      select rm.client_id, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = rm.client_id), 0) as pts
+      select rm.client_id, app.loyalty_earned(rm.client_id) as pts
         from public.ranking_members rm where rm.clinic_id = me.clinic_id) t) r
    where r.client_id = me.client_id;
 
   return jsonb_build_object(
     'enabled', true,
-    'points', total,
+    'points', app.loyalty_balance(me.client_id),
+    'earned', total,
     'level', lvl,
     'next', case when nxt is null then null
                  else jsonb_build_object('name', nxt ->> 'name', 'min', (nxt ->> 'min')::int, 'remaining', (nxt ->> 'min')::int - total) end,
@@ -111,7 +112,7 @@ begin
              order by r.pos, r.nickname), '[]')
       from (
         select t.client_id, t.nickname, t.pts, rank() over (order by t.pts desc) as pos from (
-          select rm.client_id, rm.nickname, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = rm.client_id), 0) as pts
+          select rm.client_id, rm.nickname, app.loyalty_earned(rm.client_id) as pts
             from public.ranking_members rm where rm.clinic_id = me.clinic_id) t) r
        where r.pos <= 20 or r.client_id = me.client_id);
 end $$;
@@ -164,7 +165,7 @@ begin
                  from public.badges b where b.clinic_id = clinic),
     'overview', (
       with pts as (
-        select c.id as client_id, c.name, coalesce((select sum(points) from public.loyalty_ledger l where l.client_id = c.id), 0) as total
+        select c.id as client_id, c.name, app.loyalty_earned(c.id) as total
           from public.clients c where c.clinic_id = clinic)
       select jsonb_build_object(
         'clients', (select count(*) from pts),

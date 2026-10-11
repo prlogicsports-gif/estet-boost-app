@@ -15,8 +15,12 @@ import { cn } from "@/lib/utils";
 import {
   CRITERIA_LABEL,
   EVENT_LABEL,
+  cancelMyRedeem,
   loadMyLoyalty,
+  loadMyRewards,
   loadRanking,
+  requestRedeem,
+  STATUS_LABEL,
   setRankingOptin,
   type MyBadge,
 } from "@/services/loyalty.service";
@@ -85,12 +89,13 @@ function ConquistasPage() {
   const { profile } = useClient();
   const mine = useRemote(loadMyLoyalty);
   const ranking = useRemote(loadRanking);
+  const rewards = useRemote(loadMyRewards);
   const [nick, setNick] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const reloadAll = () => void Promise.all([mine.reload(), ranking.reload()]);
+  const reloadAll = () => void Promise.all([mine.reload(), ranking.reload(), rewards.reload()]);
   const data = mine.data;
 
   const topBar = (
@@ -129,7 +134,23 @@ function ConquistasPage() {
   const base = data.level?.min ?? 0;
   const span = data.next ? data.next.min - base : 0;
   const pct =
-    data.next && span > 0 ? Math.min(100, Math.round(((data.points - base) / span) * 100)) : 100;
+    data.next && span > 0 ? Math.min(100, Math.round(((data.earned - base) / span) * 100)) : 100;
+  const prizes = rewards.data && rewards.data.enabled ? rewards.data : null;
+  const redeem = async (id: string) => {
+    setBusy(true);
+    const result = await requestRedeem(id);
+    setBusy(false);
+    if (!result.ok) return setToast(result.message);
+    setToast("Pedido enviado. A clínica responde em breve.");
+    reloadAll();
+  };
+  const cancelRedeem = async (id: string) => {
+    const result = await cancelMyRedeem(id);
+    if (result.ok) {
+      setToast("Pedido cancelado");
+      reloadAll();
+    }
+  };
 
   const join = async () => {
     setBusy(true);
@@ -199,6 +220,101 @@ function ConquistasPage() {
           <p className="text-[13px] text-muted-foreground">Nenhum selo disponível ainda.</p>
         )}
       </section>
+
+      {prizes && (prizes.rewards.length || prizes.requests.length) ? (
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-baseline gap-2">
+            <span className={`${heading} flex-1`}>Prêmios</span>
+            <span className="font-mono text-[12.5px] text-[var(--eb-amber-500)]">
+              {prizes.available} pontos disponíveis
+            </span>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(240px,100%),1fr))] gap-2.5">
+            {prizes.rewards.map((reward) => (
+              <div
+                key={reward.id}
+                className="flex min-w-0 flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-3.5"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words text-[14.5px] font-medium">
+                      {reward.name}
+                    </span>
+                    {reward.description ? (
+                      <span className="mt-0.5 block break-words text-[12.5px] text-[var(--text-secondary)]">
+                        {reward.description}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="flex-none font-mono text-[14px] text-[var(--eb-amber-500)]">
+                    {reward.cost}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
+                  {reward.valid_until ? (
+                    <span>
+                      até {new Date(`${reward.valid_until}T12:00:00`).toLocaleDateString("pt-BR")}
+                    </span>
+                  ) : null}
+                  {reward.remaining !== null ? (
+                    <span>{reward.remaining === 1 ? "resta 1" : `restam ${reward.remaining}`}</span>
+                  ) : null}
+                </div>
+                {reward.pending ? (
+                  <span className="text-[12.5px] text-[var(--eb-amber-500)]">
+                    Pedido enviado, aguardando a clínica
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={reward.can_redeem ? "tech" : "secondary"}
+                    disabled={busy || !reward.can_redeem}
+                    className="self-start"
+                    onClick={() => void redeem(reward.id)}
+                  >
+                    <Icon name="Gift" size={15} />{" "}
+                    {reward.can_redeem
+                      ? "Resgatar"
+                      : `Faltam ${reward.cost - prizes.available} pontos`}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          {prizes.requests.length ? (
+            <div className="flex flex-col rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] px-4 py-1">
+              {prizes.requests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex min-h-12 items-center gap-3 border-b border-[var(--border-hairline)] py-2 last:border-b-0"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words text-[13.5px]">{request.reward}</span>
+                    <span className="block text-[11.5px] text-muted-foreground">
+                      {STATUS_LABEL[request.status]} · {timeAgo(request.at)}
+                    </span>
+                  </span>
+                  {request.status === "pendente" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void cancelRedeem(request.id)}
+                    >
+                      Cancelar
+                    </Button>
+                  ) : (
+                    <span className="flex-none font-mono text-[12.5px] text-muted-foreground">
+                      {request.cost}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {data.ranking.enabled ? (
         <section className="flex flex-col gap-2.5 rounded-[var(--radius-lg)] border border-[var(--border-card)] bg-[var(--surface-card)] p-4">
