@@ -1,3 +1,4 @@
+import { procLabel } from "@/lib/activity-text";
 import type { ClientRec } from "@/data/db";
 import type { LedgerEntry } from "@/lib/models";
 import { formatWeekday } from "@/lib/dates";
@@ -66,7 +67,7 @@ export const events = {
     toGestor({
       kind: "confirmed",
       title: `${first(a.client)} confirmou presença`,
-      body: `${a.procedure} · ${when(a)}`,
+      body: `${procLabel(a.procedure)} · ${when(a)}`,
       href: `/atendimentos/${a.id}`,
     }),
   paymentReported: (entry: LedgerEntry, method: string) =>
@@ -129,7 +130,7 @@ export const events = {
     toGestor({
       kind: "reminder",
       title: `${first(a.client)} ainda não confirmou`,
-      body: `${a.procedure} · hoje ${a.time}`,
+      body: `${procLabel(a.procedure)} · hoje ${a.time}`,
       href: `/atendimentos/${a.id}`,
       ruleKey: `unconf:${a.id}:${today}`,
     }),
@@ -137,7 +138,7 @@ export const events = {
     toGestor({
       kind: "reminder",
       title: `Próximo atendimento em ${minutes} min`,
-      body: `${a.client} · ${a.procedure}`,
+      body: `${a.client} · ${procLabel(a.procedure)}`,
       href: `/atendimentos/${a.id}`,
       ruleKey: `soon:${a.id}`,
     }),
@@ -153,7 +154,7 @@ export const events = {
     toGestor({
       kind: "stock",
       title: "Produtos pesaram no atendimento",
-      body: `${first(clientName)} · ${procedure}: ${Math.round(costShare * 100)}% do valor foi custo de produto`,
+      body: `${first(clientName)} · ${procLabel(procedure)}: ${Math.round(costShare * 100)}% do valor foi custo de produto`,
       href: "/financeiro",
       ruleKey: `margin:${sessionId}`,
     }),
@@ -163,14 +164,14 @@ export const events = {
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Novo horário agendado",
-      body: `${a.procedure} · ${when(a)}. Toque para confirmar sua presença.`,
+      body: `${procLabel(a.procedure)} · ${when(a)}. Toque para confirmar sua presença.`,
       href: "/cliente/agenda",
     }),
   requestApproved: (a: AppointmentRec) =>
     toCliente(a.clientId, {
       kind: "confirmed",
       title: "Horário confirmado",
-      body: `${a.procedure} · ${when(a)}`,
+      body: `${procLabel(a.procedure)} · ${when(a)}`,
       href: "/cliente/agenda",
     }),
   requestDeclined: (a: AppointmentRec) =>
@@ -184,28 +185,28 @@ export const events = {
     toCliente(a.clientId, {
       kind: "confirmed",
       title: "Horário confirmado",
-      body: `${a.procedure} · ${when(a)}`,
+      body: `${procLabel(a.procedure)} · ${when(a)}`,
       href: "/cliente/agenda",
     }),
   cancelledByStudio: (a: AppointmentRec) =>
     toCliente(a.clientId, {
       kind: "reschedule",
       title: "Atendimento cancelado",
-      body: `${a.procedure} · ${when(a)}. A sessão volta para o pacote.`,
+      body: `${procLabel(a.procedure)} · ${when(a)}. A sessão volta para o pacote.`,
       href: "/cliente/agenda",
     }),
   movedByStudio: (a: AppointmentRec, date: string, time: string) =>
     toCliente(a.clientId, {
       kind: "reschedule",
       title: "Horário alterado",
-      body: `${a.procedure} passou para ${formatWeekday(date)} · ${time}`,
+      body: `${procLabel(a.procedure)} passou para ${formatWeekday(date)} · ${time}`,
       href: "/cliente/agenda",
     }),
   rescheduleApproved: (a: AppointmentRec, date: string, time: string) =>
     toCliente(a.clientId, {
       kind: "confirmed",
       title: "Remarcação confirmada",
-      body: `${a.procedure} · ${formatWeekday(date)} · ${time}`,
+      body: `${procLabel(a.procedure)} · ${formatWeekday(date)} · ${time}`,
       href: "/cliente/agenda",
     }),
   rescheduleDeclined: (a: AppointmentRec) =>
@@ -219,14 +220,14 @@ export const events = {
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Confirme seu atendimento de hoje",
-      body: `${a.procedure} · às ${a.time}`,
+      body: `${procLabel(a.procedure)} · às ${a.time}`,
       href: "/cliente/agenda",
     }),
   remindTomorrow: (a: AppointmentRec) =>
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Seu atendimento é amanhã",
-      body: `${a.procedure} · ${a.time}`,
+      body: `${procLabel(a.procedure)} · ${a.time}`,
       href: "/cliente/agenda",
       ruleKey: `r24:${a.id}`,
     }),
@@ -234,7 +235,7 @@ export const events = {
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Seu atendimento é hoje",
-      body: `${a.procedure} · às ${a.time}`,
+      body: `${procLabel(a.procedure)} · às ${a.time}`,
       href: "/cliente/agenda",
       ruleKey: `r0:${a.id}`,
     }),
@@ -258,7 +259,7 @@ export const events = {
     toCliente(a.clientId, {
       kind: "reminder",
       title: "Retorno sugerido",
-      body: `${a.procedure} · ${when(a)}. Confirme sua presença.`,
+      body: `${procLabel(a.procedure)} · ${when(a)}. Confirme sua presença.`,
       href: "/cliente/agenda",
     }),
   paymentDue: (entry: LedgerEntry, days: number, today: string) =>

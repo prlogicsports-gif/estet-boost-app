@@ -1,3 +1,4 @@
+import { completeActivityText } from "@/lib/activity-text";
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -125,7 +126,8 @@ function ActivityList() {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px]">
-                  <span className="font-medium">{item.client}</span> · {item.text}
+                  <span className="font-medium">{item.client}</span> ·{" "}
+                  {completeActivityText(item.text)}
                 </div>
                 <div className="font-mono text-[11.5px] text-muted-foreground">
                   {new Date(item.at).toLocaleTimeString("pt-BR", {

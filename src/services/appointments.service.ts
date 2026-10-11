@@ -1,3 +1,4 @@
+import { procLabel } from "@/lib/activity-text";
 import { logActivity } from "@/services/activity.service";
 import { appointmentsDb, clientsDb } from "@/data/db";
 import type { AppointmentRec, AppointmentStatus } from "@/lib/models";
@@ -91,7 +92,7 @@ export function requestAppointment(input: {
     kind: "horario",
     clientId: client.id,
     client: client.name,
-    text: `Solicitou ${rec.procedure} em ${rec.date.split("-").reverse().join("/")} às ${rec.time}`,
+    text: `Solicitou ${procLabel(rec.procedure)} em ${rec.date.split("-").reverse().join("/")} às ${rec.time}`,
   });
   return rec;
 }
@@ -106,7 +107,7 @@ export function approveRequest(id: string) {
     kind: "horario",
     clientId: a.clientId,
     client: a.client,
-    text: `Aprovou o horário de ${a.procedure} (${a.time})`,
+    text: `Aprovou o horário de ${procLabel(a.procedure)} (${a.time})`,
   });
 }
 
@@ -141,8 +142,8 @@ export function confirmAppointment(id: string, by: "gestor" | "cliente") {
     client: a.client,
     text:
       by === "cliente"
-        ? `Confirmou presença em ${a.procedure}`
-        : `Confirmou o horário de ${a.procedure}`,
+        ? `Confirmou presença em ${procLabel(a.procedure)}`
+        : `Confirmou o horário de ${procLabel(a.procedure)}`,
   });
 }
 
@@ -167,7 +168,7 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
         kind: "horario",
         clientId: a.clientId,
         client: a.client,
-        text: `Pediu para cancelar ${a.procedure} (menos de 24 h)`,
+        text: `Pediu para cancelar ${procLabel(a.procedure)} (menos de 24 h)`,
       });
       return;
     }
@@ -178,7 +179,7 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
       kind: "horario",
       clientId: a.clientId,
       client: a.client,
-      text: `Cancelou ${a.procedure}`,
+      text: `Cancelou ${procLabel(a.procedure)}`,
     });
     return;
   }
@@ -189,7 +190,7 @@ export function cancelAppointment(id: string, by: "gestor" | "cliente") {
     kind: "horario",
     clientId: a.clientId,
     client: a.client,
-    text: `Cancelou ${a.procedure}`,
+    text: `Cancelou ${procLabel(a.procedure)}`,
   });
 }
 
