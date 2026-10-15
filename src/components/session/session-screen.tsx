@@ -570,9 +570,87 @@ export function SessionScreen({ session, onExit }: { session: SessionRec; onExit
               <div className={card}>
                 <span className={label}>Resumo</span>
                 {s.procedures.map((item, index) => (
-                  <Row key={`${item.name}-${index}`} k={item.name} v={money(item.price)} />
+                  <div key={`${item.name}-${index}`} className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1 break-words text-[13.5px] text-[var(--text-secondary)]">
+                      {item.name}
+                    </span>
+                    <Input
+                      aria-label={`Valor de ${item.name}`}
+                      className="w-32"
+                      trailing="R$"
+                      inputMode="decimal"
+                      value={String(item.price)}
+                      onChange={(event) =>
+                        setProcedurePrice(index, Number(event.target.value.replace(",", ".")) || 0)
+                      }
+                    />
+                  </div>
                 ))}
-                <Row k="Total" v={money(totals.price)} strong />
+                <div role="group" aria-label="Desconto" className="flex flex-col gap-2 pt-1">
+                  <span className={label}>Desconto</span>
+                  <div className="flex gap-2">
+                    {(
+                      [
+                        { id: "nenhum", text: "Sem desconto" },
+                        { id: "valor", text: "Em R$" },
+                        { id: "percent", text: "Em %" },
+                      ] as const
+                    ).map((option) => {
+                      const active = (s.discount?.kind ?? "nenhum") === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() =>
+                            set({
+                              discount:
+                                option.id === "nenhum"
+                                  ? undefined
+                                  : { kind: option.id, value: s.discount?.value ?? 0 },
+                            })
+                          }
+                          className={cn(
+                            "min-h-11 flex-1 rounded-full border px-2 text-[13px]",
+                            active
+                              ? "border-transparent bg-[var(--eb-nude-500)] text-[var(--text-on-nude)]"
+                              : "border-[var(--border-hairline)] bg-[var(--eb-ivory-a06)] text-[var(--text-secondary)]",
+                          )}
+                        >
+                          {option.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {s.discount ? (
+                    <Input
+                      aria-label={
+                        s.discount.kind === "percent"
+                          ? "Desconto em porcentagem"
+                          : "Desconto em reais"
+                      }
+                      trailing={s.discount.kind === "percent" ? "%" : "R$"}
+                      inputMode="decimal"
+                      value={s.discount.value ? String(s.discount.value) : ""}
+                      placeholder="0"
+                      onChange={(event) =>
+                        set({
+                          discount: {
+                            kind: s.discount?.kind ?? "valor",
+                            value: Math.max(0, Number(event.target.value.replace(",", ".")) || 0),
+                          },
+                        })
+                      }
+                    />
+                  ) : null}
+                </div>
+                {totals.discount > 0 ? (
+                  <>
+                    <Row k="Subtotal" v={money(totals.gross)} />
+                    <Row k="Desconto" v={`− ${money(totals.discount)}`} />
+                  </>
+                ) : null}
+                <Row k="Total a cobrar" v={money(totals.price)} strong />
                 <Row k="Custo de produtos" v={money(totals.cost)} />
                 <Row k="Sobra" v={money(totals.profit)} strong />
               </div>

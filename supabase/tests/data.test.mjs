@@ -653,5 +653,96 @@ check(
     })()),
 );
 
+// ---- desconto no pagamento
+const finish = async (uid, data) => {
+  const id = await draft(uid, {
+    client: "Cliente Um",
+    payment: "Pix",
+    paidNow: true,
+    products: [],
+    ...data,
+  });
+  const r = R(await rpc(db, uid, "select public.complete_session($1,'[]','null') r", [id]));
+  return { id, r };
+};
+const ledgerOf = async (id) =>
+  (await q(db, "select * from public.ledger where ref_id=$1", [id]))[0];
+const finOf = async (id) =>
+  (await q(db, "select * from public.session_finance where session_id=$1", [id]))[0];
+const dv = await finish(g, {
+  procedures: [
+    { name: "Limpeza", price: 200 },
+    { name: "Peeling", price: 100 },
+  ],
+  discount: { kind: "valor", value: 50 },
+});
+check(
+  "desconto em valor: caixa recebe o total menos o desconto",
+  dv.r.ok === true &&
+    Number((await ledgerOf(dv.id)).value) === 250 &&
+    Number((await finOf(dv.id)).discount) === 50,
+);
+check(
+  "o bruto continua nos itens",
+  (await finOf(dv.id)).items.reduce((sum, i) => sum + Number(i.price), 0) === 300,
+);
+const dp = await finish(g, {
+  procedures: [{ name: "Limpeza", price: 250 }],
+  discount: { kind: "percent", value: 10 },
+});
+check("desconto em porcentagem", Number((await ledgerOf(dp.id)).value) === 225);
+const dx = await finish(g, {
+  procedures: [{ name: "Limpeza", price: 80 }],
+  discount: { kind: "valor", value: 500 },
+});
+check(
+  "desconto nunca passa do total",
+  (await ledgerOf(dx.id)) === undefined && Number((await finOf(dx.id)).discount) === 80,
+);
+const dxp = await finish(g, {
+  procedures: [{ name: "Limpeza", price: 80 }],
+  discount: { kind: "percent", value: 400 },
+});
+check("porcentagem acima de 100 vale 100", Number((await finOf(dxp.id)).discount) === 80);
+const dbad = await finish(g, {
+  procedures: [{ name: "Limpeza", price: 80 }],
+  discount: { kind: "valor", value: -5 },
+});
+check(
+  "desconto negativo é ignorado",
+  Number((await ledgerOf(dbad.id)).value) === 80 && Number((await finOf(dbad.id)).discount) === 0,
+);
+const dnone = await finish(g, { procedures: [{ name: "Limpeza", price: 80 }] });
+check("sem desconto nada muda", Number((await ledgerOf(dnone.id)).value) === 80);
+const dstaff = await finish(s, {
+  procedures: [{ name: "Limpeza", price: 80 }],
+  discount: { kind: "percent", value: 50 },
+});
+check(
+  "funcionária sem financeiro não dá desconto",
+  Number((await ledgerOf(dstaff.id)).value) === 180 &&
+    Number((await finOf(dstaff.id)).discount) === 0,
+);
+check(
+  "corrigir o atendimento recalcula o desconto em porcentagem",
+  R(
+    await rpc(db, g, "select public.edit_finished_session($1,$2::jsonb,'{}'::jsonb,'Pix') r", [
+      dp.id,
+      JSON.stringify([{ name: "Limpeza", price: 400 }]),
+    ]),
+  ).ok === true &&
+    Number((await ledgerOf(dp.id)).value) === 360 &&
+    Number((await finOf(dp.id)).discount) === 40,
+);
+check(
+  "corrigir mantém o desconto em valor",
+  R(
+    await rpc(db, g, "select public.edit_finished_session($1,$2::jsonb,'{}'::jsonb,'Pix') r", [
+      dv.id,
+      JSON.stringify([{ name: "Limpeza", price: 500 }]),
+    ]),
+  ).ok === true && Number((await ledgerOf(dv.id)).value) === 450,
+);
+
 console.log(`\n${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

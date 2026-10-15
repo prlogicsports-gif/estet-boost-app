@@ -1,5 +1,6 @@
 import { appointmentsDb, clientsDb, proceduresDb, sessionsDb, stockDb } from "@/data/db";
 import { addDays, todayISO } from "@/lib/dates";
+import { discountAmount, type Discount } from "@/lib/discount";
 import type { ProcedureRec, SessionProduct, SessionRec } from "@/lib/models";
 import { reloadAll, runRpc } from "@/lib/remote-store";
 import { newId } from "@/lib/uuid";
@@ -9,10 +10,21 @@ export const MARGIN_ALERT = 0.35;
 
 const find = (id: string) => sessionsDb.get().find((item) => item.id === id);
 
-export const sessionTotals = (session: Pick<SessionRec, "procedures" | "products">) => {
-  const price = session.procedures.reduce((sum, item) => sum + item.price, 0);
+export const sessionTotals = (
+  session: Pick<SessionRec, "procedures" | "products"> & { discount?: Discount | undefined },
+) => {
+  const gross = session.procedures.reduce((sum, item) => sum + item.price, 0);
+  const discount = discountAmount(gross, session.discount);
+  const price = gross - discount;
   const cost = session.products.reduce((sum, item) => sum + item.qty * item.unitCost, 0);
-  return { price, cost, profit: price - cost, share: price > 0 ? cost / price : 0 };
+  return {
+    gross,
+    discount,
+    price,
+    cost,
+    profit: price - cost,
+    share: price > 0 ? cost / price : 0,
+  };
 };
 
 /** Produtos do procedimento com nome e custo do estoque (itens que não existem mais são ignorados). */

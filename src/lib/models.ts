@@ -1,3 +1,4 @@
+import type { Discount } from "@/lib/discount";
 import type { StatusTone } from "@/components/eb/status-badge";
 import type { NotificationKind } from "@/components/eb/notification-center";
 
@@ -146,6 +147,8 @@ export type SessionRec = {
   /** Se o valor já foi pago ou fica a receber. */
   paidNow: boolean;
   dueDate: string;
+  /** Desconto dado no pagamento (só quem tem permissão financeira). */
+  discount?: Discount | undefined;
   status: "draft" | "done";
   startedAt: string;
   finishedAt?: string | undefined;

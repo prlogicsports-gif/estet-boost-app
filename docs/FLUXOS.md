@@ -129,6 +129,8 @@ Para a funcionária, a etapa de produtos não mostra custo e o resumo financeiro
 
 ## 6. Pagamentos
 
+**Valor e desconto**: na última etapa do atendimento, quem tem permissão financeira edita o valor de cada procedimento e pode dar desconto em R$ ou em %. O desconto nunca passa do total; o caixa e o "a receber" já entram com o valor final, e o valor bruto continua guardado nos itens. Corrigir o atendimento depois recalcula o desconto sobre o novo total. Quem não tem permissão financeira fecha com o preço da tabela e sem desconto.
+
 ```mermaid
 stateDiagram-v2
   [*] --> aReceber: atendimento fechado como "a receber" ou cobrança criada

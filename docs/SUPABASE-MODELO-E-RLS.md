@@ -242,6 +242,7 @@ Migrações em `supabase/migrations`, todas testadas com `bun run test` (91 veri
 | `…18_loyalty_rpcs.sql`        | `my_loyalty`, `loyalty_ranking`, `set_ranking_optin` (cliente); `loyalty_admin`, `save_loyalty_config`, `save_badge`, `delete_badge`, `grant_badge`, `award_manual`, `loyalty_backfill` (gestora)                                             |
 | `…19_rewards.sql`             | tabelas `rewards`, `redemptions`; `my_rewards`, `request_redeem`, `cancel_my_redeem` (cliente); `rewards_admin`, `save_reward`, `delete_reward`, `decide_redeem` (gestora)                                                                    |
 | `…20_campaigns.sql`           | tabelas `campaigns`, `campaign_sends`; público, envio e cron `eb-campaigns`; `campaigns_admin`, `save_campaign`, `set_campaign_status`, `delete_campaign`, `preview_campaign_audience`, `send_campaign_now`, `save_campaign_limits` (gestora) |
+| `…21_discount.sql` | colunas de desconto em `session_finance`; `complete_session` e `edit_finished_session` aplicam desconto (valor ou %, só com permissão financeira) |
 
 No app, `src/lib/remote-store.ts` liga cada coleção à sua tabela (leitura, tempo real, gravação agrupada e na ordem certa) e `src/data/db.ts` define como cada registro vira linha e volta.
 

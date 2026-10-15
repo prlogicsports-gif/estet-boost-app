@@ -519,7 +519,7 @@ export const sessionsDb = createRemoteStore<SessionRec>({
   key: "sessions",
   label: (rec) => `Atendimento de ${rec.client}`,
   table: "sessions",
-  select: "*, session_finance(items, paid_now, payment, due_date)",
+  select: "*, session_finance(items, paid_now, payment, due_date, discount_kind, discount_value)",
   watch: ["session_finance"],
   order: { column: "started_at" },
   fromRow: (r) => {
@@ -529,6 +529,8 @@ export const sessionsDb = createRemoteStore<SessionRec>({
       paid_now: boolean;
       payment: string;
       due_date: string | null;
+      discount_kind: "valor" | "percent" | null;
+      discount_value: number | string | null;
     }>(r.session_finance);
     const costOf = (stockId: string) =>
       stockDb.get().find((item) => item.id === stockId)?.cost ?? 0;
@@ -556,6 +558,14 @@ export const sessionsDb = createRemoteStore<SessionRec>({
       payment: fin?.payment ?? d.payment ?? "Pix",
       paidNow: fin?.paid_now ?? d.paidNow ?? true,
       dueDate: fin?.due_date ?? d.dueDate ?? "",
+      discount: fin?.discount_kind
+        ? { kind: fin.discount_kind, value: num(fin.discount_value) }
+        : d.discount?.value > 0
+          ? {
+              kind: d.discount.kind === "percent" ? "percent" : "valor",
+              value: num(d.discount.value),
+            }
+          : undefined,
       status: r.status,
       startedAt: r.started_at,
       finishedAt: opt(r.finished_at),
@@ -583,6 +593,7 @@ export const sessionsDb = createRemoteStore<SessionRec>({
           payment: rec.payment,
           paidNow: rec.paidNow,
           dueDate: rec.dueDate,
+          discount: rec.discount ?? null,
           beforePhotoId: rec.beforePhotoId ?? null,
           afterPhotoId: rec.afterPhotoId ?? null,
         },
